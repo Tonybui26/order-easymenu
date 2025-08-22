@@ -29,5 +29,6 @@ export const config = {
     // Protected pages that require authentication only
     "/admin/:path*",
     "/me/:path*",
+    "/",
   ],
 };

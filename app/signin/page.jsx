@@ -1,7 +1,6 @@
 import Image from "next/image";
 import Logo from "../../public/images/logo.svg";
 import SignInForm from "@/components/auth/SignInForm";
-import ButtonContinueWithGoogle from "@/components/auth/ButtonContinueWithGoogle";
 import { getServerUserSession } from "@/lib/auth/serverSession";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -33,19 +32,6 @@ export default async function SignInPage({ searchParams }) {
           </h2>
         </div>
         <div className="mt-8">
-          <div className="mt-6">
-            <ButtonContinueWithGoogle callbackUrl={redirectUrl} />
-          </div>
-          <div className="relative mt-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="bg-white px-4 text-gray-500">
-                Or sign in with email
-              </span>
-            </div>
-          </div>
           <SignInForm />
         </div>
       </div>

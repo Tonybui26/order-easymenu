@@ -10,9 +10,8 @@ const nunito = Nunito({
 });
 
 export const metadata = {
-  title: "Mindmoney - Simple Finance for Indie Hackers",
-  description:
-    "Minimal finance and budgeting app for indie hackers, solo founders, and entrepreneurs",
+  title: "Order Manager",
+  description: "GoEasyMenu - Order Manager by GoEasyMenu",
 };
 
 export default function RootLayout({ children }) {
