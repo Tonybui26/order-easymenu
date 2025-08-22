@@ -15,6 +15,16 @@ module.exports = {
   },
   plugins: [require("daisyui"), require("tailwindcss-animate")],
   daisyui: {
-    themes: ["light"],
+    themes: [
+      {
+        light: {
+          ...require("daisyui/src/theming/themes")["light"],
+          primary: "#D76228",
+          ".btn-primary": {
+            color: "#fff",
+          },
+        },
+      },
+    ],
   },
 };
