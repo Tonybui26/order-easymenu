@@ -15,10 +15,10 @@ export default async function SignInPage({ searchParams }) {
   }
 
   return (
-    <div className="min-h-[100vh] bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
+    <div className="min-h-[100vh] bg-[#fff8f4] px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-md rounded-xl bg-white p-8 shadow-lg sm:p-10">
         <div className="text-center">
-          <Link href="/" className="text-primary text-2xl font-bold">
+          <Link href="/" className="text-2xl font-bold text-primary">
             <Image
               src={Logo}
               alt="GoEasyMenu"
@@ -27,9 +27,7 @@ export default async function SignInPage({ searchParams }) {
               priority
             />
           </Link>
-          <h2 className="mt-6 text-3xl font-bold text-gray-900">
-            Sign in to your account
-          </h2>
+          <h2 className="mt-6 text-3xl font-bold text-gray-900">Sign in</h2>
         </div>
         <div className="mt-8">
           <SignInForm />

@@ -4,11 +4,12 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Eye, EyeOff, AlertCircle } from "lucide-react";
 import Link from "next/link";
-import { getDashboardUrl } from "@/lib/constants/auth";
+import { getAuthRedirectUrl } from "@/lib/constants/auth";
 
 export default function SignInForm() {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [menuLink, setMenuLink] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -22,18 +23,19 @@ export default function SignInForm() {
     try {
       const result = await signIn("credentials", {
         redirect: false,
-        email,
+        username,
         password,
+        menuLink,
       });
 
       if (result?.error) {
-        setError("Invalid email or password");
+        setError("Invalid username or password");
         setIsLoading(false);
         return;
       }
       console.log(result);
       if (result?.ok) {
-        router.push(getDashboardUrl());
+        router.push(getAuthRedirectUrl());
         router.refresh();
       }
     } catch (error) {
@@ -60,23 +62,41 @@ export default function SignInForm() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         <div>
           <label
-            htmlFor="email"
+            htmlFor="menuLink"
             className="block text-sm font-medium text-gray-700"
           >
-            Email address
+            Menu Link
           </label>
           <input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
+            id="menuLink"
+            name="menuLink"
+            type="text"
+            autoComplete="menuLink"
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="focus:border-primary focus:ring-primary mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:outline-none"
+            value={menuLink}
+            onChange={(e) => setMenuLink(e.target.value)}
+            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-primary"
+          />
+        </div>
+        <div>
+          <label
+            htmlFor="username"
+            className="block text-sm font-medium text-gray-700"
+          >
+            Username
+          </label>
+          <input
+            id="username"
+            name="username"
+            type="text"
+            autoComplete="username"
+            required
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-primary"
           />
         </div>
 
@@ -96,7 +116,7 @@ export default function SignInForm() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="focus:border-primary focus:ring-primary block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:outline-none"
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-primary"
             />
             <button
               type="button"
@@ -108,13 +128,13 @@ export default function SignInForm() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
+        {/* <div className="flex items-center justify-between">
           <div className="flex items-center">
             <input
               id="remember-me"
               name="remember-me"
               type="checkbox"
-              className="text-primary focus:ring-primary h-4 w-4 rounded border-gray-300"
+              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
             />
             <label
               htmlFor="remember-me"
@@ -127,18 +147,18 @@ export default function SignInForm() {
           <div className="text-sm">
             <Link
               href="/forgot-password"
-              className="text-primary hover:text-primary/80 font-medium"
+              className="font-medium text-primary hover:text-primary/80"
             >
               Forgot your password?
             </Link>
           </div>
-        </div>
+        </div> */}
 
         <div>
           <button
             type="submit"
             disabled={isLoading}
-            className="bg-primary hover:bg-primary/80 focus:ring-primary group relative flex w-full justify-center rounded-lg px-4 py-3 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-70"
+            className="group relative flex w-full justify-center rounded-lg bg-primary px-4 py-3 text-sm font-medium text-white hover:bg-primary/80 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-70"
           >
             {isLoading ? (
               <svg
@@ -165,15 +185,15 @@ export default function SignInForm() {
               "Sign in"
             )}
           </button>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          {/* <p className="mt-2 text-center text-sm text-gray-600">
             Or{" "}
             <Link
               href="/signup"
-              className="text-primary hover:text-primary/80 font-medium"
+              className="font-medium text-primary hover:text-primary/80"
             >
               create a new account
             </Link>
-          </p>
+          </p> */}
         </div>
       </form>
     </>

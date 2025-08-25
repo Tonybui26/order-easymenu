@@ -1,25 +1,13 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg width="256px" height="256px" viewBox="0 0 256 256" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" preserveAspectRatio="xMidYMid">
-    <title>Next.js</title>
-    <defs>
-        <circle id="path-1" cx="128" cy="128" r="128"></circle>
-        <linearGradient x1="55.6325605%" y1="56.3850422%" x2="83.2279093%" y2="96.0801119%" id="nextjsLinearGradient-3">
-            <stop stop-color="#FFFFFF" offset="0%"></stop>
-            <stop stop-color="#FFFFFF" stop-opacity="0" offset="100%"></stop>
-        </linearGradient>
-        <linearGradient x1="50%" y1="0%" x2="49.9534722%" y2="73.4375%" id="nextjsLinearGradient-4">
-            <stop stop-color="#FFFFFF" offset="0%"></stop>
-            <stop stop-color="#FFFFFF" stop-opacity="0" offset="100%"></stop>
-        </linearGradient>
-    </defs>
-    <g>
-        <mask id="mask-2" fill="white">
-            <use xlink:href="#path-1"></use>
-        </mask>
-        <g mask="url(#mask-2)">
-            <circle fill="#000000" cx="128" cy="128" r="128"></circle>
-            <path d="M212.6336,224.028444 L98.3352889,76.8 L76.8,76.8 L76.8,179.157333 L94.0282311,179.157333 L94.0282311,98.6788978 L199.109689,234.446222 C203.851378,231.273244 208.368356,227.790222 212.6336,224.028444 Z" fill="url(#nextjsLinearGradient-3)"></path>
-            <rect fill="url(#nextjsLinearGradient-4)" x="163.555556" y="76.8" width="17.0666667" height="102.4"></rect>
-        </g>
-    </g>
+<svg width="58" height="72" viewBox="0 0 58 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g clip-path="url(#clip0_293_214)">
+<rect x="55.25" y="69.0845" width="52.5" height="66.169" rx="8" transform="rotate(-180 55.25 69.0845)" stroke="#D76228" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M29.75 56.5L15.75 56.5" stroke="#D76228" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M35.75 44.5H15.75" stroke="#D76228" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M18.6389 32.5L38.8611 32.5C40.4566 32.5 41.75 31.6543 41.75 30.6111L41.75 17.3889C41.75 16.3457 40.4566 15.5 38.8611 15.5L18.6389 15.5C17.0434 15.5 15.75 16.3457 15.75 17.3889L15.75 30.6111C15.75 31.6543 17.0434 32.5 18.6389 32.5Z" fill="#D76228" stroke="#D76228" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<defs>
+<clipPath id="clip0_293_214">
+<rect width="58" height="72" fill="white" transform="translate(58 72) rotate(-180)"/>
+</clipPath>
+</defs>
 </svg>

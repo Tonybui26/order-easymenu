@@ -1,12 +1,17 @@
-import { Nunito } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { NextAuthProvider } from "@/lib/auth/nextAuthProvider";
-import { GlobalAppContextProvider } from "@/components/context/GlobalContext";
+import { GlobalAppContextProvider } from "@/components/context/GlobalAppContext";
+import { getServerSession } from "next-auth";
+import { NextAuthOptions } from "@/lib/auth/nextAuthOptions";
+import { MenuContextProvider } from "@/components/context/MenuContext";
+import { fetchGetMenuByOwnerEmail } from "@/lib/api/fetchApi";
+import { Toaster } from "react-hot-toast";
 
-const nunito = Nunito({
+const inter = Inter({
+  weight: ["400", "500", "600", "700", "800", "900"],
   subsets: ["latin"],
-  variable: "--font-nunito",
-  weight: ["200", "300", "400", "500", "600", "700", "800", "900"],
+  display: "swap",
 });
 
 export const metadata = {
@@ -14,13 +19,29 @@ export const metadata = {
   description: "GoEasyMenu - Order Manager by GoEasyMenu",
 };
 
-export default function RootLayout({ children }) {
+export default async function RootLayout({ children }) {
+  const session = await getServerSession(NextAuthOptions);
+  let user = null;
+  let menuData = null;
+  console.log(" check session", session);
+  if (session && session.user) {
+    console.log(" check session user", session.user);
+    // get user data
+    user = session.user;
+    menuData = await fetchGetMenuByOwnerEmail(user.ownerEmail);
+  }
+
   return (
     <html lang="en">
-      <body className={`${nunito.variable} bg-neutral-900 antialiased`}>
+      <body className={`${inter.className} min-h-[100vh] antialiased`}>
         <NextAuthProvider>
-          <GlobalAppContextProvider>{children}</GlobalAppContextProvider>
+          <GlobalAppContextProvider userData={user}>
+            <MenuContextProvider data={menuData}>
+              {children}
+            </MenuContextProvider>
+          </GlobalAppContextProvider>
         </NextAuthProvider>
+        <Toaster />
       </body>
     </html>
   );
