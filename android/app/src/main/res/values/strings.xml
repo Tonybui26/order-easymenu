@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">order-manager-by-goeasymenu</string>
+    <string name="title_activity_main">order-manager-by-goeasymenu</string>
+    <string name="package_name">order.goeasy.menu</string>
+    <string name="custom_url_scheme">order.goeasy.menu</string>
+</resources>
