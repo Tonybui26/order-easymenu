@@ -1,0 +1,285 @@
+"use client";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { X } from "lucide-react";
+import { toast } from "react-hot-toast";
+
+export default function PrinterSetupModal({
+  isOpen,
+  onClose,
+  onSave,
+  mode = "add",
+  printer = null,
+}) {
+  const [formData, setFormData] = useState({
+    name: "",
+    localIp: "",
+    port: "9100",
+    forTakeaway: false,
+    forDineIn: false,
+  });
+
+  const [errors, setErrors] = useState({});
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Initialize form data when editing
+  useEffect(() => {
+    if (mode === "edit" && printer) {
+      setFormData({
+        name: printer.name || "",
+        localIp: printer.localIp || "",
+        port: printer.port || "9100",
+        forTakeaway: printer.forTakeaway || false,
+        forDineIn: printer.forDineIn || false,
+      });
+    }
+  }, [mode, printer]);
+
+  // Validation functions
+  const validateIpAddress = (ip) => {
+    const ipRegex =
+      /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    return ipRegex.test(ip);
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    // Printer name validation
+    if (!formData.name.trim()) {
+      newErrors.name = "Printer name is required";
+    } else if (formData.name.length < 3) {
+      newErrors.name = "Printer name must be at least 3 characters";
+    } else if (formData.name.length > 50) {
+      newErrors.name = "Printer name must be less than 50 characters";
+    }
+
+    // Local IP validation
+    if (!formData.localIp.trim()) {
+      newErrors.localIp = "Local IP address is required";
+    } else if (!validateIpAddress(formData.localIp)) {
+      newErrors.localIp = "Please enter a valid IP address";
+    }
+
+    // Port validation
+    const port = parseInt(formData.port);
+    if (!formData.port || formData.port === "") {
+      newErrors.port = "Port number is required";
+    } else if (isNaN(port) || port < 1 || port > 65535) {
+      newErrors.port = "Port must be between 1 and 65535";
+    }
+
+    // At least one order type must be selected
+    if (!formData.forTakeaway && !formData.forDineIn) {
+      newErrors.orderTypes = "Please select at least one order type";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: "" }));
+    }
+  };
+
+  const handleSave = async () => {
+    if (!validateForm()) {
+      toast.error("Please fix form errors before saving");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const printerData = {
+        ...formData,
+        status: "unknown", // Default status for simple management
+      };
+
+      onSave(printerData);
+      onClose();
+    } catch (error) {
+      toast.error("Failed to save printer configuration");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  const modalContent = (
+    <div className="modal modal-open">
+      <div className="modal-box max-h-[90vh] max-w-md overflow-y-auto">
+        {/* Header */}
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-xl font-bold">
+            {mode === "add" ? "Add New Printer" : "Edit Printer"}
+          </h2>
+          <button onClick={onClose} className="btn btn-circle btn-ghost btn-sm">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="space-y-4">
+          {/* Printer Name */}
+          <div className="form-control">
+            <label className="label">
+              <span className="label-text">Printer Name *</span>
+            </label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => handleInputChange("name", e.target.value)}
+              className={`input input-bordered w-full ${
+                errors.name ? "input-error" : ""
+              }`}
+              placeholder="e.g., Kitchen Printer 1"
+            />
+            {errors.name && (
+              <label className="label">
+                <span className="label-text-alt text-error">{errors.name}</span>
+              </label>
+            )}
+          </div>
+
+          {/* Network Configuration */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text">Local IP Address *</span>
+              </label>
+              <input
+                type="text"
+                value={formData.localIp}
+                onChange={(e) => handleInputChange("localIp", e.target.value)}
+                className={`input input-bordered w-full ${
+                  errors.localIp ? "input-error" : ""
+                }`}
+                placeholder="e.g., 192.168.1.100"
+              />
+              {errors.localIp && (
+                <label className="label">
+                  <span className="label-text-alt text-error">
+                    {errors.localIp}
+                  </span>
+                </label>
+              )}
+            </div>
+
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text">Port Number *</span>
+              </label>
+              <input
+                type="number"
+                value={formData.port}
+                onChange={(e) => handleInputChange("port", e.target.value)}
+                className={`input input-bordered w-full ${
+                  errors.port ? "input-error" : ""
+                }`}
+                placeholder="9100"
+                min="1"
+                max="65535"
+              />
+              {errors.port && (
+                <label className="label">
+                  <span className="label-text-alt text-error">
+                    {errors.port}
+                  </span>
+                </label>
+              )}
+            </div>
+          </div>
+
+          {/* Order Type Settings */}
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-sm font-medium text-base-content">
+                Order Types *
+              </h3>
+              <p className="text-xs text-base-content/60">
+                Select which order types this printer will handle
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="form-control">
+                <label className="label cursor-pointer justify-between">
+                  <div>
+                    <span className="label-text font-medium">
+                      Takeaway Orders
+                    </span>
+                    <div className="text-xs text-base-content/60">
+                      Print orders for pickup/delivery
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={formData.forTakeaway}
+                    onChange={(e) =>
+                      handleInputChange("forTakeaway", e.target.checked)
+                    }
+                    className="toggle toggle-primary"
+                  />
+                </label>
+              </div>
+
+              <div className="form-control">
+                <label className="label cursor-pointer justify-between">
+                  <div>
+                    <span className="label-text font-medium">
+                      Dine-in Orders
+                    </span>
+                    <div className="text-xs text-base-content/60">
+                      Print orders for table service
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={formData.forDineIn}
+                    onChange={(e) =>
+                      handleInputChange("forDineIn", e.target.checked)
+                    }
+                    className="toggle toggle-primary"
+                  />
+                </label>
+              </div>
+            </div>
+
+            {errors.orderTypes && (
+              <div className="text-sm text-error">{errors.orderTypes}</div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="modal-action">
+          <button onClick={onClose} className="btn btn-ghost">
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="btn-primary btn"
+          >
+            {isSaving
+              ? "Saving..."
+              : mode === "add"
+                ? "Add Printer"
+                : "Save Changes"}
+          </button>
+        </div>
+      </div>
+      <div className="modal-backdrop" onClick={onClose}></div>
+    </div>
+  );
+
+  // Use portal to render modal at document body level
+  return typeof document !== "undefined"
+    ? createPortal(modalContent, document.body)
+    : modalContent;
+}

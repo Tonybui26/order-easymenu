@@ -3,36 +3,25 @@ import { useState } from "react";
 import { Menu, Printer, CheckCheck, X, LogOut } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { isNativeApp, getPlatform } from "../../lib/helper/platformDetection";
-import { printTestMessage } from "../../lib/helper/printerUtils";
+import { useRouter } from "next/navigation";
 
 export default function MoreMenuButton({ setViewMode }) {
   const [showModal, setShowModal] = useState(false);
+  const router = useRouter();
 
   const handlePrinterManagement = async () => {
     const platform = getPlatform();
     const isNative = isNativeApp();
 
     if (isNative) {
-      // Test print for native apps
-      console.log("Testing printer for", platform, "app");
-
-      try {
-        const result = await printTestMessage("Test Print from Mobile App!");
-
-        if (result.success) {
-          alert(`✅ ${result.message}`);
-        } else {
-          alert(`❌ ${result.message}`);
-        }
-      } catch (error) {
-        console.error("Print test error:", error);
-        alert(`❌ Print test failed: ${error.message}`);
-      }
+      // Navigate to printer management page
+      router.push("/printer-management");
     } else {
       // Show web alert - printer management only available on mobile apps
-      alert(
-        "Printer Management is currently only available for Android or iOS app. Please download our mobile app to configure your receipt printers.",
-      );
+      // alert(
+      //   "Printer Management is currently only available for Android or iOS app. Please download our mobile app to configure your printers.",
+      // );
+      router.push("/printer-management");
     }
 
     setShowModal(false);

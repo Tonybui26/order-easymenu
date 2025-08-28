@@ -20,6 +20,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   const [menuContent, setMenuContent] = useState(
     (menuData && menuData.menuContent) || [],
   );
+  const [isFirstLoadClientSide, setIsFirstLoadClientSide] = useState(false);
 
   const [storeProfile, setStoreProfile] = useState({
     storeName: (menuData && menuData.storeName) || "",
@@ -37,10 +38,11 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   const menuId = menuData?._id || null;
 
   // Fetch menu data client-side if not loaded from server
-  useEffect(() => {
+  useSkipInitialEffect(() => {
     const fetchMenuData = async () => {
       if (!dataLoaded && session?.user?.ownerEmail) {
         try {
+          setIsFirstLoadClientSide(true);
           console.log("Fetching menu data client-side...");
           const data = await fetchGetMenuByOwnerEmail(session.user.ownerEmail);
 
@@ -70,7 +72,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   }, [session?.user?.ownerEmail, dataLoaded]);
 
   // Create the saveMenuUpdate function
-  const saveMenuUpdate = async () => {
+  const saveMenuConfig = async () => {
     try {
       // update menu config
       await updateMenuConfig(menuConfig);
@@ -83,7 +85,13 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   useSkipInitialEffect(() => {
     // Show toast message when saving the menu
     console.log("menuConfig changed run here");
-    toast.promise(saveMenuUpdate(), {
+    // skip the first load client side from the toast
+    if (isFirstLoadClientSide) {
+      setIsFirstLoadClientSide(false);
+      return;
+    }
+    console.log("menuConfig changed run here 2");
+    toast.promise(saveMenuConfig(), {
       loading: "Saving...",
       success: "Changes saved successfully!",
       error: "Something went wrong! Can't save changes",

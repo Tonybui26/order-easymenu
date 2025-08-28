@@ -26,6 +26,8 @@ module.exports = {
           primary: "#D76228",
           ".btn-primary": {
             color: "#fff",
+            backgroundColor: "#D76228",
+            borderColor: "#D76228",
           },
         },
       },

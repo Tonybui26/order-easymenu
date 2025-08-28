@@ -32,6 +32,7 @@ import MoreMenuButton from "./MoreMenuButton";
 import { useMenuContext } from "../context/MenuContext";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
+import { printOrder } from "@/lib/helper/printerUtils";
 
 /**
  * LiveOrderTerminal Component - Order Management Interface
@@ -640,11 +641,14 @@ export default function LiveOrderTerminal() {
         ),
       );
 
+      // Hardcoded for creating print jobs when order status is changed to "preparing" - Now I want to temporary disable this feature
+      const createPrintJobs = false;
       // Create print jobs when order status is changed to "preparing" ONLY if auto-printing is disabled
       if (
         newStatus === "preparing" &&
         storeProfile &&
-        session?.user?.ownerEmail
+        session?.user?.ownerEmail &&
+        createPrintJobs
       ) {
         try {
           const order = orders.find((o) => o._id === orderId);
@@ -703,6 +707,47 @@ export default function LiveOrderTerminal() {
         } catch (error) {
           console.error("Error creating print jobs:", error);
           // Don't block the order status update if printing fails
+        }
+      }
+
+      // Print order when order status is changed to "preparing" ONLY if auto-printing is disabled without creating print jobs
+      const autoPrintingEnabled = menuConfig?.autoPrinting?.enabled;
+      if (
+        newStatus === "preparing" &&
+        storeProfile &&
+        session?.user?.ownerEmail &&
+        !autoPrintingEnabled
+      ) {
+        try {
+          const order = orders.find((o) => o._id === orderId);
+          if (order) {
+            // Determine order type
+            const isTakeaway = order.table === "takeaway";
+            const orderType = isTakeaway ? "takeaway" : "dinein";
+
+            // Check printer availability for the order type
+            const printersAvailability =
+              await checkPrinterAvailability(orderType);
+            console.log("printersAvailability", printersAvailability);
+            if (printersAvailability.available) {
+              // Create print data object for the order
+              // Order Data
+              const orderData = order;
+              // List of available printers
+              const printers = printersAvailability.printers;
+              // Create print data object for the order
+              const printData = {
+                order: orderData,
+                orderId: order._id.slice(-6).toUpperCase(),
+                printers: printers,
+              };
+              console.log("printData", printData);
+              const printResult = await printOrder(printData);
+              console.log("printResult", printResult);
+            }
+          }
+        } catch (error) {
+          console.error("Error printing order:", error);
         }
       }
 
