@@ -2,11 +2,22 @@ import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
   appId: "order.goeasy.menu",
-  appName: "order-manager-by-goeasymenu",
+  appName: "Order Manager by GoEasyMenu",
   webDir: "public",
   server: {
-    url: "http://192.168.1.53:3001",
+    url: "http://192.168.0.155:3001",
     cleartext: true,
+  },
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 2000,
+      backgroundColor: "#D76228",
+      showSpinner: false,
+      androidSpinnerStyle: "small",
+      iosSpinnerStyle: "small",
+      splashFullScreen: true,
+      splashImmersive: true,
+    },
   },
 };
 
