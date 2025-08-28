@@ -27,7 +27,9 @@ export default async function SignInPage({ searchParams }) {
               priority
             />
           </Link>
-          <h2 className="mt-6 text-3xl font-bold text-gray-900">Sign in</h2>
+          <h2 className="mt-6 text-2xl font-bold text-gray-900 lg:text-3xl">
+            Order Manager
+          </h2>
         </div>
         <div className="mt-8">
           <SignInForm />

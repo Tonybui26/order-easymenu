@@ -120,7 +120,7 @@ export default function SignInForm() {
             />
             <button
               type="button"
-              className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-500"
+              className="absolute inset-y-0 right-0 flex items-center bg-transparent pr-3 text-gray-400 hover:text-gray-500"
               onClick={() => setShowPassword(!showPassword)}
             >
               {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}

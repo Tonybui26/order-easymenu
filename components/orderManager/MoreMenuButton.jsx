@@ -114,9 +114,11 @@ export default function MoreMenuButton({ setViewMode }) {
           <div className="mt-6 flex justify-end">
             {/* Logout Button - moved to bottom right */}
             <button
-              onClick={() => {
-                signOut({ callbackUrl: "/signin" });
+              onClick={async () => {
+                console.log("Logging out", window.location.origin);
                 setShowModal(false);
+                await signOut({ redirect: false });
+                window.location.href = `${window.location.origin}/signin`;
               }}
               className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-700"
             >
