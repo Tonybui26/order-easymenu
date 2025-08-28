@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: "order-manager-by-goeasymenu",
   webDir: "public",
   server: {
-    url: "http://10.0.2.2:3001",
+    url: "http://192.168.1.53:3001",
     cleartext: true,
   },
 };
