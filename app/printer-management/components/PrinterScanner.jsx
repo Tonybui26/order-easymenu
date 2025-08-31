@@ -34,7 +34,7 @@ export default function PrinterScanner({ onPrinterSelect, onShowManualForm }) {
   const [discoveryLogs, setDiscoveryLogs] = useState([]);
   const [showLogs, setShowLogs] = useState(true);
 
-  const hideAllLogs = true;
+  const hideAllLogs = false;
 
   // Check if network discovery is available (mobile app only)
   const canScanNetwork = isNativeApp();
@@ -260,156 +260,154 @@ export default function PrinterScanner({ onPrinterSelect, onShowManualForm }) {
       )}
 
       {/* Discovery Logs */}
-      {process.env.NODE_ENV === "development" &&
-        discoveryLogs.length > 0 &&
-        !hideAllLogs && (
-          <div className="space-y-3 rounded-lg bg-base-200 p-4">
-            <div className="flex items-center justify-between">
-              <h4 className="font-medium">
-                📋 Discovery Logs ({discoveryLogs.length})
-              </h4>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setDiscoveryLogs([])}
-                  className="btn btn-ghost btn-xs"
-                  title="Clear all logs"
-                >
-                  Clear
-                </button>
-                <button
-                  onClick={() => setShowLogs(!showLogs)}
-                  className="btn btn-ghost btn-xs"
-                >
-                  {showLogs ? "Hide" : "Show"}
-                </button>
-              </div>
+      {true && discoveryLogs.length > 0 && !hideAllLogs && (
+        <div className="space-y-3 rounded-lg bg-base-200 p-4">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium">
+              📋 Discovery Logs ({discoveryLogs.length})
+            </h4>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDiscoveryLogs([])}
+                className="btn btn-ghost btn-xs"
+                title="Clear all logs"
+              >
+                Clear
+              </button>
+              <button
+                onClick={() => setShowLogs(!showLogs)}
+                className="btn btn-ghost btn-xs"
+              >
+                {showLogs ? "Hide" : "Show"}
+              </button>
             </div>
+          </div>
 
-            {showLogs && (
-              <div className="space-y-3">
-                {/* Debug Info for Development */}
-                <div className="rounded-lg bg-base-100 p-3">
-                  <h5 className="mb-2 text-sm font-medium">🔍 Debug Info</h5>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>State: {isDiscovering ? "Scanning" : "Idle"}</div>
-                    <div>Logs: {discoveryLogs.length}</div>
-                    <div>
-                      Progress: {discoveryProgress.current}/
-                      {discoveryProgress.total}
-                    </div>
-                    <div>Found: {discoveredPrinters.length} printers</div>
+          {showLogs && (
+            <div className="space-y-3">
+              {/* Debug Info for Development */}
+              <div className="rounded-lg bg-base-100 p-3">
+                <h5 className="mb-2 text-sm font-medium">🔍 Debug Info</h5>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>State: {isDiscovering ? "Scanning" : "Idle"}</div>
+                  <div>Logs: {discoveryLogs.length}</div>
+                  <div>
+                    Progress: {discoveryProgress.current}/
+                    {discoveryProgress.total}
                   </div>
+                  <div>Found: {discoveredPrinters.length} printers</div>
                 </div>
+              </div>
 
-                {/* Ping Results Summary */}
-                {(() => {
-                  // Filter logs that are specifically from HTTP ping operations
-                  const pingLogs = discoveryLogs.filter(
+              {/* Ping Results Summary */}
+              {(() => {
+                // Filter logs that are specifically from HTTP ping operations
+                const pingLogs = discoveryLogs.filter(
+                  (log) =>
+                    log.message.includes("HTTP ping") ||
+                    log.message.includes("Device reachable") ||
+                    log.message.includes("Device not reachable") ||
+                    (log.message.includes("Testing") &&
+                      log.message.includes(":")),
+                );
+
+                if (pingLogs.length > 0) {
+                  // Count successful pings (SUCCESS or reachable devices)
+                  const successLogs = pingLogs.filter(
                     (log) =>
-                      log.message.includes("HTTP ping") ||
+                      log.message.includes("SUCCESS") ||
                       log.message.includes("Device reachable") ||
-                      log.message.includes("Device not reachable") ||
-                      (log.message.includes("Testing") &&
-                        log.message.includes(":")),
+                      log.message.includes("reachable (non-HTTP)"),
                   );
 
-                  if (pingLogs.length > 0) {
-                    // Count successful pings (SUCCESS or reachable devices)
-                    const successLogs = pingLogs.filter(
-                      (log) =>
-                        log.message.includes("SUCCESS") ||
-                        log.message.includes("Device reachable") ||
-                        log.message.includes("reachable (non-HTTP)"),
-                    );
+                  // Count failed pings (FAILED, ERROR, or not reachable)
+                  const failedLogs = pingLogs.filter(
+                    (log) =>
+                      log.message.includes("FAILED") ||
+                      log.message.includes("ERROR") ||
+                      log.message.includes("Device not reachable") ||
+                      (log.message.includes("failed") &&
+                        !log.message.includes("reachable")),
+                  );
 
-                    // Count failed pings (FAILED, ERROR, or not reachable)
-                    const failedLogs = pingLogs.filter(
-                      (log) =>
-                        log.message.includes("FAILED") ||
-                        log.message.includes("ERROR") ||
-                        log.message.includes("Device not reachable") ||
-                        (log.message.includes("failed") &&
-                          !log.message.includes("reachable")),
-                    );
+                  // Debug: Log what we're counting
+                  console.log("🔍 Ping Summary Debug:", {
+                    totalPingLogs: pingLogs.length,
+                    successLogs: successLogs.map((l) => l.message),
+                    failedLogs: failedLogs.map((l) => l.message),
+                  });
 
-                    // Debug: Log what we're counting
-                    console.log("🔍 Ping Summary Debug:", {
-                      totalPingLogs: pingLogs.length,
-                      successLogs: successLogs.map((l) => l.message),
-                      failedLogs: failedLogs.map((l) => l.message),
-                    });
-
-                    return (
-                      <div className="rounded-lg bg-base-100 p-3">
-                        <h5 className="mb-2 text-sm font-medium">
-                          📊 Ping Results Summary
-                        </h5>
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div className="text-success">
-                            ✅ Success: {successLogs.length}
-                          </div>
-                          <div className="text-error">
-                            ❌ Failed: {failedLogs.length}
-                          </div>
+                  return (
+                    <div className="rounded-lg bg-base-100 p-3">
+                      <h5 className="mb-2 text-sm font-medium">
+                        📊 Ping Results Summary
+                      </h5>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="text-success">
+                          ✅ Success: {successLogs.length}
                         </div>
-                        {successLogs.length > 0 && (
-                          <div className="mt-2 text-xs text-success">
-                            {successLogs.slice(0, 3).map((log, index) => (
-                              <div key={index} className="font-mono">
-                                {log.message}
-                              </div>
-                            ))}
-                            {successLogs.length > 3 && (
-                              <div className="text-base-content/60">
-                                ... and {successLogs.length - 3} more
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        {failedLogs.length > 0 && (
-                          <div className="mt-2 text-xs text-error">
-                            <div className="font-medium">Failed Examples:</div>
-                            {failedLogs.slice(0, 2).map((log, index) => (
-                              <div key={index} className="font-mono">
-                                {log.message}
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        <div className="text-error">
+                          ❌ Failed: {failedLogs.length}
+                        </div>
                       </div>
-                    );
-                  }
-                  return null;
-                })()}
-
-                {/* Detailed Logs */}
-                <div className="max-h-40 space-y-1 overflow-y-auto">
-                  {discoveryLogs.map((log, index) => (
-                    <div
-                      key={index}
-                      className={`font-mono text-xs ${
-                        log.type === "error"
-                          ? "text-error"
-                          : log.type === "success"
-                            ? "font-semibold text-success"
-                            : log.type === "start"
-                              ? "font-semibold text-primary"
-                              : log.type === "progress"
-                                ? "text-info"
-                                : "text-base-content/60"
-                      }`}
-                    >
-                      <span className="text-base-content/50">
-                        [{log.timestamp}]
-                      </span>{" "}
-                      {log.message}
+                      {successLogs.length > 0 && (
+                        <div className="mt-2 text-xs text-success">
+                          {successLogs.slice(0, 3).map((log, index) => (
+                            <div key={index} className="font-mono">
+                              {log.message}
+                            </div>
+                          ))}
+                          {successLogs.length > 3 && (
+                            <div className="text-base-content/60">
+                              ... and {successLogs.length - 3} more
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {failedLogs.length > 0 && (
+                        <div className="mt-2 text-xs text-error">
+                          <div className="font-medium">Failed Examples:</div>
+                          {failedLogs.slice(0, 2).map((log, index) => (
+                            <div key={index} className="font-mono">
+                              {log.message}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  );
+                }
+                return null;
+              })()}
+
+              {/* Detailed Logs */}
+              <div className="max-h-40 space-y-1 overflow-y-auto">
+                {discoveryLogs.map((log, index) => (
+                  <div
+                    key={index}
+                    className={`font-mono text-xs ${
+                      log.type === "error"
+                        ? "text-error"
+                        : log.type === "success"
+                          ? "font-semibold text-success"
+                          : log.type === "start"
+                            ? "font-semibold text-primary"
+                            : log.type === "progress"
+                              ? "text-info"
+                              : "text-base-content/60"
+                    }`}
+                  >
+                    <span className="text-base-content/50">
+                      [{log.timestamp}]
+                    </span>{" "}
+                    {log.message}
+                  </div>
+                ))}
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Discovered Printers */}
       {discoveredPrinters.length > 0 && (
