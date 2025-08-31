@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: "Order Manager by GoEasyMenu",
   webDir: "public",
   server: {
-    url: "https://order.goeasy.menu",
+    url: "order.goeasy.menu",
     cleartext: true,
   },
   plugins: {
