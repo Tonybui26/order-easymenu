@@ -5,12 +5,12 @@ const config: CapacitorConfig = {
   appName: "Order Manager by GoEasyMenu",
   webDir: "public",
   server: {
-    url: "http://192.168.0.155:3001",
+    url: "http://192.168.1.53:3001",
     cleartext: true,
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 2000,
+      launchShowDuration: 1500,
       backgroundColor: "#D76228",
       showSpinner: false,
       androidSpinnerStyle: "small",

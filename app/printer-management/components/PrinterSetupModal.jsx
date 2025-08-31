@@ -3,6 +3,8 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { toast } from "react-hot-toast";
+import PrinterScanner from "./PrinterScanner";
+import { isNativeApp } from "../../../lib/helper/platformDetection";
 
 export default function PrinterSetupModal({
   isOpen,
@@ -21,6 +23,7 @@ export default function PrinterSetupModal({
 
   const [errors, setErrors] = useState({});
   const [isSaving, setIsSaving] = useState(false);
+  const [showManualForm, setShowManualForm] = useState(false);
 
   // Initialize form data when editing
   useEffect(() => {
@@ -32,6 +35,10 @@ export default function PrinterSetupModal({
         forTakeaway: printer.forTakeaway || false,
         forDineIn: printer.forDineIn || false,
       });
+      setShowManualForm(true); // Show form directly for editing
+    } else {
+      // Show manual form directly if not on mobile (no network scanning available)
+      setShowManualForm(!isNativeApp());
     }
   }, [mode, printer]);
 
@@ -100,7 +107,7 @@ export default function PrinterSetupModal({
       };
 
       onSave(printerData);
-      onClose();
+      handleClose();
     } catch (error) {
       toast.error("Failed to save printer configuration");
     } finally {
@@ -108,173 +115,196 @@ export default function PrinterSetupModal({
     }
   };
 
+  const handlePrinterSelect = (printerData) => {
+    setFormData(printerData);
+    setShowManualForm(true);
+  };
+
+  const handleShowManualForm = () => {
+    setShowManualForm(true);
+  };
+
+  const handleClose = () => {
+    // Reset all states when modal closes
+    setShowManualForm(!isNativeApp()); // Reset based on platform
+    setFormData({
+      name: "",
+      localIp: "",
+      port: "9100",
+      forTakeaway: false,
+      forDineIn: false,
+    });
+    setErrors({});
+    setIsSaving(false);
+    onClose();
+  };
+
   if (!isOpen) return null;
 
   const modalContent = (
     <div className="modal modal-open">
-      <div className="modal-box max-h-[90vh] max-w-md overflow-y-auto">
+      <div className="modal-box max-h-[90vh] max-w-lg overflow-y-auto">
         {/* Header */}
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-bold">
-            {mode === "add" ? "Add New Printer" : "Edit Printer"}
+            {mode === "add"
+              ? showManualForm
+                ? isNativeApp()
+                  ? "Add Manually"
+                  : "Add Printer"
+                : "Add Printer"
+              : "Edit Printer"}
           </h2>
-          <button onClick={onClose} className="btn btn-circle btn-ghost btn-sm">
+          <button
+            onClick={handleClose}
+            className="btn btn-circle btn-ghost btn-sm"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="space-y-4">
-          {/* Printer Name */}
-          <div className="form-control">
-            <label className="label">
-              <span className="label-text">Printer Name *</span>
-            </label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => handleInputChange("name", e.target.value)}
-              className={`input input-bordered w-full ${
-                errors.name ? "input-error" : ""
-              }`}
-              placeholder="e.g., Kitchen Printer 1"
-            />
-            {errors.name && (
-              <label className="label">
-                <span className="label-text-alt text-error">{errors.name}</span>
-              </label>
-            )}
-          </div>
-
-          {/* Network Configuration */}
-          <div className="grid gap-4 md:grid-cols-2">
+        {mode === "add" && !showManualForm ? (
+          <PrinterScanner
+            onPrinterSelect={handlePrinterSelect}
+            onShowManualForm={handleShowManualForm}
+          />
+        ) : (
+          <div className="space-y-4">
+            {/* Printer Name */}
             <div className="form-control">
               <label className="label">
-                <span className="label-text">Local IP Address *</span>
+                <span className="label-text">Name *</span>
               </label>
               <input
                 type="text"
-                value={formData.localIp}
-                onChange={(e) => handleInputChange("localIp", e.target.value)}
+                value={formData.name}
+                onChange={(e) => handleInputChange("name", e.target.value)}
                 className={`input input-bordered w-full ${
-                  errors.localIp ? "input-error" : ""
+                  errors.name ? "input-error" : ""
                 }`}
-                placeholder="e.g., 192.168.1.100"
+                placeholder="Kitchen Printer"
               />
-              {errors.localIp && (
+              {errors.name && (
                 <label className="label">
                   <span className="label-text-alt text-error">
-                    {errors.localIp}
+                    {errors.name}
                   </span>
                 </label>
               )}
             </div>
 
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text">Port Number *</span>
-              </label>
-              <input
-                type="number"
-                value={formData.port}
-                onChange={(e) => handleInputChange("port", e.target.value)}
-                className={`input input-bordered w-full ${
-                  errors.port ? "input-error" : ""
-                }`}
-                placeholder="9100"
-                min="1"
-                max="65535"
-              />
-              {errors.port && (
+            {/* Network Configuration */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="form-control">
                 <label className="label">
-                  <span className="label-text-alt text-error">
-                    {errors.port}
-                  </span>
+                  <span className="label-text">IP Address *</span>
                 </label>
-              )}
-            </div>
-          </div>
+                <input
+                  type="text"
+                  value={formData.localIp}
+                  onChange={(e) => handleInputChange("localIp", e.target.value)}
+                  className={`input input-bordered w-full ${
+                    errors.localIp ? "input-error" : ""
+                  }`}
+                  placeholder="192.168.1.100"
+                />
+                {errors.localIp && (
+                  <label className="label">
+                    <span className="label-text-alt text-error">
+                      {errors.localIp}
+                    </span>
+                  </label>
+                )}
+              </div>
 
-          {/* Order Type Settings */}
-          <div className="space-y-3">
-            <div>
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text">Port *</span>
+                </label>
+                <input
+                  type="number"
+                  value={formData.port}
+                  onChange={(e) => handleInputChange("port", e.target.value)}
+                  className={`input input-bordered w-full ${
+                    errors.port ? "input-error" : ""
+                  }`}
+                  placeholder="9100"
+                  min="1"
+                  max="65535"
+                />
+                {errors.port && (
+                  <label className="label">
+                    <span className="label-text-alt text-error">
+                      {errors.port}
+                    </span>
+                  </label>
+                )}
+              </div>
+            </div>
+
+            {/* Order Type Settings */}
+            <div className="space-y-3">
               <h3 className="text-sm font-medium text-base-content">
                 Order Types *
               </h3>
-              <p className="text-xs text-base-content/60">
-                Select which order types this printer will handle
-              </p>
-            </div>
 
-            <div className="space-y-3">
-              <div className="form-control">
-                <label className="label cursor-pointer justify-between">
-                  <div>
-                    <span className="label-text font-medium">
-                      Takeaway Orders
-                    </span>
-                    <div className="text-xs text-base-content/60">
-                      Print orders for pickup/delivery
-                    </div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={formData.forTakeaway}
-                    onChange={(e) =>
-                      handleInputChange("forTakeaway", e.target.checked)
-                    }
-                    className="toggle toggle-primary"
-                  />
-                </label>
+              <div className="space-y-3">
+                <div className="form-control">
+                  <label className="label cursor-pointer justify-between">
+                    <span className="label-text">Takeaway Orders</span>
+                    <input
+                      type="checkbox"
+                      checked={formData.forTakeaway}
+                      onChange={(e) =>
+                        handleInputChange("forTakeaway", e.target.checked)
+                      }
+                      className="toggle toggle-primary"
+                    />
+                  </label>
+                </div>
+
+                <div className="form-control">
+                  <label className="label cursor-pointer justify-between">
+                    <span className="label-text">Dine-in Orders</span>
+                    <input
+                      type="checkbox"
+                      checked={formData.forDineIn}
+                      onChange={(e) =>
+                        handleInputChange("forDineIn", e.target.checked)
+                      }
+                      className="toggle toggle-primary"
+                    />
+                  </label>
+                </div>
               </div>
 
-              <div className="form-control">
-                <label className="label cursor-pointer justify-between">
-                  <div>
-                    <span className="label-text font-medium">
-                      Dine-in Orders
-                    </span>
-                    <div className="text-xs text-base-content/60">
-                      Print orders for table service
-                    </div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={formData.forDineIn}
-                    onChange={(e) =>
-                      handleInputChange("forDineIn", e.target.checked)
-                    }
-                    className="toggle toggle-primary"
-                  />
-                </label>
-              </div>
+              {errors.orderTypes && (
+                <div className="text-sm text-error">{errors.orderTypes}</div>
+              )}
             </div>
 
-            {errors.orderTypes && (
-              <div className="text-sm text-error">{errors.orderTypes}</div>
-            )}
+            {/* Footer */}
+            <div className="modal-action">
+              <button onClick={handleClose} className="btn btn-ghost">
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="btn-primary btn"
+              >
+                {isSaving
+                  ? "Saving..."
+                  : mode === "add"
+                    ? "Add Printer"
+                    : "Save Changes"}
+              </button>
+            </div>
           </div>
-        </div>
-
-        {/* Footer */}
-        <div className="modal-action">
-          <button onClick={onClose} className="btn btn-ghost">
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="btn-primary btn"
-          >
-            {isSaving
-              ? "Saving..."
-              : mode === "add"
-                ? "Add Printer"
-                : "Save Changes"}
-          </button>
-        </div>
+        )}
       </div>
-      <div className="modal-backdrop" onClick={onClose}></div>
+      <div className="modal-backdrop" onClick={handleClose}></div>
     </div>
   );
 

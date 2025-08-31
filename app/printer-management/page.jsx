@@ -11,12 +11,16 @@ import {
 import PrinterCard from "./components/PrinterCard";
 import PrinterSetupModal from "./components/PrinterSetupModal";
 import { toast } from "react-hot-toast";
+import { useMenuContext } from "@/components/context/MenuContext";
 
 export default function PrinterManagementPage() {
   const router = useRouter();
-  const [autoPrintingEnabled, setAutoPrintingEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [printers, setPrinters] = useState([]);
+  const { menuConfig, setMenuConfig } = useMenuContext();
+  const [autoPrintingEnabled, setAutoPrintingEnabled] = useState(
+    menuConfig?.autoPrinting?.enabled || false,
+  );
   // Fetch printers on component mount
   useEffect(() => {
     fetchPrintersData();
@@ -35,6 +39,17 @@ export default function PrinterManagementPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAutoPrintingChange = (e) => {
+    setAutoPrintingEnabled(e.target.checked);
+    // update auto printing settings in the database
+    setMenuConfig({
+      ...menuConfig,
+      autoPrinting: {
+        enabled: e.target.checked,
+      },
+    });
   };
 
   const [showAddPrinterModal, setShowAddPrinterModal] = useState(false);
@@ -131,12 +146,16 @@ export default function PrinterManagementPage() {
                 <span className="ml-3 text-gray-600">Loading printers...</span>
               </div>
             ) : printers.length === 0 ? (
-              <div className="py-8 text-center">
-                <Printer className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+              <div className="flex flex-col items-center justify-center gap-4 text-center">
+                <Printer className="mx-auto h-12 w-12 text-gray-400" />
                 <p className="text-gray-500">No printers configured yet</p>
-                <p className="text-sm text-gray-400">
-                  Add your first printer to get started
-                </p>
+                <button
+                  onClick={() => setShowAddPrinterModal(true)}
+                  className="flex items-center gap-2 rounded-lg bg-brand_accent px-4 py-2 text-sm font-medium text-white transition-all duration-300 hover:bg-brand_accent/90"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Your First Printer
+                </button>
               </div>
             ) : (
               <div className="space-y-4">
@@ -181,7 +200,7 @@ export default function PrinterManagementPage() {
                 type="checkbox"
                 className="toggle toggle-success"
                 checked={autoPrintingEnabled}
-                onChange={(e) => setAutoPrintingEnabled(e.target.checked)}
+                onChange={handleAutoPrintingChange}
               />
             </div>
           </div>
