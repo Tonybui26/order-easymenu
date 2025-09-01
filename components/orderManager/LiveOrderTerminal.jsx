@@ -1071,7 +1071,7 @@ export default function LiveOrderTerminal() {
           {/* quick settings */}
           <div className="mb-3 flex gap-3">
             {/* logo */}
-            <div className="hidden h-auto flex-col items-center justify-center gap-0 rounded-lg bg-gray-100 px-4 py-1 text-left transition-colors hover:bg-gray-200 sm:flex">
+            <div className="hidden h-auto flex-col items-center justify-center gap-0 rounded-lg bg-gray-100 px-4 py-1 text-left transition-colors hover:bg-gray-200 md:flex">
               <Image
                 src={Logo}
                 alt="GoEasyMenu"
@@ -1091,7 +1091,7 @@ export default function LiveOrderTerminal() {
 
           {/* View Mode Tabs */}
           <div className="mb-6 flex flex-wrap gap-3">
-            <div className="hidden flex-wrap gap-3 sm:flex">
+            <div className="hidden flex-wrap gap-3 md:flex">
               <ViewModeTab
                 icon={Bell}
                 label="New"
@@ -1132,7 +1132,16 @@ export default function LiveOrderTerminal() {
               />
             </div>
             {/* Add new tab here as a more menu button */}
-            <MoreMenuButton setViewMode={setViewMode} />
+            <MoreMenuButton
+              setViewMode={setViewMode}
+              viewMode={viewMode}
+              newOrdersCount={newOrdersCount}
+              preparingCount={preparingCount}
+              readyCount={readyCount}
+              allActiveCount={allActiveCount}
+              unpaidTablesBadgeCount={unpaidTablesBadgeCount}
+              storeProfile={storeProfile}
+            />
           </div>
         </div>
         {loading ? (
