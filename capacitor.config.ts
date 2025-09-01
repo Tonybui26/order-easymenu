@@ -3,10 +3,10 @@ import type { CapacitorConfig } from "@capacitor/cli";
 const config: CapacitorConfig = {
   appId: "order.goeasy.menu",
   appName: "Order Manager by GoEasyMenu",
-  webDir: "public",
+  webDir: ".next",
   server: {
-    url: "order.goeasy.menu",
-    cleartext: true,
+    url: "https://order.goeasy.menu",
+    cleartext: false,
   },
   plugins: {
     SplashScreen: {

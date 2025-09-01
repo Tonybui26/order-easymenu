@@ -33,6 +33,7 @@ import { useMenuContext } from "../context/MenuContext";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
 import { printOrder } from "@/lib/helper/printerUtils";
+import { isNativeApp } from "@/lib/helper/platformDetection";
 
 /**
  * LiveOrderTerminal Component - Order Management Interface
@@ -76,6 +77,9 @@ export default function LiveOrderTerminal() {
   const { soundEnabled } = useGlobalAppContext();
   const { storeProfile, menuId, menuConfig } = useMenuContext();
   const { data: session } = useSession();
+
+  // Platform detection
+  const isNative = isNativeApp();
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -459,9 +463,9 @@ export default function LiveOrderTerminal() {
     };
   }, [showDatePicker]);
 
-  // Function to initialize audio with user interaction
+  // Function to initialize audio with user interaction (web only)
   const initializeAudio = async () => {
-    if (!audioRef.current) return;
+    if (!audioRef.current || isNative) return;
 
     try {
       // Play and immediately pause to initialize audio context
@@ -491,8 +495,8 @@ export default function LiveOrderTerminal() {
         soundIntervalRef.current = setTimeout(playSound, 900);
       } catch (error) {
         console.error("Error playing sound:", error);
-        // If audio fails to play, show the audio prompt
-        if (!audioInitialized) {
+        // If audio fails to play, show the audio prompt (web only)
+        if (!audioInitialized && !isNative) {
           setShowAudioPrompt(true);
         }
       }
@@ -612,15 +616,24 @@ export default function LiveOrderTerminal() {
     };
   }, [soundEnabled, showNotification, lastDismissedIds]);
 
-  // Show audio prompt on first visit if sound is enabled
+  // Show audio prompt on first visit if sound is enabled (web only)
   useEffect(() => {
-    if (soundEnabled && !audioInitialized && !loading) {
+    if (soundEnabled && !audioInitialized && !loading && !isNative) {
       // Small delay to let the page load first
       setTimeout(() => {
         setShowAudioPrompt(true);
       }, 1000);
     }
-  }, [soundEnabled, audioInitialized, loading]);
+  }, [soundEnabled, audioInitialized, loading, isNative]);
+
+  // Auto-initialize audio for native apps
+  useEffect(() => {
+    if (isNative && soundEnabled && !audioInitialized && !loading) {
+      // For native apps, we can initialize audio automatically
+      setAudioInitialized(true);
+      console.log("Audio auto-initialized for native app");
+    }
+  }, [isNative, soundEnabled, audioInitialized, loading]);
 
   // Cleanup sound intervals on component unmount
   useEffect(() => {
@@ -984,8 +997,8 @@ export default function LiveOrderTerminal() {
         {/* Audio element for notifications */}
         <audio ref={audioRef} src="/sounds/notification.mp3" />
 
-        {/* Audio Permission Prompt */}
-        {showAudioPrompt && (
+        {/* Audio Permission Prompt - Web Only */}
+        {showAudioPrompt && !isNative && (
           <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
@@ -1058,7 +1071,7 @@ export default function LiveOrderTerminal() {
           {/* quick settings */}
           <div className="mb-3 flex gap-3">
             {/* logo */}
-            <div className="flex h-auto flex-col items-center justify-center gap-0 rounded-lg bg-gray-100 px-4 py-1 text-left transition-colors hover:bg-gray-200">
+            <div className="hidden h-auto flex-col items-center justify-center gap-0 rounded-lg bg-gray-100 px-4 py-1 text-left transition-colors hover:bg-gray-200 sm:flex">
               <Image
                 src={Logo}
                 alt="GoEasyMenu"
@@ -1078,44 +1091,46 @@ export default function LiveOrderTerminal() {
 
           {/* View Mode Tabs */}
           <div className="mb-6 flex flex-wrap gap-3">
-            <ViewModeTab
-              icon={Bell}
-              label="New"
-              count={newOrdersCount}
-              isActive={viewMode === "new"}
-              onClick={() => setViewMode("new")}
-            />
-            <ViewModeTab
-              icon={ChefHat}
-              label="Preparing"
-              count={preparingCount}
-              isActive={viewMode === "preparing"}
-              onClick={() => setViewMode("preparing")}
-            />
-            <ViewModeTab
-              icon={Check}
-              label="Ready"
-              count={readyCount}
-              isActive={viewMode === "ready"}
-              onClick={() => setViewMode("ready")}
-            />
-            {/* Only show Unpaid tab if Pay at Counter payment method is enabled */}
-            {storeProfile?.paymentMethods?.cash?.enabled && (
+            <div className="hidden flex-wrap gap-3 sm:flex">
               <ViewModeTab
-                icon={Banknote}
-                label="Unpaid"
-                count={unpaidTablesBadgeCount}
-                isActive={viewMode === "unpaid"}
-                onClick={() => setViewMode("unpaid")}
+                icon={Bell}
+                label="New"
+                count={newOrdersCount}
+                isActive={viewMode === "new"}
+                onClick={() => setViewMode("new")}
               />
-            )}
-            <ViewModeTab
-              icon={Radio}
-              label="Active"
-              count={allActiveCount}
-              isActive={viewMode === "all"}
-              onClick={() => setViewMode("all")}
-            />
+              <ViewModeTab
+                icon={ChefHat}
+                label="Preparing"
+                count={preparingCount}
+                isActive={viewMode === "preparing"}
+                onClick={() => setViewMode("preparing")}
+              />
+              <ViewModeTab
+                icon={Check}
+                label="Ready"
+                count={readyCount}
+                isActive={viewMode === "ready"}
+                onClick={() => setViewMode("ready")}
+              />
+              {/* Only show Unpaid tab if Pay at Counter payment method is enabled */}
+              {storeProfile?.paymentMethods?.cash?.enabled && (
+                <ViewModeTab
+                  icon={Banknote}
+                  label="Unpaid"
+                  count={unpaidTablesBadgeCount}
+                  isActive={viewMode === "unpaid"}
+                  onClick={() => setViewMode("unpaid")}
+                />
+              )}
+              <ViewModeTab
+                icon={Radio}
+                label="Active"
+                count={allActiveCount}
+                isActive={viewMode === "all"}
+                onClick={() => setViewMode("all")}
+              />
+            </div>
             {/* Add new tab here as a more menu button */}
             <MoreMenuButton setViewMode={setViewMode} />
           </div>
