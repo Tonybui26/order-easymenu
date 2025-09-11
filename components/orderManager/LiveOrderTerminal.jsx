@@ -72,6 +72,7 @@ export default function LiveOrderTerminal() {
   const [showNotification, setShowNotification] = useState(false);
   const [notificationOrderCount, setNotificationOrderCount] = useState(0);
   const [lastDismissedIds, setLastDismissedIds] = useState(new Set());
+  const [printedOrderIds, setPrintedOrderIds] = useState(new Set());
   const [audioInitialized, setAudioInitialized] = useState(false);
   const [showAudioPrompt, setShowAudioPrompt] = useState(false);
   const { soundEnabled } = useGlobalAppContext();
@@ -519,6 +520,8 @@ export default function LiveOrderTerminal() {
     setNotificationOrderCount(0);
     // Update lastDismissedIds to current order IDs so future counts are calculated correctly
     setLastDismissedIds(new Set(orders.map((order) => order._id)));
+    // Clear printed orders tracking when notification is dismissed
+    setPrintedOrderIds(new Set());
     stopSoundCycle();
     // Switch to new orders tab when notification is dismissed
     setViewMode("new");
@@ -555,51 +558,82 @@ export default function LiveOrderTerminal() {
 
         setOrders(activeOrders);
 
-        setLastOrderIds((prevLastOrderIdsSet) => {
-          // Check for new orders since last dismissal (not just last poll)
-          const newOrdersSinceLastDismissal = activeOrders.filter(
-            (order) => !lastDismissedIds.has(order._id),
-          );
+        // Check for new orders since last dismissal (not just last poll)
+        const newOrdersSinceLastDismissal = activeOrders.filter(
+          (order) => !lastDismissedIds.has(order._id),
+        );
 
-          // Filter orders that should trigger notifications:
-          // 1. Paid orders (takeaway/dine-in, but not counter paid)
-          // 2. Pending counter orders for dine-in only
-          const notificationWorthyOrders = newOrdersSinceLastDismissal.filter(
-            (order) => {
-              // Case 1: Paid orders (but not counter paid - these don't need immediate attention)
-              if (
-                order.paymentStatus === "paid" &&
-                !isCounterPayment(order.paymentMethod)
-              ) {
-                return true;
+        // Filter orders that should trigger notifications:
+        // 1. Paid orders (takeaway/dine-in, but not counter paid)
+        // 2. Pending counter orders for dine-in only
+        const notificationWorthyOrders = newOrdersSinceLastDismissal.filter(
+          (order) => {
+            // Case 1: Paid orders (but not counter paid - these don't need immediate attention)
+            if (
+              order.paymentStatus === "paid" &&
+              !isCounterPayment(order.paymentMethod)
+            ) {
+              return true;
+            }
+
+            // Case 2: Pending counter orders for dine-in only (these need payment collection)
+            if (
+              order.paymentStatus === "pending" &&
+              isCounterPayment(order.paymentMethod) &&
+              order.table !== "takeaway"
+            ) {
+              return true;
+            }
+
+            return false;
+          },
+        );
+
+        // Update count to reflect notification-worthy orders since last dismissal
+        if (notificationWorthyOrders.length > 0) {
+          setNotificationOrderCount(notificationWorthyOrders.length);
+
+          // Only trigger notification if it's not already showing
+          if (!showNotification) {
+            setShowNotification(true);
+            playSoundCycle();
+
+            // Auto-print orders if auto-printing is enabled
+            const autoPrintingEnabled = menuConfig?.autoPrinting?.enabled;
+            if (
+              autoPrintingEnabled &&
+              storeProfile &&
+              session?.user?.ownerEmail
+            ) {
+              // Filter out orders that have already been printed
+              const unprintedOrders = notificationWorthyOrders.filter(
+                (order) => !printedOrderIds.has(order._id),
+              );
+
+              // Print only unprinted orders
+              for (const order of unprintedOrders) {
+                try {
+                  const printResult = await handlePrintingOrder(order);
+                  console.log(
+                    `Auto-printed order ${order._id.slice(-6)}:`,
+                    printResult,
+                  );
+
+                  // Mark this order as printed
+                  setPrintedOrderIds((prev) => new Set([...prev, order._id]));
+                } catch (error) {
+                  console.error(
+                    `Error auto-printing order ${order._id}:`,
+                    error,
+                  );
+                  // Don't block other orders if one fails
+                }
               }
-
-              // Case 2: Pending counter orders for dine-in only (these need payment collection)
-              if (
-                order.paymentStatus === "pending" &&
-                isCounterPayment(order.paymentMethod) &&
-                order.table !== "takeaway"
-              ) {
-                return true;
-              }
-
-              return false;
-            },
-          );
-
-          // Update count to reflect notification-worthy orders since last dismissal
-          if (notificationWorthyOrders.length > 0) {
-            setNotificationOrderCount(notificationWorthyOrders.length);
-
-            // Only trigger notification if it's not already showing
-            if (!showNotification) {
-              setShowNotification(true);
-              playSoundCycle();
             }
           }
+        }
 
-          return currentOrderIdsAsSet;
-        });
+        setLastOrderIds(currentOrderIdsAsSet);
 
         // Note: Auto-printing is handled automatically in the backend
         // when orders are created or payment is confirmed
@@ -642,7 +676,42 @@ export default function LiveOrderTerminal() {
     };
   }, []);
 
-  // Handle order status updates
+  // Add this function inside the LiveOrderTerminal component
+  const handlePrintingOrder = async (order) => {
+    try {
+      // Determine order type
+      const isTakeaway = order.table === "takeaway";
+      const orderType = isTakeaway ? "takeaway" : "dinein";
+
+      // Check printer availability for the order type
+      const printersAvailability = await checkPrinterAvailability(orderType);
+      console.log("printersAvailability", printersAvailability);
+
+      if (printersAvailability.available) {
+        // Create print data object for the order
+        const printData = {
+          order: order,
+          orderId: order._id.slice(-6).toUpperCase(),
+          printers: printersAvailability.printers,
+        };
+
+        console.log("printData", printData);
+        const printResult = await printOrder(printData);
+        console.log("printResult", printResult);
+
+        return { success: true, result: printResult };
+      } else {
+        console.log(`No printers available for ${orderType} orders`);
+        return { success: false, message: "No printers available" };
+      }
+    } catch (error) {
+      console.error("Error printing order:", error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Handle order status updates and control printing
+  // only printing docket when order status is changed to "preparing" and auto-printing is disabled
   const handleStatusUpdate = async (orderId, newStatus) => {
     try {
       const updatedOrder = await updateOrderStatus(orderId, newStatus);
@@ -656,6 +725,7 @@ export default function LiveOrderTerminal() {
 
       // Hardcoded for creating print jobs when order status is changed to "preparing" - Now I want to temporary disable this feature
       const createPrintJobs = false;
+      // Currently I want to disable this feature so the following if statement never runs
       // Create print jobs when order status is changed to "preparing" ONLY if auto-printing is disabled
       if (
         newStatus === "preparing" &&
@@ -734,30 +804,31 @@ export default function LiveOrderTerminal() {
         try {
           const order = orders.find((o) => o._id === orderId);
           if (order) {
-            // Determine order type
-            const isTakeaway = order.table === "takeaway";
-            const orderType = isTakeaway ? "takeaway" : "dinein";
-
-            // Check printer availability for the order type
-            const printersAvailability =
-              await checkPrinterAvailability(orderType);
-            console.log("printersAvailability", printersAvailability);
-            if (printersAvailability.available) {
-              // Create print data object for the order
-              // Order Data
-              const orderData = order;
-              // List of available printers
-              const printers = printersAvailability.printers;
-              // Create print data object for the order
-              const printData = {
-                order: orderData,
-                orderId: order._id.slice(-6).toUpperCase(),
-                printers: printers,
-              };
-              console.log("printData", printData);
-              const printResult = await printOrder(printData);
-              console.log("printResult", printResult);
-            }
+            // // Determine order type
+            // const isTakeaway = order.table === "takeaway";
+            // const orderType = isTakeaway ? "takeaway" : "dinein";
+            // // Check printer availability for the order type
+            // const printersAvailability =
+            //   await checkPrinterAvailability(orderType);
+            // console.log("printersAvailability", printersAvailability);
+            // if (printersAvailability.available) {
+            //   // Create print data object for the order
+            //   // Order Data
+            //   const orderData = order;
+            //   // List of available printers
+            //   const printers = printersAvailability.printers;
+            //   // Create print data object for the order
+            //   const printData = {
+            //     order: orderData,
+            //     orderId: order._id.slice(-6).toUpperCase(),
+            //     printers: printers,
+            //   };
+            //   console.log("printData", printData);
+            //   const printResult = await printOrder(printData);
+            //   console.log("printResult", printResult);
+            // }
+            const printResult = await handlePrintingOrder(order);
+            console.log("printResult", printResult);
           }
         } catch (error) {
           console.error("Error printing order:", error);
