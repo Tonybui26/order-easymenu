@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 const GlobalAppContext = createContext();
 
 export const GlobalAppContextProvider = ({ children, userData }) => {
-  // App-wide general state
+  const { data: session, status } = useSession(); // Keep this for status only
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
@@ -19,8 +19,11 @@ export const GlobalAppContextProvider = ({ children, userData }) => {
         // Sound
         soundEnabled,
         setSoundEnabled,
-        // User data (available app-wide)
+        // User data (from server-side verification)
         userData,
+        // Session status (for loading states)
+        sessionStatus: status,
+        isAuthenticated: status === "authenticated",
       }}
     >
       {children}

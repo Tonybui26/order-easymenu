@@ -5,7 +5,7 @@ import { X, Minus, Plus } from "lucide-react";
 
 export default function PrepTimeControlButton() {
   const [showModal, setShowModal] = useState(false);
-  const { menuConfig, setMenuConfig } = useMenuContext();
+  const { menuConfig, setMenuConfig, updateMenuConfigField } = useMenuContext();
   const [localPrepTime, setLocalPrepTime] = useState(
     menuConfig?.prepTime || 30,
   );
@@ -17,14 +17,9 @@ export default function PrepTimeControlButton() {
     console.log("menuConfig", menuConfig);
   };
 
-  const handleSaveChanges = () => {
-    // Preserve all existing menuConfig properties and update prepTime
-    const updatedConfig = {
-      ...menuConfig,
-      prepTime: localPrepTime,
-    };
-
-    setMenuConfig(updatedConfig);
+  const handleSaveChanges = async () => {
+    // Use the reusable function to update config with fresh server data
+    await updateMenuConfigField("prepTime", localPrepTime);
     setShowModal(false);
   };
 

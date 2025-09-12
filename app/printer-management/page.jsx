@@ -17,7 +17,7 @@ export default function PrinterManagementPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [printers, setPrinters] = useState([]);
-  const { menuConfig, setMenuConfig } = useMenuContext();
+  const { menuConfig, setMenuConfig, updateMenuConfigField } = useMenuContext();
   const [autoPrintingEnabled, setAutoPrintingEnabled] = useState(
     menuConfig?.autoPrinting?.enabled || false,
   );
@@ -41,14 +41,12 @@ export default function PrinterManagementPage() {
     }
   };
 
-  const handleAutoPrintingChange = (e) => {
+  const handleAutoPrintingChange = async (e) => {
     setAutoPrintingEnabled(e.target.checked);
-    // update auto printing settings in the database
-    setMenuConfig({
-      ...menuConfig,
-      autoPrinting: {
-        enabled: e.target.checked,
-      },
+
+    // Use the reusable function to update config with fresh server data
+    await updateMenuConfigField("autoPrinting", {
+      enabled: e.target.checked,
     });
   };
 

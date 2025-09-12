@@ -20,6 +20,7 @@ import {
   Radio,
   Clock,
   Package,
+  RefreshCw,
   ShoppingCart,
   Users,
   X,
@@ -34,6 +35,7 @@ import { useSession } from "next-auth/react";
 import Image from "next/image";
 import { printOrder } from "@/lib/helper/printerUtils";
 import { isNativeApp } from "@/lib/helper/platformDetection";
+import toast from "react-hot-toast";
 
 /**
  * LiveOrderTerminal Component - Order Management Interface
@@ -60,7 +62,7 @@ import { isNativeApp } from "@/lib/helper/platformDetection";
  */
 export default function LiveOrderTerminal() {
   const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState("new"); // "new", "preparing", "ready", "unpaid", "all", or "completed"
   const [completedOrders, setCompletedOrders] = useState([]);
   const [completedOrdersLoading, setCompletedOrdersLoading] = useState(false);
@@ -73,11 +75,14 @@ export default function LiveOrderTerminal() {
   const [notificationOrderCount, setNotificationOrderCount] = useState(0);
   const [lastDismissedIds, setLastDismissedIds] = useState(new Set());
   const [printedOrderIds, setPrintedOrderIds] = useState(new Set());
+  const printedOrderIdsRef = useRef(new Set());
   const [audioInitialized, setAudioInitialized] = useState(false);
   const [showAudioPrompt, setShowAudioPrompt] = useState(false);
   const { soundEnabled } = useGlobalAppContext();
-  const { storeProfile, menuId, menuConfig } = useMenuContext();
-  const { data: session } = useSession();
+  const { storeProfile, menuId, menuConfig, refreshMenuDataWithToast } =
+    useMenuContext();
+  // const { data: session } = useSession();
+  const { userData } = useGlobalAppContext();
 
   // Platform detection
   const isNative = isNativeApp();
@@ -419,10 +424,12 @@ export default function LiveOrderTerminal() {
         setOrders(activeOrders);
         setLastOrderIds(new Set(activeOrders.map((order) => order._id)));
         setLastDismissedIds(new Set(activeOrders.map((order) => order._id)));
+        setLoading(false);
       } catch (error) {
+        setLoading(false);
         console.error("Failed to load initial orders:", error);
       } finally {
-        setLoading(false);
+        // setLoading(false);
       }
     }
 
@@ -431,6 +438,7 @@ export default function LiveOrderTerminal() {
 
   // Effect to fetch completed orders when view mode changes
   useEffect(() => {
+    console.log("useEffect viewMode run");
     if (viewMode === "completed") {
       fetchCompletedOrdersData();
     }
@@ -522,6 +530,7 @@ export default function LiveOrderTerminal() {
     setLastDismissedIds(new Set(orders.map((order) => order._id)));
     // Clear printed orders tracking when notification is dismissed
     setPrintedOrderIds(new Set());
+    printedOrderIdsRef.current.clear();
     stopSoundCycle();
     // Switch to new orders tab when notification is dismissed
     setViewMode("new");
@@ -529,6 +538,11 @@ export default function LiveOrderTerminal() {
 
   // Effect for polling orders
   useEffect(() => {
+    // Clear any existing interval first
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+
     pollingIntervalRef.current = setInterval(async () => {
       console.log("polling orders time:", new Date().toISOString());
       try {
@@ -564,6 +578,7 @@ export default function LiveOrderTerminal() {
         const newOrdersSinceLastDismissal = activeOrders.filter(
           (order) => !lastDismissedIds.has(order._id),
         );
+        console.log("lastDismissedIds", lastDismissedIds);
         console.log("newOrdersSinceLastDismissal", newOrdersSinceLastDismissal);
 
         // Filter orders that should trigger notifications:
@@ -591,10 +606,6 @@ export default function LiveOrderTerminal() {
             return false;
           },
         );
-        console.log("lastDismissedIds", lastDismissedIds);
-        console.log("printedOrderIds", printedOrderIds);
-        console.log("notificationWorthyOrders", notificationWorthyOrders);
-        console.log("showNotification", showNotification);
 
         // Update count to reflect notification-worthy orders since last dismissal
         if (notificationWorthyOrders.length > 0) {
@@ -602,31 +613,60 @@ export default function LiveOrderTerminal() {
 
           // Auto-print orders if auto-printing is enabled
           const autoPrintingEnabled = menuConfig?.autoPrinting?.enabled;
-          if (
-            autoPrintingEnabled &&
-            storeProfile &&
-            session?.user?.ownerEmail
-          ) {
+          if (autoPrintingEnabled && storeProfile && userData?.ownerEmail) {
             // Filter out orders that have already been printed
             const unprintedOrders = notificationWorthyOrders.filter(
-              (order) => !printedOrderIds.has(order._id),
+              (order) => !printedOrderIdsRef.current.has(order._id),
+            );
+            console.log(
+              "printedOrderIds right before filtering:",
+              printedOrderIdsRef.current,
             );
             console.log("unprintedOrders", unprintedOrders);
-            // Print only unprinted orders
+            // Print only unprinted orders and collect printed IDs
+            const newlyPrintedIds = [];
             for (const order of unprintedOrders) {
               try {
                 const printResult = await handlePrintingOrder(order);
-                console.log(
-                  `Auto-printed order ${order._id.slice(-6)}:`,
-                  printResult,
-                );
-
-                // Mark this order as printed
-                setPrintedOrderIds((prev) => new Set([...prev, order._id]));
+                if (printResult.success) {
+                  console.log(
+                    `Auto-printed successfully order ${order._id.slice(-6)}:`,
+                    printResult,
+                  );
+                  console.log("Marked order as printed:", order._id);
+                  newlyPrintedIds.push(order._id);
+                } else {
+                  console.error(
+                    `Error auto-printing order ${order._id}:`,
+                    printResult.message,
+                  );
+                  toast.error(
+                    "Failed to auto-print order - Double check the printer settings",
+                  );
+                }
               } catch (error) {
                 console.error(`Error auto-printing order ${order._id}:`, error);
                 // Don't block other orders if one fails
               }
+            }
+
+            // Update both the ref and state with all newly printed order IDs at once
+            if (newlyPrintedIds.length > 0) {
+              // Update ref immediately (synchronous)
+              newlyPrintedIds.forEach((id) =>
+                printedOrderIdsRef.current.add(id),
+              );
+              console.log(
+                "Updated printed order ids ref:",
+                printedOrderIdsRef.current,
+              );
+
+              // Update state for UI (if needed)
+              setPrintedOrderIds((prev) => {
+                const newSet = new Set([...prev, ...newlyPrintedIds]);
+                console.log("Updated printed order ids state:", newSet);
+                return newSet;
+              });
             }
           }
 
@@ -703,7 +743,7 @@ export default function LiveOrderTerminal() {
         const printResult = await printOrder(printData);
         console.log("printResult", printResult);
 
-        return { success: true, result: printResult };
+        return printResult;
       } else {
         console.log(`No printers available for ${orderType} orders`);
         return { success: false, message: "No printers available" };
@@ -734,7 +774,7 @@ export default function LiveOrderTerminal() {
       if (
         newStatus === "preparing" &&
         storeProfile &&
-        session?.user?.ownerEmail &&
+        userData?.ownerEmail &&
         createPrintJobs
       ) {
         try {
@@ -751,7 +791,7 @@ export default function LiveOrderTerminal() {
 
               // Check printer availability first
               const availability = await checkPrinterAvailability(
-                session.user.ownerEmail,
+                userData.ownerEmail,
                 orderType,
                 false, // isBackend = false for frontend manual printing
               );
@@ -761,7 +801,7 @@ export default function LiveOrderTerminal() {
                 const printResult = await createPrintJobsForOrder(
                   order,
                   storeProfile.menuLink,
-                  session.user.ownerEmail,
+                  userData.ownerEmail,
                   menuId, // Pass menuId as storeId
                   availability.printers, // Pass printer data to avoid duplicate API calls
                   false, // isBackend = false for frontend manual printing
@@ -802,7 +842,7 @@ export default function LiveOrderTerminal() {
       if (
         newStatus === "preparing" &&
         storeProfile &&
-        session?.user?.ownerEmail &&
+        userData?.ownerEmail &&
         !autoPrintingEnabled
       ) {
         try {
@@ -832,7 +872,12 @@ export default function LiveOrderTerminal() {
             //   console.log("printResult", printResult);
             // }
             const printResult = await handlePrintingOrder(order);
-            console.log("printResult", printResult);
+            if (printResult.success) {
+              console.log("Printed order:", printResult.message);
+            } else {
+              console.error("Error printing order:", printResult.message);
+              toast.error(printResult.message);
+            }
           }
         } catch (error) {
           console.error("Error printing order:", error);
@@ -1162,6 +1207,15 @@ export default function LiveOrderTerminal() {
             <OnlineOrderControlButton />
             {/* Button for controlling prep time */}
             <PrepTimeControlButton />
+            {/* Button for refreshing menu data */}
+            <button
+              onClick={refreshMenuDataWithToast}
+              className="btn flex h-auto flex-col items-center gap-0 rounded-xl px-4 py-1 text-center transition-colors hover:bg-gray-200"
+              title="Refresh menu data from server"
+            >
+              <RefreshCw className="size-5 text-gray-600" />
+              {/* <span className="text-xs font-medium text-gray-600">Refresh</span> */}
+            </button>
           </div>
 
           {/* View Mode Tabs */}

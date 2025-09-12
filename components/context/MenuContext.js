@@ -2,16 +2,16 @@
 
 import { updateMenuConfig, fetchGetMenuByOwnerEmail } from "@/lib/api/fetchApi";
 import { useSkipInitialEffect } from "@/lib/hooks/useSkipInitialEffect";
-import { useSession } from "next-auth/react";
-import { useEffect } from "react";
+import { useEffect, useState, createContext, useContext } from "react";
 import toast from "react-hot-toast";
-
-const { createContext, useContext, useState } = require("react");
+import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 
 const MenuContext = createContext();
 export const MenuContextProvider = ({ children, data: menuData }) => {
-  const { data: session } = useSession();
+  // const { data: session } = useSession();
+  const { userData } = useGlobalAppContext();
   const [dataLoaded, setDataLoaded] = useState(!!menuData);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [menuConfig, setMenuConfig] = useState(
     (menuData && menuData.config) || {},
@@ -20,8 +20,6 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   const [menuContent, setMenuContent] = useState(
     (menuData && menuData.menuContent) || [],
   );
-  const [isFirstLoadClientSide, setIsFirstLoadClientSide] = useState(false);
-
   const [storeProfile, setStoreProfile] = useState({
     storeName: (menuData && menuData.storeName) || "",
     storeLogo: (menuData && menuData.storeProfileImage) || "",
@@ -38,38 +36,128 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   const menuId = menuData?._id || null;
 
   // Fetch menu data client-side if not loaded from server
-  useSkipInitialEffect(() => {
+  useEffect(() => {
+    console.log("effect run");
     const fetchMenuData = async () => {
-      if (!dataLoaded && session?.user?.ownerEmail) {
-        try {
-          setIsFirstLoadClientSide(true);
-          console.log("Fetching menu data client-side...");
-          const data = await fetchGetMenuByOwnerEmail(session.user.ownerEmail);
+      // Only fetch if we don't have data AND we have a session
 
-          if (data) {
-            setMenuConfig(data.config || {});
-            setMenuContent(data.menuContent || []);
-            setStoreProfile({
-              storeName: data.storeName || "",
-              storeLogo: data.storeProfileImage || "",
-              menuLink: data.menuLink || "",
-              storeAddress: data.storeAddress || "",
-              stripeConfig: data.stripeConfig || {},
-              paymentMethods: data.paymentMethods || {
-                stripe: { enabled: false, isDefault: false },
-                cash: { enabled: false, isDefault: false },
-              },
-            });
-            setDataLoaded(true);
-          }
-        } catch (error) {
-          console.error("Error fetching menu data:", error);
+      try {
+        console.log("Fetching menu data client-side...");
+        const data = await fetchGetMenuByOwnerEmail(userData.ownerEmail);
+
+        if (data) {
+          setMenuConfig(data.config || {});
+          setMenuContent(data.menuContent || []);
+          setStoreProfile({
+            storeName: data.storeName || "",
+            storeLogo: data.storeProfileImage || "",
+            menuLink: data.menuLink || "",
+            storeAddress: data.storeAddress || "",
+            stripeConfig: data.stripeConfig || {},
+            paymentMethods: data.paymentMethods || {
+              stripe: { enabled: false, isDefault: false },
+              cash: { enabled: false, isDefault: false },
+            },
+          });
+          setDataLoaded(true);
         }
+      } catch (error) {
+        console.error("Error fetching menu data:", error);
+        setDataLoaded(true); // Mark as loaded even on error to prevent infinite retries
       }
     };
+    if (!dataLoaded && userData?.ownerEmail) {
+      fetchMenuData();
+    }
+  }, [userData?.ownerEmail, dataLoaded]);
 
-    fetchMenuData();
-  }, [session?.user?.ownerEmail, dataLoaded]);
+  // Reusable function to update config fields with fresh server data
+  const updateMenuConfigField = async (fieldPath, newValue) => {
+    try {
+      // Step 1: Fetch latest menu config from server
+      console.log("🔄 Fetching latest menu config...");
+      const latestData = await fetchGetMenuByOwnerEmail(userData.ownerEmail);
+
+      if (latestData) {
+        // Step 2: Update local state with fresh server data + user's change
+        const freshConfig = latestData.config || {};
+
+        // Step 3: Apply user's change using deep spread
+        const updatedConfig = {
+          ...freshConfig,
+          [fieldPath]:
+            typeof newValue === "object" && newValue !== null
+              ? {
+                  ...freshConfig[fieldPath],
+                  ...newValue,
+                }
+              : newValue, // For primitive values (numbers, strings, booleans)
+        };
+
+        setMenuConfig(updatedConfig);
+        console.log("✅ Config updated with fresh data + user change");
+        return { success: true };
+      }
+    } catch (error) {
+      console.error("❌ Error updating config field:", error);
+      return { success: false, error };
+    }
+  };
+
+  // Function to refresh all menu data from server
+  const refreshMenuData = async () => {
+    try {
+      console.log("🔄 Refreshing menu data from server...");
+      const data = await fetchGetMenuByOwnerEmail(userData.ownerEmail);
+
+      if (data) {
+        // Update all menu-related state with fresh data
+        setMenuConfig(data.config || {});
+        setMenuContent(data.menuContent || []);
+        setStoreProfile({
+          storeName: data.storeName || "",
+          storeLogo: data.storeProfileImage || "",
+          menuLink: data.menuLink || "",
+          storeAddress: data.storeAddress || "",
+          stripeConfig: data.stripeConfig || {},
+          paymentMethods: data.paymentMethods || {
+            stripe: { enabled: false, isDefault: false },
+            cash: { enabled: false, isDefault: false },
+          },
+        });
+
+        console.log("✅ Menu data refreshed successfully 11");
+        return { success: true };
+      }
+    } catch (error) {
+      console.error("❌ Error refreshing menu data:", error);
+      return { success: false, error };
+    }
+  };
+
+  // Wrapper function for refresh with toast
+  const refreshMenuDataWithToast = async () => {
+    try {
+      console.log("Set is refreshing true");
+      setIsRefreshing(true); // Set flag to prevent useSkipInitialEffect
+      const result = await refreshMenuData();
+      if (result.success) {
+        toast.success("Menu data refreshed!");
+      } else {
+        toast.error("Failed to refresh menu data");
+      }
+      // timeout 1 second
+      setTimeout(() => {
+        console.log("Set is refreshing false");
+        setIsRefreshing(false); // Reset flag
+      }, 1000);
+      return result;
+    } catch (error) {
+      toast.error("Failed to refresh menu data");
+      setIsRefreshing(false); // Reset flag
+      return { success: false, error };
+    }
+  };
 
   // Create the saveMenuUpdate function
   const saveMenuConfig = async () => {
@@ -83,14 +171,15 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
 
   // Use the effect for database update when menu config changes
   useSkipInitialEffect(() => {
-    // Show toast message when saving the menu
-    console.log("menuConfig changed run here");
-    // skip the first load client side from the toast
-    if (isFirstLoadClientSide) {
-      setIsFirstLoadClientSide(false);
+    // Skip if we're currently refreshing to prevent double toast
+    if (isRefreshing) {
+      console.log("⏸️ Skipping save - currently refreshing menu data");
       return;
     }
-    console.log("menuConfig changed run here 2");
+
+    console.log("useSkipInitialEffect run");
+    // Show toast message when saving the menu
+    console.log("menuConfig changed run here");
     toast.promise(saveMenuConfig(), {
       loading: "Saving...",
       success: "Changes saved successfully!",
@@ -103,6 +192,8 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
       value={{
         menuConfig,
         setMenuConfig,
+        updateMenuConfigField, // Add reusable config update function
+        refreshMenuDataWithToast, // Add refresh function with toast
         menuContent,
         setMenuContent,
         menuId,
