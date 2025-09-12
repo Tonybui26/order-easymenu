@@ -530,6 +530,7 @@ export default function LiveOrderTerminal() {
   // Effect for polling orders
   useEffect(() => {
     pollingIntervalRef.current = setInterval(async () => {
+      console.log("polling orders time:", new Date().toISOString());
       try {
         const data = await fetchOrders();
         const activeOrders = data.filter((order) => {
@@ -557,11 +558,13 @@ export default function LiveOrderTerminal() {
         );
 
         setOrders(activeOrders);
+        console.log("activeOrders", activeOrders);
 
         // Check for new orders since last dismissal (not just last poll)
         const newOrdersSinceLastDismissal = activeOrders.filter(
           (order) => !lastDismissedIds.has(order._id),
         );
+        console.log("newOrdersSinceLastDismissal", newOrdersSinceLastDismissal);
 
         // Filter orders that should trigger notifications:
         // 1. Paid orders (takeaway/dine-in, but not counter paid)
@@ -588,48 +591,49 @@ export default function LiveOrderTerminal() {
             return false;
           },
         );
+        console.log("lastDismissedIds", lastDismissedIds);
+        console.log("printedOrderIds", printedOrderIds);
+        console.log("notificationWorthyOrders", notificationWorthyOrders);
+        console.log("showNotification", showNotification);
 
         // Update count to reflect notification-worthy orders since last dismissal
         if (notificationWorthyOrders.length > 0) {
           setNotificationOrderCount(notificationWorthyOrders.length);
 
+          // Auto-print orders if auto-printing is enabled
+          const autoPrintingEnabled = menuConfig?.autoPrinting?.enabled;
+          if (
+            autoPrintingEnabled &&
+            storeProfile &&
+            session?.user?.ownerEmail
+          ) {
+            // Filter out orders that have already been printed
+            const unprintedOrders = notificationWorthyOrders.filter(
+              (order) => !printedOrderIds.has(order._id),
+            );
+            console.log("unprintedOrders", unprintedOrders);
+            // Print only unprinted orders
+            for (const order of unprintedOrders) {
+              try {
+                const printResult = await handlePrintingOrder(order);
+                console.log(
+                  `Auto-printed order ${order._id.slice(-6)}:`,
+                  printResult,
+                );
+
+                // Mark this order as printed
+                setPrintedOrderIds((prev) => new Set([...prev, order._id]));
+              } catch (error) {
+                console.error(`Error auto-printing order ${order._id}:`, error);
+                // Don't block other orders if one fails
+              }
+            }
+          }
+
           // Only trigger notification if it's not already showing
           if (!showNotification) {
             setShowNotification(true);
             playSoundCycle();
-
-            // Auto-print orders if auto-printing is enabled
-            const autoPrintingEnabled = menuConfig?.autoPrinting?.enabled;
-            if (
-              autoPrintingEnabled &&
-              storeProfile &&
-              session?.user?.ownerEmail
-            ) {
-              // Filter out orders that have already been printed
-              const unprintedOrders = notificationWorthyOrders.filter(
-                (order) => !printedOrderIds.has(order._id),
-              );
-
-              // Print only unprinted orders
-              for (const order of unprintedOrders) {
-                try {
-                  const printResult = await handlePrintingOrder(order);
-                  console.log(
-                    `Auto-printed order ${order._id.slice(-6)}:`,
-                    printResult,
-                  );
-
-                  // Mark this order as printed
-                  setPrintedOrderIds((prev) => new Set([...prev, order._id]));
-                } catch (error) {
-                  console.error(
-                    `Error auto-printing order ${order._id}:`,
-                    error,
-                  );
-                  // Don't block other orders if one fails
-                }
-              }
-            }
           }
         }
 
