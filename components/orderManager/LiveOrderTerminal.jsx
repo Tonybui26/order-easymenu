@@ -113,39 +113,35 @@ export default function LiveOrderTerminal() {
         setShowAudioPrompt(false);
 
         // 3. Force re-fetch initial orders
-        setTimeout(async () => {
-          try {
-            setLoading(true);
-            const data = await fetchOrders();
-            const activeOrders = data.filter((order) => {
-              if (
-                ["pending", "confirmed", "preparing", "ready"].includes(
-                  order.status,
-                )
-              ) {
-                return true;
-              }
-              if (
-                order.status === "delivered" &&
-                order.paymentStatus === "pending"
-              ) {
-                return true;
-              }
-              return false;
-            });
-            setOrders(activeOrders);
-            setLastOrderIds(new Set(activeOrders.map((order) => order._id)));
-            setLastDismissedIds(
-              new Set(activeOrders.map((order) => order._id)),
-            );
-            setLoading(false);
-            toast.success("App refreshed successfully!");
-          } catch (error) {
-            setLoading(false);
-            console.error("Failed to reload orders:", error);
-            toast.error("Failed to refresh orders");
-          }
-        }, 1000);
+        try {
+          setLoading(true);
+          const data = await fetchOrders();
+          const activeOrders = data.filter((order) => {
+            if (
+              ["pending", "confirmed", "preparing", "ready"].includes(
+                order.status,
+              )
+            ) {
+              return true;
+            }
+            if (
+              order.status === "delivered" &&
+              order.paymentStatus === "pending"
+            ) {
+              return true;
+            }
+            return false;
+          });
+          setOrders(activeOrders);
+          setLastOrderIds(new Set(activeOrders.map((order) => order._id)));
+          setLastDismissedIds(new Set(activeOrders.map((order) => order._id)));
+          setLoading(false);
+          toast.success("App refreshed successfully!");
+        } catch (error) {
+          setLoading(false);
+          console.error("Failed to reload orders:", error);
+          toast.error("Failed to refresh orders");
+        }
       } else {
         // For web browser - use regular page refresh
         window.location.reload();
