@@ -8,17 +8,19 @@ import {
   Trash2,
   CheckCircle,
   MoreVertical,
+  RotateCcw, // ✅ Correct icon name
 } from "lucide-react";
 import PrinterSetupModal from "./PrinterSetupModal";
 import { createTestPrintJob } from "@/lib/api/fetchApi";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { useSession } from "next-auth/react";
 import { toast } from "react-hot-toast";
-import { printTest } from "@/lib/helper/printerUtils";
+import { printTest, resetTcpPlugin } from "@/lib/helper/printerUtils";
 
 export default function PrinterCard({ printer, onDelete, onUpdate }) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [testingPrinter, setTestingPrinter] = useState(false);
+  const [resettingPrinter, setResettingPrinter] = useState(false); // ✅ Add this state
   const { menuId, storeProfile } = useMenuContext();
   const { data: session } = useSession();
 
@@ -47,6 +49,24 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
       toast.error("Failed to test printer: " + error.message);
     } finally {
       setTestingPrinter(false);
+    }
+  };
+
+  const handleResetPrinter = async () => {
+    try {
+      setResettingPrinter(true); // ✅ Set loading state
+
+      await toast.promise(resetTcpPlugin(), {
+        loading: "Resetting TCP plugin...",
+        success: "TCP plugin reset successfully!",
+        error: (err) =>
+          `Failed to reset TCP plugin: ${err?.message || "Unknown error"}`,
+      });
+    } catch (error) {
+      // toast.promise handles the error display
+      console.error("Reset error:", error);
+    } finally {
+      setResettingPrinter(false); // ✅ Clear loading state
     }
   };
 
@@ -102,6 +122,25 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
               tabIndex={0}
               className="menu dropdown-content z-[1] w-52 rounded-box bg-base-100 p-2 shadow"
             >
+              <li>
+                <button
+                  onClick={handleResetPrinter}
+                  disabled={resettingPrinter} // ✅ Disable during reset
+                  className="flex items-center gap-2"
+                >
+                  {resettingPrinter ? ( // ✅ Show loading state
+                    <>
+                      <div className="h-4 w-4 animate-spin rounded-full border border-red-300 border-t-red-600"></div>
+                      Resetting...
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="h-4 w-4" /> {/* ✅ Correct icon */}
+                      Reset TCP Plugin
+                    </>
+                  )}
+                </button>
+              </li>
               <li>
                 <button
                   onClick={handleTestPrinter}
