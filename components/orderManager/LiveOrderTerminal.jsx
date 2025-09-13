@@ -87,6 +87,72 @@ export default function LiveOrderTerminal() {
   // Platform detection
   const isNative = isNativeApp();
 
+  // Comprehensive refresh function for mobile app
+  const handleFullRefresh = async () => {
+    try {
+      if (isNative) {
+        // For Capacitor webview - comprehensive refresh
+        toast.loading("Refreshing app data...", { duration: 2000 });
+
+        // 1. Refresh menu data
+        await refreshMenuDataWithToast();
+
+        // 2. Reset all local state to force re-initialization
+        setOrders([]);
+        setCompletedOrders([]);
+        setLastOrderIds(new Set());
+        setShowNotification(false);
+        setNotificationOrderCount(0);
+        setLastDismissedIds(new Set());
+        setPrintedOrderIds(new Set());
+        printedOrderIdsRef.current.clear();
+        setAudioInitialized(false);
+        setShowAudioPrompt(false);
+
+        // 3. Force re-fetch initial orders
+        setTimeout(async () => {
+          try {
+            setLoading(true);
+            const data = await fetchOrders();
+            const activeOrders = data.filter((order) => {
+              if (
+                ["pending", "confirmed", "preparing", "ready"].includes(
+                  order.status,
+                )
+              ) {
+                return true;
+              }
+              if (
+                order.status === "delivered" &&
+                order.paymentStatus === "pending"
+              ) {
+                return true;
+              }
+              return false;
+            });
+            setOrders(activeOrders);
+            setLastOrderIds(new Set(activeOrders.map((order) => order._id)));
+            setLastDismissedIds(
+              new Set(activeOrders.map((order) => order._id)),
+            );
+            setLoading(false);
+            toast.success("App refreshed successfully!");
+          } catch (error) {
+            setLoading(false);
+            console.error("Failed to reload orders:", error);
+            toast.error("Failed to refresh orders");
+          }
+        }, 1000);
+      } else {
+        // For web browser - use regular page refresh
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error("Error during refresh:", error);
+      toast.error("Failed to refresh app");
+    }
+  };
+
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const datePickerRef = useRef(null);
@@ -1207,11 +1273,11 @@ export default function LiveOrderTerminal() {
             <OnlineOrderControlButton />
             {/* Button for controlling prep time */}
             <PrepTimeControlButton />
-            {/* Button for refreshing menu data */}
+            {/* Button for refreshing app data */}
             <button
-              onClick={refreshMenuDataWithToast}
+              onClick={handleFullRefresh}
               className="btn flex h-auto flex-col items-center gap-0 rounded-xl px-4 py-1 text-center transition-colors hover:bg-gray-200"
-              title="Refresh menu data from server"
+              title={isNative ? "Refresh app data" : "Refresh page"}
             >
               <RefreshCw className="size-5 text-gray-600" />
               {/* <span className="text-xs font-medium text-gray-600">Refresh</span> */}
