@@ -97,7 +97,10 @@ export default function LiveOrderTerminal() {
         // 1. Refresh menu data
         await refreshMenuDataWithToast();
 
-        // 2. Reset all local state to force re-initialization
+        // 2. Stop any ongoing notification sounds
+        stopSoundCycle();
+
+        // 3. Reset all local state to force re-initialization
         setOrders([]);
         setCompletedOrders([]);
         setLastOrderIds(new Set());
