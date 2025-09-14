@@ -60,9 +60,9 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
   const handleAggressiveTestPrinter = async () => {
     try {
       setAggressiveTestingPrinter(true);
-      const result = await aggressiveTestThrottled(printer, null, 10);
+      const result = await aggressiveTestNew(printer, null, 10);
       toast.success(
-        `Throttled test: ${result.successfulTests}/${result.totalTests} successful!`,
+        `Simple aggressive test: ${result.successfulTests}/${result.totalTests} successful! in ${result.totalDuration}ms`,
       );
     } catch (error) {
       toast.error("Failed to throttled test printer: " + error.message);
