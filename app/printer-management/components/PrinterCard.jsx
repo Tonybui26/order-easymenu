@@ -56,7 +56,7 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
   const handleAggressiveTestPrinter = async () => {
     try {
       setAggressiveTestingPrinter(true);
-      const result = await aggressiveTestNew(printer, null, 3);
+      const result = await aggressiveTestNew(printer, null, 10);
       console.log("Aggressive testing printer result:", result);
       toast.success("Aggressive testing printer result:", result);
     } catch (error) {
