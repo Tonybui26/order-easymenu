@@ -34,6 +34,7 @@
     "next-video": "^2.0.4",
     "prettier": "^3.3.3",
     "prettier-plugin-tailwindcss": "^0.6.9",
+    "printer-tcp-socket": "file:printer-tcp-socket",
     "react": "^18",
     "react-dom": "^18",
     "react-hot-toast": "^2.5.2",

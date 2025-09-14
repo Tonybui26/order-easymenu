@@ -16,6 +16,7 @@ import { useMenuContext } from "@/components/context/MenuContext";
 import { useSession } from "next-auth/react";
 import { toast } from "react-hot-toast";
 import { printTest, resetTcpPlugin } from "@/lib/helper/printerUtils";
+import { printTestNew } from "@/lib/helper/printerUtilsNew";
 
 export default function PrinterCard({ printer, onDelete, onUpdate }) {
   const [showEditModal, setShowEditModal] = useState(false);
@@ -37,7 +38,7 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
   const handleTestPrinter = async () => {
     try {
       setTestingPrinter(true);
-      const result = await printTest(null, printer);
+      const result = await printTestNew(null, printer);
 
       if (result.success) {
         toast.success(result.message);

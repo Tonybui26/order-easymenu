@@ -10,3 +10,6 @@ project(':capacitor-splash-screen').projectDir = new File('../node_modules/@capa
 
 include ':capacitor-tcp-socket'
 project(':capacitor-tcp-socket').projectDir = new File('../node_modules/capacitor-tcp-socket/android')
+
+include ':printer-tcp-socket'
+project(':printer-tcp-socket').projectDir = new File('../printer-tcp-socket/android')
