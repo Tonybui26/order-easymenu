@@ -16,14 +16,14 @@ import { useMenuContext } from "@/components/context/MenuContext";
 import { useSession } from "next-auth/react";
 import { toast } from "react-hot-toast";
 import { printTest, resetTcpPlugin } from "@/lib/helper/printerUtils";
-import { printTestNew } from "@/lib/helper/printerUtilsNew";
+import { printTestNew, aggressiveTestNew } from "@/lib/helper/printerUtilsNew";
 
 export default function PrinterCard({ printer, onDelete, onUpdate }) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [testingPrinter, setTestingPrinter] = useState(false);
+  const [aggressiveTestingPrinter, setAggressiveTestingPrinter] =
+    useState(false);
   const [resettingPrinter, setResettingPrinter] = useState(false); // ✅ Add this state
-  const { menuId, storeProfile } = useMenuContext();
-  const { data: session } = useSession();
 
   const handleEdit = () => {
     setShowEditModal(true);
@@ -50,6 +50,20 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
       toast.error("Failed to test printer: " + error.message);
     } finally {
       setTestingPrinter(false);
+    }
+  };
+
+  const handleAggressiveTestPrinter = async () => {
+    try {
+      setAggressiveTestingPrinter(true);
+      const result = await aggressiveTestNew(printer, null, 3);
+      console.log("Aggressive testing printer result:", result);
+      toast.success("Aggressive testing printer result:", result);
+    } catch (error) {
+      console.error("Error aggressive testing printer:", error);
+      toast.error("Failed to aggressive test printer: " + error.message);
+    } finally {
+      setAggressiveTestingPrinter(false);
     }
   };
 
@@ -123,6 +137,25 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
               tabIndex={0}
               className="menu dropdown-content z-[1] w-52 rounded-box bg-base-100 p-2 shadow"
             >
+              <li>
+                <button
+                  onClick={handleAggressiveTestPrinter}
+                  disabled={aggressiveTestingPrinter} // ✅ Disable during reset
+                  className="flex items-center gap-2"
+                >
+                  {aggressiveTestingPrinter ? ( // ✅ Show loading state
+                    <>
+                      <div className="h-4 w-4 animate-spin rounded-full border border-red-300 border-t-red-600"></div>
+                      Aggressive Testing...
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="h-4 w-4" /> {/* ✅ Correct icon */}
+                      Aggressive Testing
+                    </>
+                  )}
+                </button>
+              </li>
               <li>
                 <button
                   onClick={handleResetPrinter}
