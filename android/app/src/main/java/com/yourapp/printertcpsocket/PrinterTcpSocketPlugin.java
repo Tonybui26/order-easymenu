@@ -87,6 +87,11 @@ public class PrinterTcpSocketPlugin extends Plugin {
                 // Printers often don't handle keep-alive well
                 socket.setKeepAlive(false);
                 
+                // CRITICAL: Configure socket for proper closure to avoid printer socket exhaustion
+                socket.setSoLinger(true, 0); // Force immediate close without TIME_WAIT
+                socket.setReuseAddress(true); // Allow port reuse to prevent exhaustion
+                socket.setTcpNoDelay(true); // Send data immediately (good for printers)
+                
                 // Attempt connection with timeout
                 // This is the key improvement - proper timeout handling!
                 socket.connect(new InetSocketAddress(ipAddress, port), timeoutMs);
@@ -203,7 +208,21 @@ public class PrinterTcpSocketPlugin extends Plugin {
         Socket socket = activeConnections.remove(connectionId);
         if (socket != null) {
             try {
-                socket.close();
+                // CRITICAL: Proper socket shutdown sequence to avoid printer socket exhaustion
+                if (!socket.isClosed()) {
+                    // First, shutdown output stream (tell printer we're done sending)
+                    try {
+                        socket.shutdownOutput();
+                    } catch (IOException ignored) {}
+                    
+                    // Then shutdown input stream
+                    try {
+                        socket.shutdownInput();
+                    } catch (IOException ignored) {}
+                    
+                    // Finally close the socket
+                    socket.close();
+                }
             } catch (IOException e) {
                 // Log but don't fail - connection is being removed anyway
                 System.out.println("Warning during disconnect: " + e.getMessage());
@@ -221,10 +240,15 @@ public class PrinterTcpSocketPlugin extends Plugin {
     public void resetAll(PluginCall call) {
         int connectionsCleared = activeConnections.size();
         
-        // Force close all connections
+        // Force close all connections with proper shutdown sequence
         for (Socket socket : activeConnections.values()) {
             try {
-                socket.close();
+                if (!socket.isClosed()) {
+                    // Proper shutdown sequence to avoid printer socket exhaustion
+                    try { socket.shutdownOutput(); } catch (IOException ignored) {}
+                    try { socket.shutdownInput(); } catch (IOException ignored) {}
+                    socket.close();
+                }
             } catch (IOException ignored) {
                 // Ignore errors during forced cleanup
             }
