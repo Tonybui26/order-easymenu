@@ -16,7 +16,11 @@ import { useMenuContext } from "@/components/context/MenuContext";
 import { useSession } from "next-auth/react";
 import { toast } from "react-hot-toast";
 import { printTest, resetTcpPlugin } from "@/lib/helper/printerUtils";
-import { printTestNew, aggressiveTestNew } from "@/lib/helper/printerUtilsNew";
+import {
+  printTestNew,
+  aggressiveTestNew,
+  aggressiveTestThrottled,
+} from "@/lib/helper/printerUtilsNew";
 
 export default function PrinterCard({ printer, onDelete, onUpdate }) {
   const [showEditModal, setShowEditModal] = useState(false);
@@ -56,12 +60,12 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
   const handleAggressiveTestPrinter = async () => {
     try {
       setAggressiveTestingPrinter(true);
-      const result = await aggressiveTestNew(printer, null, 10);
-      console.log("Aggressive testing printer result:", result);
-      toast.success("Aggressive testing printer result:", result);
+      const result = await aggressiveTestThrottled(printer, null, 10);
+      toast.success(
+        `Throttled test: ${result.successfulTests}/${result.totalTests} successful!`,
+      );
     } catch (error) {
-      console.error("Error aggressive testing printer:", error);
-      toast.error("Failed to aggressive test printer: " + error.message);
+      toast.error("Failed to throttled test printer: " + error.message);
     } finally {
       setAggressiveTestingPrinter(false);
     }
