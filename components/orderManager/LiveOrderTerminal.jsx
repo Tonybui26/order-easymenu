@@ -41,7 +41,7 @@ import {
   getPrintQueueStatus,
   printOrderQueued,
 } from "@/lib/helper/printerUtilsNew";
-import { useSkipInitialEffect } from "@/hooks/useSkipInitialEffect";
+import { useSkipInitialEffect } from "@/lib/hooks/useSkipInitialEffect";
 
 /**
  * LiveOrderTerminal Component - Order Management Interface
