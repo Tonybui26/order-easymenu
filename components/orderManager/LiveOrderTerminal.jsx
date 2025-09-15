@@ -822,7 +822,9 @@ export default function LiveOrderTerminal() {
             toast.error(printResult.failedPrinterNames + " failed to print");
           }
         } else {
-          toast.error(printResult.message);
+          // toast.error(printResult.message);
+          // create for me a similar toast but not use the plugin, just use the state to show the message with the same style and add the dismiss button
+          showCustomToast(printResult.message, "error");
         }
 
         return printResult;
@@ -1163,6 +1165,32 @@ export default function LiveOrderTerminal() {
     );
     return uniqueTables.size;
   })();
+
+  const [customToast, setCustomToast] = useState({
+    show: false,
+    type: "error", // 'error', 'success', 'warning'
+    message: "",
+    id: null,
+  });
+
+  const showCustomToast = (message, type = "error") => {
+    const id = Date.now() + Math.random();
+    setCustomToast({
+      show: true,
+      type,
+      message,
+      id,
+    });
+  };
+
+  const hideCustomToast = () => {
+    setCustomToast({
+      show: false,
+      type: "error",
+      message: "",
+      id: null,
+    });
+  };
 
   return (
     <>
@@ -1673,6 +1701,37 @@ export default function LiveOrderTerminal() {
         <PaymentMethodModal />
         <DatePickerModal />
       </div>
+      {/* Custom Toast Component */}
+      {customToast.show && (
+        <div className="fixed right-4 top-4 z-50 animate-in slide-in-from-right-5">
+          <div
+            className={`flex w-full max-w-md items-center justify-between rounded-lg border p-4 shadow-lg ${
+              customToast.type === "error"
+                ? "border-red-200 bg-red-50 text-red-800"
+                : customToast.type === "success"
+                  ? "border-green-200 bg-green-50 text-green-800"
+                  : "border-yellow-200 bg-yellow-50 text-yellow-800"
+            } `}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-lg">
+                {customToast.type === "error"
+                  ? "❌"
+                  : customToast.type === "success"
+                    ? "✅"
+                    : "⚠️"}
+              </span>
+              <span className="font-medium">{customToast.message}</span>
+            </div>
+            <button
+              onClick={hideCustomToast}
+              className="ml-4 rounded bg-red-600 px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-red-700"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
