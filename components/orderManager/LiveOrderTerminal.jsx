@@ -816,11 +816,15 @@ export default function LiveOrderTerminal() {
           delayAfterDisconnect: 300, // Longer delay for production
         });
 
-        console.log("printResult", printResult);
+        if (printResult.success) {
+          toast.success(printResult.message);
+        } else {
+          toast.error(printResult.error);
+        }
 
         return printResult;
       } else {
-        console.log(`No printers available for ${orderType} orders`);
+        toast.error(`No printers available for ${orderType} orders`);
         return { success: false, message: "No printers available" };
       }
     } catch (error) {
@@ -924,12 +928,6 @@ export default function LiveOrderTerminal() {
           const order = orders.find((o) => o._id === orderId);
           if (order) {
             const printResult = await handlePrintingOrder(order);
-            if (printResult.success) {
-              toast.success("Order printed successfully");
-              toast.success(printResult.message);
-            } else {
-              toast.error(printResult.error);
-            }
           }
         } catch (error) {
           console.error("Error printing order:", error);
