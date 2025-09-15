@@ -47,9 +47,8 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
       const printData = {
         printers: [printer],
       };
-      const result = await printOrderNewQueued(printData, {
+      const result = await printTestNew(null, printer, {
         delayAfterDisconnect: 300,
-        testing: true,
       });
 
       if (result.success) {
