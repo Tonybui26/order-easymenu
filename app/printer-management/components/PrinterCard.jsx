@@ -88,8 +88,12 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
         "info",
       );
 
-      const result = await printTestNew(null, printer, {
+      const printData = {
+        printers: [printer],
+      };
+      const result = await printTestNewQueued(printData, {
         delayAfterDisconnect: 300,
+        testing: true,
       });
 
       if (result.success) {
