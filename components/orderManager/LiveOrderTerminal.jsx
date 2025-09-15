@@ -41,6 +41,7 @@ import {
   getPrintQueueStatus,
   printOrderQueued,
 } from "@/lib/helper/printerUtilsNew";
+import { useSkipInitialEffect } from "@/hooks/useSkipInitialEffect";
 
 /**
  * LiveOrderTerminal Component - Order Management Interface
@@ -605,7 +606,7 @@ export default function LiveOrderTerminal() {
   };
 
   // Effect for polling orders
-  useEffect(() => {
+  useSkipInitialEffect(() => {
     let isActive = true;
     let timeoutId;
     let retryCount = 0;
@@ -651,6 +652,7 @@ export default function LiveOrderTerminal() {
         console.log("activeOrders", activeOrders);
 
         // Check for new orders since last dismissal (not just last poll)
+        // Now this is safe - lastDismissedIds is already set from initial loading
         const newOrdersSinceLastDismissal = activeOrders.filter(
           (order) => !lastDismissedIds.has(order._id),
         );
@@ -784,10 +786,9 @@ export default function LiveOrderTerminal() {
       }
     };
 
-    // Add small delay to let initial loading complete first
-    timeoutId = setTimeout(pollOrders, 1000); // Wait 1 second
+    // Start polling immediately (no delay needed)
+    pollOrders();
 
-    // Cleanup
     return () => {
       isActive = false;
       if (timeoutId) {
