@@ -24,7 +24,8 @@ import {
   aggressiveTestThrottled,
   printOrderNewQueued,
   aggressiveTestNewQueued,
-  setQueueLogCallback, // ✅ Import the new function
+  setQueueLogCallback,
+  aggressiveTestNewQueuedParallel, // ✅ Import the new function
 } from "@/lib/helper/printerUtilsNew";
 
 export default function PrinterCard({ printer, onDelete, onUpdate }) {
@@ -126,7 +127,7 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
       addLog(`Starting aggressive test for ${printer.name}`, "info");
       addLog(`Target: 20 test cycles`, "info");
 
-      const result = await aggressiveTestNewQueued(printer, 20);
+      const result = await aggressiveTestNewQueuedParallel(printer, 5);
 
       addLog(`🏁 Test completed!`, "success");
       addLog(
