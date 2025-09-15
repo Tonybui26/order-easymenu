@@ -925,9 +925,10 @@ export default function LiveOrderTerminal() {
           if (order) {
             const printResult = await handlePrintingOrder(order);
             if (printResult.success) {
-              toast.success(printResult.message);
+              toast.success("Order printed successfully");
+              toast.success(printResult);
             } else {
-              toast.error(printResult.message);
+              toast.error(printResult.error);
             }
           }
         } catch (error) {
