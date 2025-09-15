@@ -41,7 +41,7 @@ export default async function RootLayout({ children }) {
             </MenuContextProvider>
           </GlobalAppContextProvider>
         </NextAuthProvider>
-        <Toaster />
+        <Toaster position="bottom-right" />
       </body>
     </html>
   );
