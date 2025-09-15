@@ -21,6 +21,7 @@ import {
   aggressiveTestNew,
   aggressiveTestThrottled,
   printOrderNewQueued,
+  aggressiveTestNewQueued,
 } from "@/lib/helper/printerUtilsNew";
 
 export default function PrinterCard({ printer, onDelete, onUpdate }) {
