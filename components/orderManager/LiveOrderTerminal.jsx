@@ -834,7 +834,7 @@ export default function LiveOrderTerminal() {
                 </div>
               ),
               {
-                duration: Infinity, // Never auto-dismiss
+                duration: 4000,
               },
             );
           }
