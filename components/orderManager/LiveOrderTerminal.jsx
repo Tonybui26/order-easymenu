@@ -819,30 +819,11 @@ export default function LiveOrderTerminal() {
         if (printResult.success) {
           toast.success(printResult.message);
           if (printResult.failedPrints > 0) {
-            toast.error(
-              (t) => (
-                <div className="flex w-full items-center justify-between">
-                  <span className="font-medium">
-                    {printResult.failedPrinterNames} failed to print
-                  </span>
-                  <button
-                    onClick={() => toast.dismiss(t.id)}
-                    className="ml-4 rounded bg-brand_accent px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand_accent/80"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              ),
-              {
-                duration: 4000,
-              },
-            );
-          }
-        } else {
-          toast.error(
-            (t) => (
+            toast.error((t) => (
               <div className="flex w-full items-center justify-between">
-                <span className="font-medium">{printResult.message}</span>
+                <span className="font-medium">
+                  {printResult.failedPrinterNames} failed to print
+                </span>
                 <button
                   onClick={() => toast.dismiss(t.id)}
                   className="ml-4 rounded bg-brand_accent px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand_accent/80"
@@ -850,11 +831,20 @@ export default function LiveOrderTerminal() {
                   Dismiss
                 </button>
               </div>
-            ),
-            {
-              duration: Infinity, // Never auto-dismiss
-            },
-          );
+            ));
+          }
+        } else {
+          toast.error((t) => (
+            <div className="flex w-full items-center justify-between">
+              <span className="font-medium">{printResult.message}</span>
+              <button
+                onClick={() => toast.dismiss(t.id)}
+                className="ml-4 rounded bg-brand_accent px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand_accent/80"
+              >
+                Dismiss
+              </button>
+            </div>
+          ));
         }
 
         return printResult;
