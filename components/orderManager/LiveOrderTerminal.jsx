@@ -819,7 +819,7 @@ export default function LiveOrderTerminal() {
         if (printResult.success) {
           toast.success(printResult.message);
         } else {
-          toast.error(printResult.error);
+          toast.error(printResult.message);
         }
 
         return printResult;
