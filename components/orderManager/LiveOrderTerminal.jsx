@@ -39,7 +39,7 @@ import toast from "react-hot-toast";
 import {
   printOrderNew,
   getPrintQueueStatus,
-  printOrderNewQueued,
+  printOrderQueued,
 } from "@/lib/helper/printerUtilsNew";
 
 /**
@@ -812,7 +812,7 @@ export default function LiveOrderTerminal() {
         console.log("printData", printData);
 
         // Use queued printing instead of direct printing
-        const printResult = await printOrderNewQueued(printData, {
+        const printResult = await printOrderQueued(printData, {
           delayAfterDisconnect: 300, // Longer delay for production
         });
 
@@ -923,34 +923,10 @@ export default function LiveOrderTerminal() {
         try {
           const order = orders.find((o) => o._id === orderId);
           if (order) {
-            // // Determine order type
-            // const isTakeaway = order.table === "takeaway";
-            // const orderType = isTakeaway ? "takeaway" : "dinein";
-            // // Check printer availability for the order type
-            // const printersAvailability =
-            //   await checkPrinterAvailability(orderType);
-            // console.log("printersAvailability", printersAvailability);
-            // if (printersAvailability.available) {
-            //   // Create print data object for the order
-            //   // Order Data
-            //   const orderData = order;
-            //   // List of available printers
-            //   const printers = printersAvailability.printers;
-            //   // Create print data object for the order
-            //   const printData = {
-            //     order: orderData,
-            //     orderId: order._id.slice(-6).toUpperCase(),
-            //     printers: printers,
-            //   };
-            //   console.log("printData", printData);
-            //   const printResult = await printOrder(printData);
-            //   console.log("printResult", printResult);
-            // }
             const printResult = await handlePrintingOrder(order);
             if (printResult.success) {
-              console.log("Printed order:", printResult.message);
+              toast.success(printResult.message);
             } else {
-              console.error("Error printing order:", printResult.message);
               toast.error(printResult.message);
             }
           }

@@ -40,7 +40,7 @@ export default function PrinterSetupModal({
       // Show manual form directly if not on mobile (no network scanning available)
       setShowManualForm(!isNativeApp());
     }
-  }, [mode, printer]);
+  }, [mode, printer, isOpen]);
 
   // Validation functions
   const validateIpAddress = (ip) => {
@@ -77,9 +77,9 @@ export default function PrinterSetupModal({
     }
 
     // At least one order type must be selected
-    if (!formData.forTakeaway && !formData.forDineIn) {
-      newErrors.orderTypes = "Please select at least one order type";
-    }
+    // if (!formData.forTakeaway && !formData.forDineIn) {
+    //   newErrors.orderTypes = "Please select at least one order type";
+    // }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -218,7 +218,7 @@ export default function PrinterSetupModal({
                 )}
               </div>
 
-              <div className="form-control">
+              <div className="form-control hidden">
                 <label className="label">
                   <span className="label-text">Port *</span>
                 </label>

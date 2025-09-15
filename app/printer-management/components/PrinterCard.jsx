@@ -22,10 +22,10 @@ import {
   printTestNew,
   aggressiveTestNew,
   aggressiveTestThrottled,
-  printOrderNewQueued,
+  printOrderQueued,
   aggressiveTestNewQueued,
   setQueueLogCallback,
-  aggressiveTestNewQueuedParallel, // ✅ Import the new function
+  aggressiveTestQueuedParallel, // ✅ Import the new function
 } from "@/lib/helper/printerUtilsNew";
 
 export default function PrinterCard({ printer, onDelete, onUpdate }) {
@@ -92,9 +92,10 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
       const printData = {
         printers: [printer],
       };
-      const result = await printOrderNewQueued(printData, {
+      const result = await printOrderQueued(printData, {
         delayAfterDisconnect: 300,
         testing: true,
+        onlyConnectionTest: false, // change to true for connection only test, false for print order test
       });
 
       if (result.success) {
@@ -127,7 +128,7 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
       addLog(`Starting aggressive test for ${printer.name}`, "info");
       addLog(`Target: 20 test cycles`, "info");
 
-      const result = await aggressiveTestNewQueuedParallel(printer, 5);
+      const result = await aggressiveTestQueuedParallel(printer, 5);
 
       addLog(`🏁 Test completed!`, "success");
       addLog(
@@ -238,7 +239,7 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
               tabIndex={0}
               className="menu dropdown-content z-[1] w-52 rounded-box bg-base-100 p-2 shadow"
             >
-              <li>
+              <li className="hidden">
                 <button
                   onClick={handleAggressiveTestPrinter}
                   disabled={aggressiveTestingPrinter}
@@ -259,25 +260,6 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
               </li>
               <li>
                 <button
-                  onClick={handleResetPrinter}
-                  disabled={resettingPrinter}
-                  className="flex items-center gap-2"
-                >
-                  {resettingPrinter ? (
-                    <>
-                      <div className="h-4 w-4 animate-spin rounded-full border border-red-300 border-t-red-600"></div>
-                      Resetting...
-                    </>
-                  ) : (
-                    <>
-                      <RotateCcw className="h-4 w-4" />
-                      Reset TCP Plugin
-                    </>
-                  )}
-                </button>
-              </li>
-              <li>
-                <button
                   onClick={handleTestPrinter}
                   disabled={testingPrinter}
                   className="flex items-center gap-2"
@@ -285,12 +267,12 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
                   {testingPrinter ? (
                     <>
                       <div className="h-4 w-4 animate-spin rounded-full border border-blue-300 border-t-blue-600"></div>
-                      Testing...
+                      Printing...
                     </>
                   ) : (
                     <>
                       <Settings className="h-4 w-4" />
-                      Test Printer
+                      Print Test
                     </>
                   )}
                 </button>
