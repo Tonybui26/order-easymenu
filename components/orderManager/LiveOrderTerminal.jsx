@@ -36,6 +36,11 @@ import Image from "next/image";
 import { printOrder } from "@/lib/helper/printerUtils";
 import { isNativeApp } from "@/lib/helper/platformDetection";
 import toast from "react-hot-toast";
+import {
+  printOrderNew,
+  getPrintQueueStatus,
+  printOrderNewQueued,
+} from "@/lib/helper/printerUtilsNew";
 
 /**
  * LiveOrderTerminal Component - Order Management Interface
@@ -805,7 +810,12 @@ export default function LiveOrderTerminal() {
         };
 
         console.log("printData", printData);
-        const printResult = await printOrder(printData);
+
+        // Use queued printing instead of direct printing
+        const printResult = await printOrderNewQueued(printData, {
+          delayAfterDisconnect: 300, // Longer delay for production
+        });
+
         console.log("printResult", printResult);
 
         return printResult;
