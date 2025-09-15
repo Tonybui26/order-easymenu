@@ -819,7 +819,10 @@ export default function LiveOrderTerminal() {
         if (printResult.success) {
           toast.success(printResult.message);
           if (printResult.failedPrints > 0) {
-            toast.error(printResult.failedPrinterNames + " failed to print");
+            showCustomToast(
+              printResult.failedPrinterNames + " failed to print",
+              "error",
+            );
           }
         } else {
           // toast.error(printResult.message);
