@@ -498,8 +498,6 @@ export default function LiveOrderTerminal() {
       } catch (error) {
         setLoading(false);
         console.error("Failed to load initial orders:", error);
-      } finally {
-        // setLoading(false);
       }
     }
 
@@ -608,15 +606,23 @@ export default function LiveOrderTerminal() {
 
   // Effect for polling orders
   useEffect(() => {
-    // Clear any existing interval first
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-    }
+    let isActive = true;
+    let timeoutId;
+    let retryCount = 0;
+    const maxRetries = 2;
+    const baseInterval = 10000; // 10 seconds
 
-    pollingIntervalRef.current = setInterval(async () => {
-      console.log("polling orders time:", new Date().toISOString());
+    const pollOrders = async () => {
+      if (!isActive) return;
+
       try {
+        console.log("polling orders time:", new Date().toISOString());
+
         const data = await fetchOrders();
+
+        if (!isActive) return; // Check again after async operation
+
+        // Your existing order processing logic (unchanged)
         const activeOrders = data.filter((order) => {
           // Include orders that are still in progress
           if (
@@ -703,7 +709,6 @@ export default function LiveOrderTerminal() {
                     `Auto-printed successfully order ${order._id.slice(-6)}:`,
                     printResult,
                   );
-                  console.log("Marked order as printed:", order._id);
                   newlyPrintedIds.push(order._id);
                 } else {
                   console.error(
@@ -748,18 +753,45 @@ export default function LiveOrderTerminal() {
         }
 
         setLastOrderIds(currentOrderIdsAsSet);
+        retryCount = 0; // Reset retry count on success
 
-        // Note: Auto-printing is handled automatically in the backend
-        // when orders are created or payment is confirmed
+        // Schedule next poll
+        timeoutId = setTimeout(pollOrders, baseInterval);
       } catch (error) {
         console.error("Failed to poll orders:", error);
-      }
-    }, 10000);
 
-    // Clean up interval on unmount
+        if (!isActive) return;
+
+        // Simple retry with exponential backoff
+        retryCount++;
+        const backoffDelay = Math.min(
+          baseInterval * Math.pow(2, retryCount),
+          60000,
+        ); // Max 1 minute
+
+        if (retryCount <= maxRetries) {
+          console.log(
+            `Retrying in ${backoffDelay}ms (attempt ${retryCount}/${maxRetries})`,
+          );
+          timeoutId = setTimeout(pollOrders, backoffDelay);
+        } else {
+          console.error(
+            "Max polling retries reached. Will retry in 5 minutes.",
+          );
+          // Don't give up completely - retry after 5 minutes
+          timeoutId = setTimeout(pollOrders, 300000);
+        }
+      }
+    };
+
+    // Add small delay to let initial loading complete first
+    timeoutId = setTimeout(pollOrders, 1000); // Wait 1 second
+
+    // Cleanup
     return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
+      isActive = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
       }
     };
   }, [soundEnabled, showNotification, lastDismissedIds]);
