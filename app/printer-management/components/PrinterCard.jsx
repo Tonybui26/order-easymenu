@@ -20,6 +20,7 @@ import {
   printTestNew,
   aggressiveTestNew,
   aggressiveTestThrottled,
+  printOrderNewQueued,
 } from "@/lib/helper/printerUtilsNew";
 
 export default function PrinterCard({ printer, onDelete, onUpdate }) {
@@ -42,7 +43,13 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
   const handleTestPrinter = async () => {
     try {
       setTestingPrinter(true);
-      const result = await printTestNew(null, printer);
+      const printData = {
+        printers: [printer],
+      };
+      const result = await printOrderNewQueued(printData, {
+        delayAfterDisconnect: 300,
+        testing: true,
+      });
 
       if (result.success) {
         toast.success(result.message);
