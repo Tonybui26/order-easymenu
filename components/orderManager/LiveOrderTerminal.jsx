@@ -632,12 +632,6 @@ export default function LiveOrderTerminal() {
             );
             console.log("unprintedOrders", unprintedOrders);
             // Print only unprinted orders and collect printed IDs
-            toast.success(
-              "Auto-printing orders...: " +
-                unprintedOrders.length +
-                "$ time: " +
-                new Date().toLocaleTimeString(),
-            );
             const newlyPrintedIds = [];
             for (const order of unprintedOrders) {
               try {
@@ -697,6 +691,7 @@ export default function LiveOrderTerminal() {
 
         // Schedule next poll
         timeoutId = setTimeout(pollOrders, baseInterval);
+        console.log("Scheduling next poll", timeoutId);
       } catch (error) {
         console.error("Failed to poll orders:", error);
 
@@ -729,6 +724,7 @@ export default function LiveOrderTerminal() {
     return () => {
       isActive = false;
       if (timeoutId) {
+        console.log("Clearing timeout id", timeoutId);
         clearTimeout(timeoutId);
       }
     };
