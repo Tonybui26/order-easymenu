@@ -1356,15 +1356,14 @@ export default function LiveOrderTerminal() {
             <OnlineOrderControlButton />
             {/* Button for controlling prep time */}
             <PrepTimeControlButton />
-            {/* Button for refreshing app data */}
-            <button
+            {/* Button for refreshing app data - temporary disabled as not working properly */}
+            {/* <button
               onClick={handleFullRefresh}
               className="btn flex h-auto flex-col items-center gap-0 rounded-xl px-4 py-1 text-center transition-colors hover:bg-gray-200"
               title={isNative ? "Refresh app data" : "Refresh page"}
             >
               <RefreshCw className="size-5 text-gray-600" />
-              {/* <span className="text-xs font-medium text-gray-600">Refresh</span> */}
-            </button>
+            </button> */}
           </div>
 
           {/* View Mode Tabs */}
