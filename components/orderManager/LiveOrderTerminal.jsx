@@ -632,6 +632,12 @@ export default function LiveOrderTerminal() {
             );
             console.log("unprintedOrders", unprintedOrders);
             // Print only unprinted orders and collect printed IDs
+            toast.success(
+              "Auto-printing orders...: " +
+                unprintedOrders.length +
+                "$ time: " +
+                new Date().toLocaleTimeString(),
+            );
             const newlyPrintedIds = [];
             for (const order of unprintedOrders) {
               try {
