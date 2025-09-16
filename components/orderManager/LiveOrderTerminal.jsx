@@ -74,7 +74,7 @@ export default function LiveOrderTerminal() {
   const [completedOrdersLoading, setCompletedOrdersLoading] = useState(false);
   const audioRef = useRef(null);
   const soundIntervalRef = useRef(null);
-
+  const cleanupRef = useRef(null);
   const [lastOrderIds, setLastOrderIds] = useState(new Set());
   const [showNotification, setShowNotification] = useState(false);
   const showNotificationRef = useRef(false);
@@ -721,14 +721,25 @@ export default function LiveOrderTerminal() {
 
     // Start polling immediately (no delay needed)
     pollOrders();
-    return () => {
+    // Store cleanup function in ref instead of returning it
+    cleanupRef.current = () => {
       isActive = false;
+      console.log("Cleaning up polling");
       if (timeoutId) {
-        console.log("Clearing timeout id", timeoutId);
         clearTimeout(timeoutId);
+        console.log("Clearing timeout id", timeoutId);
       }
     };
   }, [lastDismissedIds]);
+
+  // Separate useEffect for unmount cleanup
+  useEffect(() => {
+    return () => {
+      if (cleanupRef.current) {
+        cleanupRef.current();
+      }
+    };
+  }, []); // Only runs on unmount
 
   // Separate useEffect to log when state actually changes
   useEffect(() => {
