@@ -73,16 +73,18 @@ export default function LiveOrderTerminal() {
   const [completedOrders, setCompletedOrders] = useState([]);
   const [completedOrdersLoading, setCompletedOrdersLoading] = useState(false);
   const audioRef = useRef(null);
-  const pollingIntervalRef = useRef(null);
   const soundIntervalRef = useRef(null);
 
   const [lastOrderIds, setLastOrderIds] = useState(new Set());
   const [showNotification, setShowNotification] = useState(false);
+  const showNotificationRef = useRef(false);
   const [notificationOrderCount, setNotificationOrderCount] = useState(0);
   const [lastDismissedIds, setLastDismissedIds] = useState(new Set());
+  const lastDismissedIdsRef = useRef(new Set());
   const [printedOrderIds, setPrintedOrderIds] = useState(new Set());
   const printedOrderIdsRef = useRef(new Set());
   const [audioInitialized, setAudioInitialized] = useState(false);
+  const [pollingInitialized, setPollingInitialized] = useState(false);
   const [showAudioPrompt, setShowAudioPrompt] = useState(false);
   const { soundEnabled } = useGlobalAppContext();
   const { storeProfile, menuId, menuConfig, refreshMenuDataWithToast } =
@@ -123,20 +125,26 @@ export default function LiveOrderTerminal() {
           setLoading(true);
           const data = await fetchOrders();
           const activeOrders = data.filter((order) => {
-            if (
-              ["pending", "confirmed", "preparing", "ready"].includes(
-                order.status,
-              )
-            ) {
+            // Include orders that are still in progress - confirmed, preparing, ready
+            if (["confirmed", "preparing", "ready"].includes(order.status)) {
               return true;
+            } else {
+              // For the rest of the orders(pending, delivered, cancelled)
+
+              // 1. if the order is cancelled or delivered, then exclude the order
+              if (["cancelled", "delivered"].includes(order.status)) {
+                return false;
+              }
+              // 2. Now only Pending orders are left, so we need to check if the order is cash payment method and still need payment
+              if (
+                order.paymentMethod === "cash" &&
+                order.paymentStatus === "pending"
+              ) {
+                return true;
+              }
+              // 3. If the order is not cash payment method or not pending, then exclude the order
+              return false;
             }
-            if (
-              order.status === "delivered" &&
-              order.paymentStatus === "pending"
-            ) {
-              return true;
-            }
-            return false;
           });
           setOrders(activeOrders);
           setLastOrderIds(new Set(activeOrders.map((order) => order._id)));
@@ -473,26 +481,30 @@ export default function LiveOrderTerminal() {
       try {
         const data = await fetchOrders();
         const activeOrders = data.filter((order) => {
-          // Include orders that are still in progress
-          if (
-            ["pending", "confirmed", "preparing", "ready"].includes(
-              order.status,
-            )
-          ) {
+          // Include orders that are still in progress - confirmed, preparing, ready
+          if (["confirmed", "preparing", "ready"].includes(order.status)) {
             return true;
+          } else {
+            // For the rest of the orders(pending, delivered, cancelled)
+
+            // 1. if the order is cancelled or delivered, then exclude the order
+            if (["cancelled", "delivered"].includes(order.status)) {
+              return false;
+            }
+            // 2. Now only Pending orders are left, so we need to check if the order is cash payment method and still need payment
+            if (
+              order.paymentMethod === "cash" &&
+              order.paymentStatus === "pending"
+            ) {
+              return true;
+            }
+            // 3. If the order is not cash payment method or not pending, then exclude the order
+            return false;
           }
-          // Include delivered orders that still need payment
-          if (
-            order.status === "delivered" &&
-            order.paymentStatus === "pending"
-          ) {
-            return true;
-          }
-          // Exclude completed orders (delivered + paid, or cancelled)
-          return false;
         });
 
         setOrders(activeOrders);
+        console.log("activeOrders initial", activeOrders);
         setLastOrderIds(new Set(activeOrders.map((order) => order._id)));
         setLastDismissedIds(new Set(activeOrders.map((order) => order._id)));
         setLoading(false);
@@ -504,6 +516,232 @@ export default function LiveOrderTerminal() {
 
     loadInitialOrders();
   }, []);
+  // Function to handle notification dismissal
+  const handleNotificationDismiss = () => {
+    setShowNotification(false);
+    setNotificationOrderCount(0);
+    // Update lastDismissedIds to current order IDs so future counts are calculated correctly
+    setLastDismissedIds(new Set(orders.map((order) => order._id)));
+    // Clear printed orders tracking when notification is dismissed
+    setPrintedOrderIds(new Set());
+    printedOrderIdsRef.current.clear();
+    stopSoundCycle();
+    // Switch to new orders tab when notification is dismissed
+    setViewMode("new");
+  };
+
+  // Effect for polling orders
+  useSkipInitialEffect(() => {
+    if (pollingInitialized) return;
+    setPollingInitialized(true);
+    let isActive = true;
+    let timeoutId;
+    let retryCount = 0;
+    const maxRetries = 2;
+    const baseInterval = 10000; // 10 seconds
+
+    const pollOrders = async () => {
+      if (!isActive) return;
+
+      try {
+        console.log("polling orders time:", new Date().toISOString());
+
+        const data = await fetchOrders();
+
+        if (!isActive) return; // Check again after async operation
+
+        // Your existing order processing logic (unchanged)
+        const activeOrders = data.filter((order) => {
+          // Include orders that are still in progress - confirmed, preparing, ready
+          if (["confirmed", "preparing", "ready"].includes(order.status)) {
+            return true;
+          } else {
+            // For the rest of the orders(pending, delivered, cancelled)
+
+            // 1. if the order is cancelled or delivered, then exclude the order
+            if (["cancelled", "delivered"].includes(order.status)) {
+              return false;
+            }
+            // 2. Now only Pending orders are left, so we need to check if the order is cash payment method and still need payment
+            if (
+              order.paymentMethod === "cash" &&
+              order.paymentStatus === "pending"
+            ) {
+              return true;
+            }
+            // 3. If the order is not cash payment method or not pending, then exclude the order
+            return false;
+          }
+        });
+
+        const currentOrderIdsAsSet = new Set(
+          activeOrders.map((order) => order._id),
+        );
+
+        setOrders(activeOrders);
+        console.log("activeOrders", activeOrders);
+
+        // Check for new orders since last dismissal (not just last poll)
+        // Now this is safe - lastDismissedIds is already set from initial loading
+        const newOrdersSinceLastDismissal = activeOrders.filter(
+          (order) => !lastDismissedIdsRef.current.has(order._id),
+        );
+        console.log("lastDismissedIds", lastDismissedIdsRef.current);
+        console.log("newOrdersSinceLastDismissal", newOrdersSinceLastDismissal);
+
+        // Filter orders that should trigger notifications:
+        // 1. Paid orders (takeaway/dine-in, but not counter paid)
+        // 2. Pending counter orders for dine-in only
+        const notificationWorthyOrders = newOrdersSinceLastDismissal.filter(
+          (order) => {
+            // Case 1: Paid orders (but not counter paid - these don't need immediate attention)
+            if (
+              order.paymentStatus === "paid" &&
+              !isCounterPayment(order.paymentMethod)
+            ) {
+              return true;
+            }
+
+            // Case 2: Pending counter orders for dine-in only (these need payment collection)
+            if (
+              order.paymentStatus === "pending" &&
+              isCounterPayment(order.paymentMethod) &&
+              order.table !== "takeaway"
+            ) {
+              return true;
+            }
+
+            return false;
+          },
+        );
+
+        // Update count to reflect notification-worthy orders since last dismissal
+        if (notificationWorthyOrders.length > 0) {
+          setNotificationOrderCount(notificationWorthyOrders.length);
+
+          // Auto-print orders if auto-printing is enabled
+          const autoPrintingEnabled = menuConfig?.autoPrinting?.enabled;
+          if (autoPrintingEnabled && storeProfile && userData?.ownerEmail) {
+            // Filter out orders that have already been printed
+            const unprintedOrders = notificationWorthyOrders.filter(
+              (order) => !printedOrderIdsRef.current.has(order._id),
+            );
+            console.log(
+              "printedOrderIds right before filtering:",
+              printedOrderIdsRef.current,
+            );
+            console.log("unprintedOrders", unprintedOrders);
+            // Print only unprinted orders and collect printed IDs
+            const newlyPrintedIds = [];
+            for (const order of unprintedOrders) {
+              try {
+                const printResult = await handlePrintingOrder(order);
+                if (printResult.success) {
+                  console.log(
+                    `Auto-printed successfully order ${order._id.slice(-6)}:`,
+                    printResult,
+                  );
+                  newlyPrintedIds.push(order._id);
+                } else {
+                  console.error(
+                    `Error auto-printing order ${order._id}:`,
+                    printResult.message,
+                  );
+                  showCustomToast(
+                    "Failed to auto-print order - Double check the printer settings",
+                    "error",
+                  );
+                }
+              } catch (error) {
+                console.error(`Error auto-printing order ${order._id}:`, error);
+                // Don't block other orders if one fails
+              }
+            }
+
+            // Update both the ref and state with all newly printed order IDs at once
+            if (newlyPrintedIds.length > 0) {
+              // Update ref immediately (synchronous)
+              newlyPrintedIds.forEach((id) =>
+                printedOrderIdsRef.current.add(id),
+              );
+              console.log(
+                "Updated printed order ids ref:",
+                printedOrderIdsRef.current,
+              );
+
+              // Update state for UI (if needed)
+              setPrintedOrderIds((prev) => {
+                const newSet = new Set([...prev, ...newlyPrintedIds]);
+                console.log("Updated printed order ids state:", newSet);
+                return newSet;
+              });
+            }
+          }
+
+          // Only trigger notification if it's not already showing
+          if (!showNotificationRef.current) {
+            console.log("Showing notification");
+            setShowNotification(true);
+            playSoundCycle();
+          }
+        }
+
+        setLastOrderIds(currentOrderIdsAsSet);
+        retryCount = 0; // Reset retry count on success
+
+        // Schedule next poll
+        timeoutId = setTimeout(pollOrders, baseInterval);
+      } catch (error) {
+        console.error("Failed to poll orders:", error);
+
+        if (!isActive) return;
+
+        // Simple retry with exponential backoff
+        retryCount++;
+        const backoffDelay = Math.min(
+          baseInterval * Math.pow(2, retryCount),
+          60000,
+        ); // Max 1 minute
+
+        if (retryCount <= maxRetries) {
+          console.log(
+            `Retrying in ${backoffDelay}ms (attempt ${retryCount}/${maxRetries})`,
+          );
+          timeoutId = setTimeout(pollOrders, backoffDelay);
+        } else {
+          console.error(
+            "Max polling retries reached. Will retry in 5 minutes.",
+          );
+          // Don't give up completely - retry after 5 minutes
+          timeoutId = setTimeout(pollOrders, 300000);
+        }
+      }
+    };
+
+    // Start polling immediately (no delay needed)
+    pollOrders();
+    return () => {
+      isActive = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [lastDismissedIds]);
+
+  // Separate useEffect to log when state actually changes
+  useEffect(() => {
+    if (pollingInitialized) {
+      console.log("Polling initialized", pollingInitialized);
+    }
+  }, [pollingInitialized]);
+
+  // Update refs when state changes
+  useEffect(() => {
+    showNotificationRef.current = showNotification;
+  }, [showNotification]);
+  useEffect(() => {
+    lastDismissedIdsRef.current = lastDismissedIds;
+  }, [lastDismissedIds]);
 
   // Effect to fetch completed orders when view mode changes
   useEffect(() => {
@@ -590,212 +828,6 @@ export default function LiveOrderTerminal() {
       soundIntervalRef.current = null;
     }
   };
-
-  // Function to handle notification dismissal
-  const handleNotificationDismiss = () => {
-    setShowNotification(false);
-    setNotificationOrderCount(0);
-    // Update lastDismissedIds to current order IDs so future counts are calculated correctly
-    setLastDismissedIds(new Set(orders.map((order) => order._id)));
-    // Clear printed orders tracking when notification is dismissed
-    setPrintedOrderIds(new Set());
-    printedOrderIdsRef.current.clear();
-    stopSoundCycle();
-    // Switch to new orders tab when notification is dismissed
-    setViewMode("new");
-  };
-
-  // Effect for polling orders
-  useSkipInitialEffect(() => {
-    let isActive = true;
-    let timeoutId;
-    let retryCount = 0;
-    const maxRetries = 2;
-    const baseInterval = 10000; // 10 seconds
-
-    const pollOrders = async () => {
-      if (!isActive) return;
-
-      try {
-        console.log("polling orders time:", new Date().toISOString());
-
-        const data = await fetchOrders();
-
-        if (!isActive) return; // Check again after async operation
-
-        // Your existing order processing logic (unchanged)
-        const activeOrders = data.filter((order) => {
-          // Include orders that are still in progress
-          if (
-            ["pending", "confirmed", "preparing", "ready"].includes(
-              order.status,
-            )
-          ) {
-            return true;
-          }
-          // Include delivered orders that still need payment
-          if (
-            order.status === "delivered" &&
-            order.paymentStatus === "pending"
-          ) {
-            return true;
-          }
-          // Exclude completed orders (delivered + paid, or cancelled)
-          return false;
-        });
-
-        const currentOrderIdsAsSet = new Set(
-          activeOrders.map((order) => order._id),
-        );
-
-        setOrders(activeOrders);
-        console.log("activeOrders", activeOrders);
-
-        // Check for new orders since last dismissal (not just last poll)
-        // Now this is safe - lastDismissedIds is already set from initial loading
-        const newOrdersSinceLastDismissal = activeOrders.filter(
-          (order) => !lastDismissedIds.has(order._id),
-        );
-        console.log("lastDismissedIds", lastDismissedIds);
-        console.log("newOrdersSinceLastDismissal", newOrdersSinceLastDismissal);
-
-        // Filter orders that should trigger notifications:
-        // 1. Paid orders (takeaway/dine-in, but not counter paid)
-        // 2. Pending counter orders for dine-in only
-        const notificationWorthyOrders = newOrdersSinceLastDismissal.filter(
-          (order) => {
-            // Case 1: Paid orders (but not counter paid - these don't need immediate attention)
-            if (
-              order.paymentStatus === "paid" &&
-              !isCounterPayment(order.paymentMethod)
-            ) {
-              return true;
-            }
-
-            // Case 2: Pending counter orders for dine-in only (these need payment collection)
-            if (
-              order.paymentStatus === "pending" &&
-              isCounterPayment(order.paymentMethod) &&
-              order.table !== "takeaway"
-            ) {
-              return true;
-            }
-
-            return false;
-          },
-        );
-
-        // Update count to reflect notification-worthy orders since last dismissal
-        if (notificationWorthyOrders.length > 0) {
-          setNotificationOrderCount(notificationWorthyOrders.length);
-
-          // Auto-print orders if auto-printing is enabled
-          const autoPrintingEnabled = menuConfig?.autoPrinting?.enabled;
-          if (autoPrintingEnabled && storeProfile && userData?.ownerEmail) {
-            // Filter out orders that have already been printed
-            const unprintedOrders = notificationWorthyOrders.filter(
-              (order) => !printedOrderIdsRef.current.has(order._id),
-            );
-            console.log(
-              "printedOrderIds right before filtering:",
-              printedOrderIdsRef.current,
-            );
-            console.log("unprintedOrders", unprintedOrders);
-            // Print only unprinted orders and collect printed IDs
-            const newlyPrintedIds = [];
-            for (const order of unprintedOrders) {
-              try {
-                const printResult = await handlePrintingOrder(order);
-                if (printResult.success) {
-                  console.log(
-                    `Auto-printed successfully order ${order._id.slice(-6)}:`,
-                    printResult,
-                  );
-                  newlyPrintedIds.push(order._id);
-                } else {
-                  console.error(
-                    `Error auto-printing order ${order._id}:`,
-                    printResult.message,
-                  );
-                  toast.error(
-                    "Failed to auto-print order - Double check the printer settings",
-                  );
-                }
-              } catch (error) {
-                console.error(`Error auto-printing order ${order._id}:`, error);
-                // Don't block other orders if one fails
-              }
-            }
-
-            // Update both the ref and state with all newly printed order IDs at once
-            if (newlyPrintedIds.length > 0) {
-              // Update ref immediately (synchronous)
-              newlyPrintedIds.forEach((id) =>
-                printedOrderIdsRef.current.add(id),
-              );
-              console.log(
-                "Updated printed order ids ref:",
-                printedOrderIdsRef.current,
-              );
-
-              // Update state for UI (if needed)
-              setPrintedOrderIds((prev) => {
-                const newSet = new Set([...prev, ...newlyPrintedIds]);
-                console.log("Updated printed order ids state:", newSet);
-                return newSet;
-              });
-            }
-          }
-
-          // Only trigger notification if it's not already showing
-          if (!showNotification) {
-            setShowNotification(true);
-            playSoundCycle();
-          }
-        }
-
-        setLastOrderIds(currentOrderIdsAsSet);
-        retryCount = 0; // Reset retry count on success
-
-        // Schedule next poll
-        timeoutId = setTimeout(pollOrders, baseInterval);
-      } catch (error) {
-        console.error("Failed to poll orders:", error);
-
-        if (!isActive) return;
-
-        // Simple retry with exponential backoff
-        retryCount++;
-        const backoffDelay = Math.min(
-          baseInterval * Math.pow(2, retryCount),
-          60000,
-        ); // Max 1 minute
-
-        if (retryCount <= maxRetries) {
-          console.log(
-            `Retrying in ${backoffDelay}ms (attempt ${retryCount}/${maxRetries})`,
-          );
-          timeoutId = setTimeout(pollOrders, backoffDelay);
-        } else {
-          console.error(
-            "Max polling retries reached. Will retry in 5 minutes.",
-          );
-          // Don't give up completely - retry after 5 minutes
-          timeoutId = setTimeout(pollOrders, 300000);
-        }
-      }
-    };
-
-    // Start polling immediately (no delay needed)
-    pollOrders();
-
-    return () => {
-      isActive = false;
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    };
-  }, [soundEnabled, showNotification, lastDismissedIds]);
 
   // Show audio prompt on first visit if sound is enabled (web only)
   useEffect(() => {
