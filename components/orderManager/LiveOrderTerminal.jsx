@@ -98,17 +98,17 @@ export default function LiveOrderTerminal() {
   const isNative = isNativeApp();
 
   // App foreground/background detection state (native mobile only)
-  const [lastPollTime, setLastPollTime] = useState(null);
+  const lastPollTimeRef = useRef(null);
   const pollingTimeoutRef = useRef(null);
 
   // Function to check if polling is actually working
   const isPollingHealthy = () => {
-    toast.success("Time since last poll:", lastPollTime);
-    if (!lastPollTime) return false;
+    toast.success(`Time since last poll:${lastPollTimeRef.current}`);
+    if (!lastPollTimeRef.current) return false;
 
     // If last poll was more than 30 seconds ago, consider it unhealthy
-    const timeSinceLastPoll = Date.now() - lastPollTime;
-    toast.success("Time since last poll:", timeSinceLastPoll);
+    const timeSinceLastPoll = Date.now() - lastPollTimeRef.current;
+    toast.success(`Time since last poll:${timeSinceLastPoll}`);
     return timeSinceLastPoll < 30000; // 30 seconds
   };
 
@@ -591,15 +591,12 @@ export default function LiveOrderTerminal() {
         console.log("polling orders time:", new Date().toISOString());
 
         // Update last poll time to track polling health
-        setLastPollTime(Date.now());
+        lastPollTimeRef.current = Date.now();
 
         // Set up initial polling health timeout
         setupPollingHealthTimeout();
 
         const data = await fetchOrders();
-
-        toast.success("check if lastPollTime is set:", lastPollTime);
-        console.log("======> lastPollTime:", lastPollTime);
 
         if (!isActive) return; // Check again after async operation
 
@@ -813,9 +810,8 @@ export default function LiveOrderTerminal() {
         const currentCount = appStateChangeCountRef.current;
 
         // Check if polling is actually working, not just initialized
-        // const pollingHealthy = isPollingHealthy();
-        const pollingHealthy = true;
-        toast.success("lastPollTime:", lastPollTime);
+        const pollingHealthy = isPollingHealthy();
+
         toast.success("App in active!");
         if (!pollingHealthy) {
           toast.error(
