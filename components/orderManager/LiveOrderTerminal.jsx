@@ -103,21 +103,21 @@ export default function LiveOrderTerminal() {
 
   // Function to check if polling is actually working
   const isPollingHealthy = () => {
-    toast.success(`Time since last poll:${lastPollTimeRef.current}`);
+    // toast.success(`Time since last poll:${lastPollTimeRef.current}`);
     if (!lastPollTimeRef.current) return false;
 
     // If last poll was more than 30 seconds ago, consider it unhealthy
     const timeSinceLastPoll = Date.now() - lastPollTimeRef.current;
-    toast.success(`Time since last poll:${timeSinceLastPoll}`);
+    // toast.success(`Time since last poll:${timeSinceLastPoll}`);
     return timeSinceLastPoll < 30000; // 30 seconds
   };
 
   // Function to set up polling health timeout
   const setupPollingHealthTimeout = () => {
     // Clear existing timeout
-    toast.success("Clearing polling timeout ref", pollingTimeoutRef.current);
+    // toast.success("Clearing polling timeout ref", pollingTimeoutRef.current);
     if (pollingTimeoutRef.current) {
-      toast.error("Clearing polling timeout ref", pollingTimeoutRef.current);
+      // toast.error("Clearing polling timeout ref", pollingTimeoutRef.current);
       clearTimeout(pollingTimeoutRef.current);
     }
     // toast.success("Setting up polling timeout ref", pollingTimeoutRef.current);
@@ -129,11 +129,11 @@ export default function LiveOrderTerminal() {
       );
       // Don't automatically restart here, let the app state change handler do it
       showCustomToast(
-        "Order receiving is not working properly, please restart the app",
+        "Order receiving is not working properly, please check the internet connection or restart the app",
         "error",
       );
     }, 35000); // 35 seconds (5 seconds buffer after 30 second threshold)
-    toast.success("Setting up polling timeout ref", pollingTimeoutRef.current);
+    // toast.success("Setting up polling timeout ref", pollingTimeoutRef.current);
   };
 
   // Comprehensive refresh function for mobile app
@@ -812,18 +812,16 @@ export default function LiveOrderTerminal() {
         // Check if polling is actually working, not just initialized
         const pollingHealthy = isPollingHealthy();
 
-        toast.success("App in active!");
+        // toast.success("App in active!");
         if (!pollingHealthy) {
           toast.error(
-            `Polling not healthy, restarting polling...Count: ${currentCount}`,
+            `Polling not healthy, restarting polling...${currentCount}`,
           );
           // Reset polling state to allow re-initialization
           setPollingInitialized(false);
         } else {
           // Use toast instead of alert for better visibility
-          toast.success(
-            `App in active!\nPolling: Healthy\nCount: ${currentCount}`,
-          );
+          toast.success(`Polling Healthy: ${currentCount}`);
         }
       }
     };
