@@ -89,6 +89,10 @@ export default function LiveOrderTerminal() {
   const [pollingInitialized, setPollingInitialized] = useState(false);
   const [showAudioPrompt, setShowAudioPrompt] = useState(false);
   const { soundEnabled } = useGlobalAppContext();
+  // App foreground/background detection state (native mobile only)
+  const lastPollTimeRef = useRef(null);
+  const pollingTimeoutRef = useRef(null);
+
   const { storeProfile, menuId, menuConfig, refreshMenuDataWithToast } =
     useMenuContext();
   // const { data: session } = useSession();
@@ -96,10 +100,6 @@ export default function LiveOrderTerminal() {
 
   // Platform detection
   const isNative = isNativeApp();
-
-  // App foreground/background detection state (native mobile only)
-  const lastPollTimeRef = useRef(null);
-  const pollingTimeoutRef = useRef(null);
 
   // Function to check if polling is actually working
   const isPollingHealthy = () => {
@@ -822,7 +822,13 @@ export default function LiveOrderTerminal() {
         } else {
           // Use toast instead of alert for better visibility
           toast.success(`Polling Healthy: ${currentCount}`);
+          // set the polling timeout when app go to foreground
+          setupPollingHealthTimeout();
         }
+      } else {
+        // this is when app go to background
+        // clear the polling timeout when app go to background
+        clearTimeout(pollingTimeoutRef.current);
       }
     };
 
