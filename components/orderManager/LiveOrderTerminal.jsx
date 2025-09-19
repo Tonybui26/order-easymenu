@@ -114,8 +114,10 @@ export default function LiveOrderTerminal() {
   const setupPollingHealthTimeout = () => {
     // Clear existing timeout
     if (pollingTimeoutRef.current) {
+      toast.error("Clearing polling timeout ref", pollingTimeoutRef.current);
       clearTimeout(pollingTimeoutRef.current);
     }
+    toast.success("Setting up polling timeout ref", pollingTimeoutRef.current);
 
     // Set timeout to mark polling as unhealthy if no poll occurs within 35 seconds
     pollingTimeoutRef.current = setTimeout(() => {
@@ -569,8 +571,7 @@ export default function LiveOrderTerminal() {
   useSkipInitialEffect(() => {
     if (pollingInitialized) return;
     setPollingInitialized(true);
-    // Set up initial polling health timeout
-    setupPollingHealthTimeout();
+
     let isActive = true;
     let timeoutId;
     let retryCount = 0;
@@ -587,6 +588,9 @@ export default function LiveOrderTerminal() {
 
         // Update last poll time to track polling health
         setLastPollTime(Date.now());
+
+        // Set up initial polling health timeout
+        setupPollingHealthTimeout();
 
         const data = await fetchOrders();
 
@@ -797,8 +801,6 @@ export default function LiveOrderTerminal() {
     console.log("Setting up native app state detection...");
 
     const handleAppStateChange = ({ isActive }) => {
-      setIsAppInForeground(isActive);
-
       if (isActive) {
         setAppStateChangeCount((prev) => prev + 1);
 
