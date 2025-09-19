@@ -124,15 +124,23 @@ export default function LiveOrderTerminal() {
     // toast.success("Setting up polling timeout ref", pollingTimeoutRef.current);
 
     // Set timeout to mark polling as unhealthy if no poll occurs within 35 seconds
-    pollingTimeoutRef.current = setTimeout(() => {
-      console.log(
-        "Polling health timeout - no poll received within expected interval",
-      );
-      // Don't automatically restart here, let the app state change handler do it
-      showCustomToast(
-        "Order receiving is not working properly, please check the internet connection or restart the app",
-        "error",
-      );
+    pollingTimeoutRef.current = setTimeout(async () => {
+      try {
+        const appState = await App.getState();
+        if (!appState.isActive) {
+          // Polling heath timeout fired while app is in background
+          return;
+        } else {
+          // Polling heath timeout fired while app is in foreground
+          // Don't automatically restart here, let the app state change handler do it
+          showCustomToast(
+            "Order receiving is not working properly, please check the internet connection or restart the app",
+            "error",
+          );
+        }
+      } catch (error) {
+        toast.error(`Error checking app state: ${error}`);
+      }
     }, 35000); // 35 seconds (5 seconds buffer after 30 second threshold)
     // toast.success("Setting up polling timeout ref", pollingTimeoutRef.current);
   };
@@ -595,7 +603,7 @@ export default function LiveOrderTerminal() {
         lastPollTimeRef.current = Date.now();
 
         // Set up initial polling health timeout
-        // setupPollingHealthTimeout();
+        setupPollingHealthTimeout();
 
         const data = await fetchOrders();
 
