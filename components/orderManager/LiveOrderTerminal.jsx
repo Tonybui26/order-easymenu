@@ -92,6 +92,7 @@ export default function LiveOrderTerminal() {
   // App foreground/background detection state (native mobile only)
   const lastPollTimeRef = useRef(null);
   const pollingTimeoutRef = useRef(null);
+  const pollingScheduleTimeoutRef = useRef(null);
 
   const { storeProfile, menuId, menuConfig, refreshMenuDataWithToast } =
     useMenuContext();
@@ -741,6 +742,7 @@ export default function LiveOrderTerminal() {
 
         // Schedule next poll
         timeoutId = setTimeout(pollOrders, baseInterval);
+        pollingScheduleTimeoutRef.current = timeoutId;
         console.log("Scheduling next poll", timeoutId);
       } catch (error) {
         console.error("Failed to poll orders:", error);
@@ -797,6 +799,7 @@ export default function LiveOrderTerminal() {
 
   // Effect to detect app foreground/background state using Capacitor App plugin
   useEffect(() => {
+    return;
     if (!isNative) {
       console.log("Not native app, skipping app state detection");
       return;
@@ -817,8 +820,11 @@ export default function LiveOrderTerminal() {
           toast.error(
             `Polling not healthy, restarting polling...${currentCount}`,
           );
+          // check if polling is auto resume? if yes, then don't restart polling
           // Reset polling state to allow re-initialization
           setPollingInitialized(false);
+          // set flag to indicate that polling is restarting
+          // setPollingRestarting(true);
         } else {
           // Use toast instead of alert for better visibility
           toast.success(`Polling Healthy: ${currentCount}`);
@@ -828,7 +834,12 @@ export default function LiveOrderTerminal() {
       } else {
         // this is when app go to background
         // clear the polling timeout when app go to background
-        clearTimeout(pollingTimeoutRef.current);
+        if (pollingScheduleTimeoutRef.current) {
+          clearTimeout(pollingScheduleTimeoutRef.current);
+        }
+        if (pollingTimeoutRef.current) {
+          clearTimeout(pollingTimeoutRef.current);
+        }
       }
     };
 
