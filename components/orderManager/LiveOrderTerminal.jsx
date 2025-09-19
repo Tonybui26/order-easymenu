@@ -818,14 +818,14 @@ export default function LiveOrderTerminal() {
         const currentCount = appStateChangeCountRef.current;
 
         // Check if polling is healthy
-        // Wait for 30 seconds to check if polling is healthy
-        await new Promise((resolve) => setTimeout(resolve, 30000));
+        // Wait for 20 seconds to check if polling is healthy
+        await new Promise((resolve) => setTimeout(resolve, 20000));
         const pollingHealthy = isPollingHealthy();
 
         // toast.success("App in active!");
         if (!pollingHealthy) {
-          customToast(
-            `Order receiving is not working properly, please check the internet connection or restart the app`,
+          showCustomToast(
+            `App idle in background for too long, please restart the app`,
             "error",
           );
         } else {
