@@ -823,12 +823,12 @@ export default function LiveOrderTerminal() {
           // Use toast instead of alert for better visibility
           toast.success(`Polling Healthy: ${currentCount}`);
           // set the polling timeout when app go to foreground
-          setupPollingHealthTimeout();
+          // setupPollingHealthTimeout();
         }
       } else {
         // this is when app go to background
         // clear the polling timeout when app go to background
-        clearTimeout(pollingTimeoutRef.current);
+        // clearTimeout(pollingTimeoutRef.current);
       }
     };
 
