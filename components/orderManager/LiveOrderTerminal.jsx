@@ -75,6 +75,7 @@ export default function LiveOrderTerminal() {
   const [completedOrdersLoading, setCompletedOrdersLoading] = useState(false);
   const audioRef = useRef(null);
   const soundIntervalRef = useRef(null);
+  const appStateChangeCountRef = useRef(0);
   const cleanupRef = useRef(null);
   const [lastOrderIds, setLastOrderIds] = useState(new Set());
   const [showNotification, setShowNotification] = useState(false);
@@ -97,7 +98,6 @@ export default function LiveOrderTerminal() {
   const isNative = isNativeApp();
 
   // App foreground/background detection state (native mobile only)
-  const [appStateChangeCount, setAppStateChangeCount] = useState(0);
   const [lastPollTime, setLastPollTime] = useState(null);
   const pollingTimeoutRef = useRef(null);
 
@@ -804,25 +804,22 @@ export default function LiveOrderTerminal() {
 
     const handleAppStateChange = ({ isActive }) => {
       if (isActive) {
-        setAppStateChangeCount((prev) => prev + 1);
+        appStateChangeCountRef.current += 1;
+        const currentCount = appStateChangeCountRef.current;
 
         // Check if polling is actually working, not just initialized
         const pollingHealthy = isPollingHealthy();
         toast.success("App in active!");
         if (!pollingHealthy) {
           toast.error(
-            `Polling not healthy, restarting polling...Count: ${
-              appStateChangeCount + 1
-            }`,
+            `Polling not healthy, restarting polling...Count: ${currentCount}`,
           );
           // Reset polling state to allow re-initialization
           setPollingInitialized(false);
         } else {
           // Use toast instead of alert for better visibility
           toast.success(
-            `App in active!\nPolling: Healthy\nCount: ${
-              appStateChangeCount + 1
-            }`,
+            `App in active!\nPolling: Healthy\nCount: ${currentCount}`,
           );
         }
       }
