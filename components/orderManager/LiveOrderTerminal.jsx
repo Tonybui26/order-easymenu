@@ -115,7 +115,7 @@ export default function LiveOrderTerminal() {
     // Clear existing timeout
     toast.success("Clearing polling timeout ref", pollingTimeoutRef.current);
     if (pollingTimeoutRef.current) {
-      // toast.error("Clearing polling timeout ref", pollingTimeoutRef.current);
+      toast.error("Clearing polling timeout ref", pollingTimeoutRef.current);
       clearTimeout(pollingTimeoutRef.current);
     }
     // toast.success("Setting up polling timeout ref", pollingTimeoutRef.current);
