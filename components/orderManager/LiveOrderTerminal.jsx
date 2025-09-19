@@ -808,11 +808,10 @@ export default function LiveOrderTerminal() {
 
         // Check if polling is actually working, not just initialized
         const pollingHealthy = isPollingHealthy();
-
+        toast.success("App in active!");
         if (!pollingHealthy) {
-          console.log("Polling not healthy, restarting polling...");
-          toast.success(
-            `App in active!\nRestarting polling...\nCount: ${
+          toast.error(
+            `Polling not healthy, restarting polling...Count: ${
               appStateChangeCount + 1
             }`,
           );
