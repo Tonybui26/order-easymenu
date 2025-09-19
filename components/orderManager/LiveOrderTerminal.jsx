@@ -598,6 +598,8 @@ export default function LiveOrderTerminal() {
 
         const data = await fetchOrders();
 
+        toast.success("check if lastPollTime is set:", lastPollTime);
+
         if (!isActive) return; // Check again after async operation
 
         // Your existing order processing logic (unchanged)
@@ -810,7 +812,9 @@ export default function LiveOrderTerminal() {
         const currentCount = appStateChangeCountRef.current;
 
         // Check if polling is actually working, not just initialized
-        const pollingHealthy = isPollingHealthy();
+        // const pollingHealthy = isPollingHealthy();
+        const pollingHealthy = true;
+        toast.success("lastPollTime:", lastPollTime);
         toast.success("App in active!");
         if (!pollingHealthy) {
           toast.error(
