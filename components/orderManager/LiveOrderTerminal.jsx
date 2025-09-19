@@ -113,11 +113,12 @@ export default function LiveOrderTerminal() {
   // Function to set up polling health timeout
   const setupPollingHealthTimeout = () => {
     // Clear existing timeout
+    console.log("Clearing polling timeout ref", pollingTimeoutRef.current);
     if (pollingTimeoutRef.current) {
-      toast.error("Clearing polling timeout ref", pollingTimeoutRef.current);
+      // toast.error("Clearing polling timeout ref", pollingTimeoutRef.current);
       clearTimeout(pollingTimeoutRef.current);
     }
-    toast.success("Setting up polling timeout ref", pollingTimeoutRef.current);
+    // toast.success("Setting up polling timeout ref", pollingTimeoutRef.current);
 
     // Set timeout to mark polling as unhealthy if no poll occurs within 35 seconds
     pollingTimeoutRef.current = setTimeout(() => {
@@ -130,6 +131,7 @@ export default function LiveOrderTerminal() {
         "error",
       );
     }, 35000); // 35 seconds (5 seconds buffer after 30 second threshold)
+    console.log("Setting up polling timeout ref", pollingTimeoutRef.current);
   };
 
   // Comprehensive refresh function for mobile app
