@@ -107,6 +107,7 @@ export default function LiveOrderTerminal() {
 
     // If last poll was more than 30 seconds ago, consider it unhealthy
     const timeSinceLastPoll = Date.now() - lastPollTime;
+    toast.success("Time since last poll:", timeSinceLastPoll);
     return timeSinceLastPoll < 30000; // 30 seconds
   };
 
