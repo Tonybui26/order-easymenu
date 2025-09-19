@@ -807,46 +807,32 @@ export default function LiveOrderTerminal() {
 
   // Effect to detect app foreground/background state using Capacitor App plugin
   useEffect(() => {
-    return;
     if (!isNative) {
       console.log("Not native app, skipping app state detection");
       return;
     }
 
-    console.log("Setting up native app state detection...");
-
-    const handleAppStateChange = ({ isActive }) => {
+    const handleAppStateChange = async ({ isActive }) => {
       if (isActive) {
         appStateChangeCountRef.current += 1;
         const currentCount = appStateChangeCountRef.current;
 
-        // Check if polling is actually working, not just initialized
+        // Check if polling is healthy
+        // Wait for 30 seconds to check if polling is healthy
+        await new Promise((resolve) => setTimeout(resolve, 30000));
         const pollingHealthy = isPollingHealthy();
 
         // toast.success("App in active!");
         if (!pollingHealthy) {
-          toast.error(
-            `Polling not healthy, restarting polling...${currentCount}`,
+          customToast(
+            `Order receiving is not working properly, please check the internet connection or restart the app`,
+            "error",
           );
-          // check if polling is auto resume? if yes, then don't restart polling
-          // Reset polling state to allow re-initialization
-          setPollingInitialized(false);
-          // set flag to indicate that polling is restarting
-          // setPollingRestarting(true);
         } else {
           // Use toast instead of alert for better visibility
           toast.success(`Polling Healthy: ${currentCount}`);
           // set the polling timeout when app go to foreground
           // setupPollingHealthTimeout();
-        }
-      } else {
-        // this is when app go to background
-        // clear the polling timeout when app go to background
-        if (pollingScheduleTimeoutRef.current) {
-          clearTimeout(pollingScheduleTimeoutRef.current);
-        }
-        if (pollingTimeoutRef.current) {
-          clearTimeout(pollingTimeoutRef.current);
         }
       }
     };
@@ -857,7 +843,6 @@ export default function LiveOrderTerminal() {
         "appStateChange",
         handleAppStateChange,
       );
-      console.log("App state listener set up successfully");
 
       // Cleanup function
       return () => {
