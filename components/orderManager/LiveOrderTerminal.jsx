@@ -103,7 +103,7 @@ export default function LiveOrderTerminal() {
 
   // Function to check if polling is actually working
   const isPollingHealthy = () => {
-    toast.success("Time since last poll:", timeSinceLastPoll);
+    toast.success("Time since last poll:", lastPollTime);
     if (!lastPollTime) return false;
 
     // If last poll was more than 30 seconds ago, consider it unhealthy
