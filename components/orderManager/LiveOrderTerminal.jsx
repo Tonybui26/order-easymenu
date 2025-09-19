@@ -594,7 +594,7 @@ export default function LiveOrderTerminal() {
         lastPollTimeRef.current = Date.now();
 
         // Set up initial polling health timeout
-        setupPollingHealthTimeout();
+        // setupPollingHealthTimeout();
 
         const data = await fetchOrders();
 
@@ -828,7 +828,7 @@ export default function LiveOrderTerminal() {
       } else {
         // this is when app go to background
         // clear the polling timeout when app go to background
-        // clearTimeout(pollingTimeoutRef.current);
+        clearTimeout(pollingTimeoutRef.current);
       }
     };
 
