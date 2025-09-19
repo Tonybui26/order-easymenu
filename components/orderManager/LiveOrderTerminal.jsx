@@ -42,6 +42,7 @@ import {
   printOrderQueued,
 } from "@/lib/helper/printerUtilsNew";
 import { useSkipInitialEffect } from "@/lib/hooks/useSkipInitialEffect";
+import { App } from "@capacitor/app";
 
 /**
  * LiveOrderTerminal Component - Order Management Interface
@@ -94,6 +95,40 @@ export default function LiveOrderTerminal() {
 
   // Platform detection
   const isNative = isNativeApp();
+
+  // App foreground/background detection state (native mobile only)
+  const [appStateChangeCount, setAppStateChangeCount] = useState(0);
+  const [lastPollTime, setLastPollTime] = useState(null);
+  const pollingTimeoutRef = useRef(null);
+
+  // Function to check if polling is actually working
+  const isPollingHealthy = () => {
+    if (!lastPollTime) return false;
+
+    // If last poll was more than 30 seconds ago, consider it unhealthy
+    const timeSinceLastPoll = Date.now() - lastPollTime;
+    return timeSinceLastPoll < 30000; // 30 seconds
+  };
+
+  // Function to set up polling health timeout
+  const setupPollingHealthTimeout = () => {
+    // Clear existing timeout
+    if (pollingTimeoutRef.current) {
+      clearTimeout(pollingTimeoutRef.current);
+    }
+
+    // Set timeout to mark polling as unhealthy if no poll occurs within 35 seconds
+    pollingTimeoutRef.current = setTimeout(() => {
+      console.log(
+        "Polling health timeout - no poll received within expected interval",
+      );
+      // Don't automatically restart here, let the app state change handler do it
+      showCustomToast(
+        "Order receiving is not working properly, please restart the app",
+        "error",
+      );
+    }, 35000); // 35 seconds (5 seconds buffer after 30 second threshold)
+  };
 
   // Comprehensive refresh function for mobile app
   const handleFullRefresh = async () => {
@@ -534,17 +569,24 @@ export default function LiveOrderTerminal() {
   useSkipInitialEffect(() => {
     if (pollingInitialized) return;
     setPollingInitialized(true);
+    // Set up initial polling health timeout
+    setupPollingHealthTimeout();
     let isActive = true;
     let timeoutId;
     let retryCount = 0;
     const maxRetries = 2;
     const baseInterval = 10000; // 10 seconds
 
+    console.log("polling initialized in useSkipInitialEffect");
+
     const pollOrders = async () => {
       if (!isActive) return;
 
       try {
         console.log("polling orders time:", new Date().toISOString());
+
+        // Update last poll time to track polling health
+        setLastPollTime(Date.now());
 
         const data = await fetchOrders();
 
@@ -729,8 +771,12 @@ export default function LiveOrderTerminal() {
         clearTimeout(timeoutId);
         console.log("Clearing timeout id", timeoutId);
       }
+      if (pollingTimeoutRef.current) {
+        clearTimeout(pollingTimeoutRef.current);
+        console.log("Clearing polling timeout ref", pollingTimeoutRef.current);
+      }
     };
-  }, [lastDismissedIds]);
+  }, [lastDismissedIds, pollingInitialized]);
 
   // Separate useEffect for unmount cleanup
   useEffect(() => {
@@ -740,6 +786,97 @@ export default function LiveOrderTerminal() {
       }
     };
   }, []); // Only runs on unmount
+
+  // Effect to detect app foreground/background state using Capacitor App plugin
+  useEffect(() => {
+    if (!isNative) {
+      console.log("Not native app, skipping app state detection");
+      return;
+    }
+
+    console.log("Setting up native app state detection...");
+
+    const handleAppStateChange = ({ isActive }) => {
+      setIsAppInForeground(isActive);
+
+      if (isActive) {
+        setAppStateChangeCount((prev) => prev + 1);
+
+        // Check if polling is actually working, not just initialized
+        const pollingHealthy = isPollingHealthy();
+
+        if (!pollingHealthy) {
+          console.log("Polling not healthy, restarting polling...");
+          toast.success(
+            `App in active!\nRestarting polling...\nCount: ${
+              appStateChangeCount + 1
+            }`,
+          );
+          // Reset polling state to allow re-initialization
+          setPollingInitialized(false);
+        } else {
+          // Use toast instead of alert for better visibility
+          toast.success(
+            `App in active!\nPolling: Healthy\nCount: ${
+              appStateChangeCount + 1
+            }`,
+          );
+        }
+      }
+    };
+
+    try {
+      // Set up native app state listener
+      const appStateListener = App.addListener(
+        "appStateChange",
+        handleAppStateChange,
+      );
+      console.log("App state listener set up successfully");
+
+      // Cleanup function
+      return () => {
+        console.log("Cleaning up app state listener");
+        appStateListener.remove();
+      };
+    } catch (error) {
+      console.error("Error setting up app state listener:", error);
+      toast.error("Error setting up app state listener");
+      // Fallback to visibility API if Capacitor fails
+      const handleVisibilityChange = () => {
+        const isVisible = !document.hidden;
+        setIsAppInForeground(isVisible);
+
+        if (isVisible) {
+          setAppStateChangeCount((prev) => prev + 1);
+
+          // Check if polling is actually working, not just initialized
+          const pollingHealthy = isPollingHealthy();
+
+          if (!pollingHealthy) {
+            console.log(
+              "Polling not healthy (fallback), restarting polling...",
+            );
+            toast.success(`App VISIBLE (fallback)!\nRestarting polling...`);
+            // Reset polling state to allow re-initialization
+            setPollingInitialized(false);
+          } else {
+            toast.success(`App VISIBLE (fallback)!\nPolling: Healthy`);
+          }
+        } else {
+          toast.error(`App HIDDEN (fallback)!\nPolling: ${pollingInitialized}`);
+        }
+      };
+      // Temporary disable visibility change listener
+      // document.addEventListener("visibilitychange", handleVisibilityChange);
+
+      // return () => {
+      //   document.removeEventListener(
+      //     "visibilitychange",
+      //     handleVisibilityChange,
+      //   );
+      // };
+    }
+  }, [isNative]);
 
   // Separate useEffect to log when state actually changes
   useEffect(() => {
