@@ -599,6 +599,7 @@ export default function LiveOrderTerminal() {
         const data = await fetchOrders();
 
         toast.success("check if lastPollTime is set:", lastPollTime);
+        console.log("======> lastPollTime:", lastPollTime);
 
         if (!isActive) return; // Check again after async operation
 
