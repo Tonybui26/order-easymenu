@@ -818,8 +818,13 @@ export default function LiveOrderTerminal() {
         const currentCount = appStateChangeCountRef.current;
 
         // Check if polling is healthy
-        // Wait for 30 seconds to check if polling is healthy
-        await new Promise((resolve) => setTimeout(resolve, 30000));
+        // Wait for 22 seconds to check if polling is healthy
+        toast.promise(
+          await new Promise((resolve) => setTimeout(resolve, 22000)),
+          {
+            loading: "Checking polling health...",
+          },
+        );
         const pollingHealthy = isPollingHealthy();
 
         // toast.success("App in active!");
