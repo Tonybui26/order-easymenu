@@ -134,7 +134,7 @@ export default function LiveOrderTerminal() {
           // Polling heath timeout fired while app is in foreground
           // Don't automatically restart here, let the app state change handler do it
           showCustomToast(
-            "Order receiving is not working properly, please check the internet connection or restart the app",
+            "Order receiving might not be working properly, check the internet connection or restart the app",
             "error",
           );
         }
@@ -816,11 +816,11 @@ export default function LiveOrderTerminal() {
       if (isActive) {
         appStateChangeCountRef.current += 1;
         const currentCount = appStateChangeCountRef.current;
-
+        toast.success("App in active!");
         // Check if polling is healthy
         // Wait for 22 seconds to check if polling is healthy
-        toast.promise(
-          await new Promise((resolve) => setTimeout(resolve, 22000)),
+        await toast.promise(
+          new Promise((resolve) => setTimeout(resolve, 22000)),
           {
             loading: "Checking polling health...",
           },
