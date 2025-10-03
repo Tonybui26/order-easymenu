@@ -43,6 +43,8 @@ import {
 } from "@/lib/helper/printerUtilsNew";
 import { useSkipInitialEffect } from "@/lib/hooks/useSkipInitialEffect";
 import { App } from "@capacitor/app";
+import { createTokenFromSession } from "@/lib/auth/tokenUtils";
+import { getJWTTokenAction } from "@/lib/actions/orderActions";
 
 /**
  * LiveOrderTerminal Component - Order Management Interface
@@ -74,16 +76,15 @@ export default function LiveOrderTerminal() {
   const [completedOrders, setCompletedOrders] = useState([]);
   const [completedOrdersLoading, setCompletedOrdersLoading] = useState(false);
   const audioRef = useRef(null);
+  const [isPolling, setIsPolling] = useState(false);
   const soundIntervalRef = useRef(null);
   const appStateChangeCountRef = useRef(0);
   const cleanupRef = useRef(null);
-  const [lastOrderIds, setLastOrderIds] = useState(new Set());
   const [showNotification, setShowNotification] = useState(false);
   const showNotificationRef = useRef(false);
   const [notificationOrderCount, setNotificationOrderCount] = useState(0);
   const [lastDismissedIds, setLastDismissedIds] = useState(new Set());
   const lastDismissedIdsRef = useRef(new Set());
-  const [printedOrderIds, setPrintedOrderIds] = useState(new Set());
   const printedOrderIdsRef = useRef(new Set());
   const [audioInitialized, setAudioInitialized] = useState(false);
   const [pollingInitialized, setPollingInitialized] = useState(false);
@@ -96,7 +97,7 @@ export default function LiveOrderTerminal() {
 
   const { storeProfile, menuId, menuConfig, refreshMenuDataWithToast } =
     useMenuContext();
-  // const { data: session } = useSession();
+  const { data: session } = useSession();
   const { userData } = useGlobalAppContext();
 
   // Platform detection
@@ -161,11 +162,9 @@ export default function LiveOrderTerminal() {
         // 3. Reset all local state to force re-initialization
         setOrders([]);
         setCompletedOrders([]);
-        setLastOrderIds(new Set());
         setShowNotification(false);
         setNotificationOrderCount(0);
         setLastDismissedIds(new Set());
-        setPrintedOrderIds(new Set());
         printedOrderIdsRef.current.clear();
         setAudioInitialized(false);
         setShowAudioPrompt(false);
@@ -197,7 +196,6 @@ export default function LiveOrderTerminal() {
             }
           });
           setOrders(activeOrders);
-          setLastOrderIds(new Set(activeOrders.map((order) => order._id)));
           setLastDismissedIds(new Set(activeOrders.map((order) => order._id)));
           setLoading(false);
           toast.success("App refreshed successfully!");
@@ -555,7 +553,6 @@ export default function LiveOrderTerminal() {
 
         setOrders(activeOrders);
         console.log("activeOrders initial", activeOrders);
-        setLastOrderIds(new Set(activeOrders.map((order) => order._id)));
         setLastDismissedIds(new Set(activeOrders.map((order) => order._id)));
         setLoading(false);
       } catch (error) {
@@ -566,6 +563,186 @@ export default function LiveOrderTerminal() {
 
     loadInitialOrders();
   }, []);
+
+  useEffect(() => {
+    if (!session) return;
+
+    let eventSource = null;
+
+    const connectToSSE = async () => {
+      try {
+        const jwtToken = await getJWTTokenAction();
+
+        eventSource = new EventSource(
+          `${process.env.NEXT_PUBLIC_MAIN_APP_URL}/api/order-app/stream?token=${jwtToken}`,
+        );
+
+        eventSource.addEventListener("connection-established", (event) => {
+          const updateData = JSON.parse(event.data);
+          console.log("connection established from SSE:", updateData);
+        });
+
+        eventSource.addEventListener("heartbeat", (event) => {
+          const updateData = JSON.parse(event.data);
+          console.log("heartbeat from SSE:", updateData);
+        });
+
+        // Listen for order status updates
+        eventSource.addEventListener("new-card-order-paid", (event) => {
+          const data = JSON.parse(event.data);
+          console.log("new card order paid from SSE:", data);
+          if (!isPolling) {
+            pollingOrders();
+          }
+        });
+
+        eventSource.onerror = (error) => {
+          console.error("SSE connection error:", error);
+        };
+
+        eventSource.onopen = () => {
+          console.log("SSE connection opened");
+        };
+      } catch (error) {
+        console.error("Failed to connect to SSE:", error);
+      }
+    };
+
+    connectToSSE();
+
+    // Cleanup function to close the connection
+    return () => {
+      if (eventSource) {
+        console.log("Closing SSE connection");
+        eventSource.close();
+      }
+    };
+  }, [session]);
+
+  const pollingOrders = async () => {
+    setIsPolling(true);
+    const data = await fetchOrders();
+    const activeOrders = data.filter((order) => {
+      // Include orders that are still in progress - confirmed, preparing, ready
+      if (["confirmed", "preparing", "ready"].includes(order.status)) {
+        return true;
+      } else {
+        // For the rest of the orders(pending, delivered, cancelled)
+
+        // 1. if the order is cancelled or delivered, then exclude the order
+        if (["cancelled", "delivered"].includes(order.status)) {
+          return false;
+        }
+        // 2. Now only Pending orders are left, so we need to check if the order is cash payment method and still need payment
+        if (
+          order.paymentMethod === "cash" &&
+          order.paymentStatus === "pending"
+        ) {
+          return true;
+        }
+        // 3. If the order is not cash payment method or not pending, then exclude the order
+        return false;
+      }
+    });
+    const currentOrderIdsAsSet = new Set(
+      activeOrders.map((order) => order._id),
+    );
+    setOrders(activeOrders);
+    // Check for new orders since last dismissal (not just last poll)
+    const newOrdersSinceLastDismissal = activeOrders.filter(
+      (order) => !lastDismissedIdsRef.current.has(order._id),
+    );
+    // Filter orders that should trigger notifications:
+    // 1. Paid orders (takeaway/dine-in, but not counter paid)
+    // 2. Pending counter orders for dine-in only
+    const notificationWorthyOrders = newOrdersSinceLastDismissal.filter(
+      (order) => {
+        // Case 1: Paid orders (but not counter paid - these don't need immediate attention)
+        if (
+          order.paymentStatus === "paid" &&
+          !isCounterPayment(order.paymentMethod)
+        ) {
+          return true;
+        }
+
+        // Case 2: Pending counter orders for dine-in only (these need payment collection)
+        if (
+          order.paymentStatus === "pending" &&
+          isCounterPayment(order.paymentMethod) &&
+          order.table !== "takeaway"
+        ) {
+          return true;
+        }
+
+        return false;
+      },
+    );
+
+    // Update count to reflect notification-worthy orders since last dismissal
+    if (notificationWorthyOrders.length > 0) {
+      setNotificationOrderCount(notificationWorthyOrders.length);
+
+      // Auto-print orders if auto-printing is enabled
+      const autoPrintingEnabled = menuConfig?.autoPrinting?.enabled;
+      if (autoPrintingEnabled && storeProfile && userData?.ownerEmail) {
+        // Filter out orders that have already been printed
+        const unprintedOrders = notificationWorthyOrders.filter(
+          (order) => !printedOrderIdsRef.current.has(order._id),
+        );
+        console.log(
+          "printedOrderIds right before filtering:",
+          printedOrderIdsRef.current,
+        );
+        console.log("unprintedOrders", unprintedOrders);
+        // Print only unprinted orders and collect printed IDs
+        const newlyPrintedIds = [];
+        for (const order of unprintedOrders) {
+          try {
+            const printResult = await handlePrintingOrder(order);
+            if (printResult.success) {
+              console.log(
+                `Auto-printed successfully order ${order._id.slice(-6)}:`,
+                printResult,
+              );
+              newlyPrintedIds.push(order._id);
+            } else {
+              console.error(
+                `Error auto-printing order ${order._id}:`,
+                printResult.message,
+              );
+              showCustomToast(
+                "Failed to auto-print order - Double check the printer settings",
+                "error",
+              );
+            }
+          } catch (error) {
+            console.error(`Error auto-printing order ${order._id}:`, error);
+            // Don't block other orders if one fails
+          }
+        }
+
+        // Update both the ref and state with all newly printed order IDs at once
+        if (newlyPrintedIds.length > 0) {
+          // Update ref immediately (synchronous)
+          newlyPrintedIds.forEach((id) => printedOrderIdsRef.current.add(id));
+          console.log(
+            "Updated printed order ids ref:",
+            printedOrderIdsRef.current,
+          );
+        }
+      }
+
+      // Only trigger notification if it's not already showing
+      if (!showNotificationRef.current) {
+        console.log("Showing notification");
+        setShowNotification(true);
+        playSoundCycle();
+      }
+    }
+
+    setIsPolling(false);
+  };
+
   // Function to handle notification dismissal
   const handleNotificationDismiss = () => {
     setShowNotification(false);
@@ -573,7 +750,6 @@ export default function LiveOrderTerminal() {
     // Update lastDismissedIds to current order IDs so future counts are calculated correctly
     setLastDismissedIds(new Set(orders.map((order) => order._id)));
     // Clear printed orders tracking when notification is dismissed
-    setPrintedOrderIds(new Set());
     printedOrderIdsRef.current.clear();
     stopSoundCycle();
     // Switch to new orders tab when notification is dismissed
@@ -582,7 +758,8 @@ export default function LiveOrderTerminal() {
 
   // Effect for polling orders
   useSkipInitialEffect(() => {
-    if (pollingInitialized) return;
+    if (true) return;
+    if (pollinginitialized) return;
     setPollingInitialized(true);
 
     let isActive = true;
@@ -727,13 +904,6 @@ export default function LiveOrderTerminal() {
                 "Updated printed order ids ref:",
                 printedOrderIdsRef.current,
               );
-
-              // Update state for UI (if needed)
-              setPrintedOrderIds((prev) => {
-                const newSet = new Set([...prev, ...newlyPrintedIds]);
-                console.log("Updated printed order ids state:", newSet);
-                return newSet;
-              });
             }
           }
 
@@ -745,7 +915,6 @@ export default function LiveOrderTerminal() {
           }
         }
 
-        setLastOrderIds(currentOrderIdsAsSet);
         retryCount = 0; // Reset retry count on success
 
         // Schedule next poll
@@ -806,93 +975,94 @@ export default function LiveOrderTerminal() {
   }, []); // Only runs on unmount
 
   // Effect to detect app foreground/background state using Capacitor App plugin
-  useEffect(() => {
-    if (!isNative) {
-      console.log("Not native app, skipping app state detection");
-      return;
-    }
+  // Temporary disable app state detection
+  // useEffect(() => {
+  //   if (!isNative) {
+  //     console.log("Not native app, skipping app state detection");
+  //     return;
+  //   }
 
-    const handleAppStateChange = async ({ isActive }) => {
-      if (isActive) {
-        appStateChangeCountRef.current += 1;
-        const currentCount = appStateChangeCountRef.current;
-        toast.success("App in active!");
-        // Check if polling is healthy
-        // Wait for 22 seconds to check if polling is healthy
-        await toast.promise(
-          new Promise((resolve) => setTimeout(resolve, 22000)),
-          {
-            loading: "Checking polling health...",
-          },
-        );
-        const pollingHealthy = isPollingHealthy();
+  //   const handleAppStateChange = async ({ isActive }) => {
+  //     if (isActive) {
+  //       appStateChangeCountRef.current += 1;
+  //       const currentCount = appStateChangeCountRef.current;
+  //       toast.success("App in active!");
+  //       // Check if polling is healthy
+  //       // Wait for 22 seconds to check if polling is healthy
+  //       await toast.promise(
+  //         new Promise((resolve) => setTimeout(resolve, 22000)),
+  //         {
+  //           loading: "Checking polling health...",
+  //         },
+  //       );
+  //       const pollingHealthy = isPollingHealthy();
 
-        // toast.success("App in active!");
-        if (!pollingHealthy) {
-          showCustomToast(
-            `App idle in background for too long, please restart the app`,
-            "error",
-          );
-        } else {
-          // Use toast instead of alert for better visibility
-          toast.success(`Polling Healthy: ${currentCount}`);
-          // set the polling timeout when app go to foreground
-          // setupPollingHealthTimeout();
-        }
-      }
-    };
+  //       // toast.success("App in active!");
+  //       if (!pollingHealthy) {
+  //         showCustomToast(
+  //           `App idle in background for too long, please restart the app`,
+  //           "error",
+  //         );
+  //       } else {
+  //         // Use toast instead of alert for better visibility
+  //         toast.success(`Polling Healthy: ${currentCount}`);
+  //         // set the polling timeout when app go to foreground
+  //         // setupPollingHealthTimeout();
+  //       }
+  //     }
+  //   };
 
-    try {
-      // Set up native app state listener
-      const appStateListener = App.addListener(
-        "appStateChange",
-        handleAppStateChange,
-      );
+  //   try {
+  //     // Set up native app state listener
+  //     const appStateListener = App.addListener(
+  //       "appStateChange",
+  //       handleAppStateChange,
+  //     );
 
-      // Cleanup function
-      return () => {
-        console.log("Cleaning up app state listener");
-        appStateListener.remove();
-      };
-    } catch (error) {
-      console.error("Error setting up app state listener:", error);
-      toast.error("Error setting up app state listener");
-      // Fallback to visibility API if Capacitor fails
-      const handleVisibilityChange = () => {
-        const isVisible = !document.hidden;
-        setIsAppInForeground(isVisible);
+  //     // Cleanup function
+  //     return () => {
+  //       console.log("Cleaning up app state listener");
+  //       appStateListener.remove();
+  //     };
+  //   } catch (error) {
+  //     console.error("Error setting up app state listener:", error);
+  //     toast.error("Error setting up app state listener");
+  //     // Fallback to visibility API if Capacitor fails
+  //     const handleVisibilityChange = () => {
+  //       const isVisible = !document.hidden;
+  //       setIsAppInForeground(isVisible);
 
-        if (isVisible) {
-          setAppStateChangeCount((prev) => prev + 1);
+  //       if (isVisible) {
+  //         setAppStateChangeCount((prev) => prev + 1);
 
-          // Check if polling is actually working, not just initialized
-          const pollingHealthy = isPollingHealthy();
+  //         // Check if polling is actually working, not just initialized
+  //         const pollingHealthy = isPollingHealthy();
 
-          if (!pollingHealthy) {
-            console.log(
-              "Polling not healthy (fallback), restarting polling...",
-            );
-            toast.success(`App VISIBLE (fallback)!\nRestarting polling...`);
-            // Reset polling state to allow re-initialization
-            setPollingInitialized(false);
-          } else {
-            toast.success(`App VISIBLE (fallback)!\nPolling: Healthy`);
-          }
-        } else {
-          toast.error(`App HIDDEN (fallback)!\nPolling: ${pollingInitialized}`);
-        }
-      };
-      // Temporary disable visibility change listener
-      // document.addEventListener("visibilitychange", handleVisibilityChange);
+  //         if (!pollingHealthy) {
+  //           console.log(
+  //             "Polling not healthy (fallback), restarting polling...",
+  //           );
+  //           toast.success(`App VISIBLE (fallback)!\nRestarting polling...`);
+  //           // Reset polling state to allow re-initialization
+  //           setPollingInitialized(false);
+  //         } else {
+  //           toast.success(`App VISIBLE (fallback)!\nPolling: Healthy`);
+  //         }
+  //       } else {
+  //         toast.error(`App HIDDEN (fallback)!\nPolling: ${pollingInitialized}`);
+  //       }
+  //     };
+  //     // Temporary disable visibility change listener
+  //     // document.addEventListener("visibilitychange", handleVisibilityChange);
 
-      // return () => {
-      //   document.removeEventListener(
-      //     "visibilitychange",
-      //     handleVisibilityChange,
-      //   );
-      // };
-    }
-  }, [isNative]);
+  //     // return () => {
+  //     //   document.removeEventListener(
+  //     //     "visibilitychange",
+  //     //     handleVisibilityChange,
+  //     //   );
+  //     // };
+  //   }
+  // }, [isNative]);
 
   // Separate useEffect to log when state actually changes
   useEffect(() => {
@@ -1179,11 +1349,6 @@ export default function LiveOrderTerminal() {
           setOrders((prevOrders) =>
             prevOrders.filter((order) => order._id !== orderId),
           );
-          setLastOrderIds((prevIds) => {
-            const newIds = new Set(prevIds);
-            newIds.delete(orderId);
-            return newIds;
-          });
         }, 5000);
       }
     } catch (error) {
