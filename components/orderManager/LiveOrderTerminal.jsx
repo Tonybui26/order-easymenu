@@ -565,6 +565,7 @@ export default function LiveOrderTerminal() {
   }, []);
 
   useEffect(() => {
+    toast.success("useEffect session change run");
     if (!session) return;
 
     let eventSource = null;
