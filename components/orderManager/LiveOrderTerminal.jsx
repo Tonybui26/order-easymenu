@@ -579,9 +579,7 @@ export default function LiveOrderTerminal() {
           const updateData = JSON.parse(event.data);
           console.log("connection established from SSE:", updateData);
           console.log("polling orders after connection established");
-          if (!isPolling) {
-            pollingOrders();
-          }
+          pollingOrders();
           toast.success("Live order is now connected!");
         });
 
@@ -594,9 +592,7 @@ export default function LiveOrderTerminal() {
         eventSource.addEventListener("new-card-order-paid", (event) => {
           const data = JSON.parse(event.data);
           console.log("new card order paid from SSE:", data);
-          if (!isPolling) {
-            pollingOrders();
-          }
+          pollingOrders();
         });
 
         eventSource.onerror = (error) => {
