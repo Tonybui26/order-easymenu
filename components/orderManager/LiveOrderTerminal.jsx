@@ -575,13 +575,16 @@ export default function LiveOrderTerminal() {
           `${process.env.NEXT_PUBLIC_MAIN_APP_URL}/api/order-app/stream?token=${jwtToken}`,
         );
 
-        eventSource.addEventListener("connection-established", (event) => {
-          const updateData = JSON.parse(event.data);
-          console.log("connection established from SSE:", updateData);
-          console.log("polling orders after connection established");
-          pollingOrders();
-          toast.success("Live order is now connected!");
-        });
+        eventSource.addEventListener(
+          "connection-established",
+          async (event) => {
+            const updateData = JSON.parse(event.data);
+            console.log("connection established from SSE:", updateData);
+            console.log("polling orders after connection established");
+            await pollingOrders(); // Add await
+            toast.success("Live order is now connected!");
+          },
+        );
 
         eventSource.addEventListener("heartbeat", (event) => {
           const updateData = JSON.parse(event.data);
@@ -589,10 +592,11 @@ export default function LiveOrderTerminal() {
         });
 
         // Listen for order status updates
-        eventSource.addEventListener("new-card-order-paid", (event) => {
+        eventSource.addEventListener("new-card-order-paid", async (event) => {
           const data = JSON.parse(event.data);
           console.log("new card order paid from SSE:", data);
-          pollingOrders();
+          await pollingOrders(); // Add await
+          console.log("polling orders after new card order paid");
         });
 
         eventSource.onerror = (error) => {
