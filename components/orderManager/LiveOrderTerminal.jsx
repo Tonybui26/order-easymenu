@@ -564,7 +564,7 @@ export default function LiveOrderTerminal() {
     loadInitialOrders();
   }, []);
 
-  useEffect(() => {
+  useSkipInitialEffect(() => {
     if (!session) return;
     let eventSource = null;
     const connectToSSE = async () => {
