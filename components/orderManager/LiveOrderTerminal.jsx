@@ -565,11 +565,8 @@ export default function LiveOrderTerminal() {
   }, []);
 
   useEffect(() => {
-    toast.success("Refreshing connection");
     if (!session) return;
-
     let eventSource = null;
-
     const connectToSSE = async () => {
       try {
         const jwtToken = await getJWTTokenAction();
@@ -581,6 +578,11 @@ export default function LiveOrderTerminal() {
         eventSource.addEventListener("connection-established", (event) => {
           const updateData = JSON.parse(event.data);
           console.log("connection established from SSE:", updateData);
+          console.log("polling orders after connection established");
+          if (!isPolling) {
+            pollingOrders();
+          }
+          toast.success("Live order is now connected!");
         });
 
         eventSource.addEventListener("heartbeat", (event) => {
