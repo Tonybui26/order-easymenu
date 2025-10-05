@@ -565,7 +565,7 @@ export default function LiveOrderTerminal() {
   }, []);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session?.user?.id) return;
     let eventSource = null;
     const connectToSSE = async () => {
       try {
@@ -651,7 +651,7 @@ export default function LiveOrderTerminal() {
         eventSource.close();
       }
     };
-  }, [session]);
+  }, [session?.user?.id]);
 
   const pollingOrders = async () => {
     setIsPolling(true);
