@@ -597,6 +597,7 @@ export default function LiveOrderTerminal() {
           console.log("new card order paid from SSE:", data);
           await pollingOrders(); // Add await
           console.log("polling orders after new card order paid");
+          toast.success("New card order paid");
         });
 
         eventSource.onerror = (error) => {
