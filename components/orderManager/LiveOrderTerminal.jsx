@@ -564,7 +564,7 @@ export default function LiveOrderTerminal() {
     loadInitialOrders();
   }, []);
 
-  useSkipInitialEffect(() => {
+  useEffect(() => {
     if (!session) return;
     let eventSource = null;
     const connectToSSE = async () => {
@@ -597,7 +597,7 @@ export default function LiveOrderTerminal() {
           console.log("new card order paid from SSE:", data);
           await pollingOrders(); // Add await
           console.log("polling orders after new card order paid");
-          toast.success("New card order paid");
+          toast.success("New order");
         });
 
         eventSource.onerror = (error) => {
@@ -678,6 +678,7 @@ export default function LiveOrderTerminal() {
         return false;
       }
     });
+    toast.success("polling orders");
     const currentOrderIdsAsSet = new Set(
       activeOrders.map((order) => order._id),
     );
