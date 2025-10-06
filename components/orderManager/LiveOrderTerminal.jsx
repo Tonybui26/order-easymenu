@@ -773,6 +773,7 @@ export default function LiveOrderTerminal() {
       if (!showNotificationRef.current) {
         console.log("Showing notification");
         setShowNotification(true);
+        showNotificationRef.current = true; // Update ref immediately
         playSoundCycle();
       }
     }
@@ -783,6 +784,7 @@ export default function LiveOrderTerminal() {
   // Function to handle notification dismissal
   const handleNotificationDismiss = () => {
     setShowNotification(false);
+    showNotificationRef.current = false; // Update ref immediately
     setNotificationOrderCount(0);
     // Update lastDismissedIds to current order IDs so future counts are calculated correctly
     setLastDismissedIds(new Set(orders.map((order) => order._id)));
@@ -948,6 +950,7 @@ export default function LiveOrderTerminal() {
           if (!showNotificationRef.current) {
             console.log("Showing notification");
             setShowNotification(true);
+            showNotificationRef.current = true; // Update ref immediately
             playSoundCycle();
           }
         }
