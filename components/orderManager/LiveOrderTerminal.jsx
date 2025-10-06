@@ -78,6 +78,7 @@ export default function LiveOrderTerminal() {
   const audioRef = useRef(null);
   const [isPolling, setIsPolling] = useState(false);
   const soundIntervalRef = useRef(null);
+  const playingAudioInstances = useRef(new Set());
   const appStateChangeCountRef = useRef(0);
   const cleanupRef = useRef(null);
   const [showNotification, setShowNotification] = useState(false);
@@ -166,6 +167,7 @@ export default function LiveOrderTerminal() {
         setNotificationOrderCount(0);
         setLastDismissedIds(new Set());
         printedOrderIdsRef.current.clear();
+        playingAudioInstances.current.clear(); // Clear audio tracking
         setAudioInitialized(false);
         setShowAudioPrompt(false);
 
@@ -678,7 +680,7 @@ export default function LiveOrderTerminal() {
         return false;
       }
     });
-    toast.success("polling orders");
+    // toast.success("polling orders");
     const currentOrderIdsAsSet = new Set(
       activeOrders.map((order) => order._id),
     );
@@ -1174,12 +1176,38 @@ export default function LiveOrderTerminal() {
 
     const playSound = async () => {
       try {
+        // Check if we should still be playing (prevent race condition)
+        if (!showNotificationRef.current) return;
+
         // Create a new audio element for each play to allow overlapping
         const audioClone = new Audio("/sounds/notification.mp3");
-        await audioClone.play();
 
-        // Schedule next play after a very short delay (e.g., 900ms)
-        soundIntervalRef.current = setTimeout(playSound, 900);
+        // Track this audio instance
+        playingAudioInstances.current.add(audioClone);
+
+        // Remove from tracking when audio ends
+        audioClone.addEventListener("ended", () => {
+          playingAudioInstances.current.delete(audioClone);
+        });
+
+        // Remove from tracking if audio fails
+        audioClone.addEventListener("error", () => {
+          playingAudioInstances.current.delete(audioClone);
+        });
+
+        try {
+          await audioClone.play();
+        } catch (playError) {
+          // If play fails, remove from tracking immediately
+          playingAudioInstances.current.delete(audioClone);
+          throw playError; // Re-throw to be caught by outer try-catch
+        }
+
+        // Double-check before scheduling next play (prevent race condition)
+        if (showNotificationRef.current) {
+          // Schedule next play after a very short delay (e.g., 900ms)
+          soundIntervalRef.current = setTimeout(playSound, 900);
+        }
       } catch (error) {
         console.error("Error playing sound:", error);
         // If audio fails to play, show the audio prompt (web only)
@@ -1194,10 +1222,27 @@ export default function LiveOrderTerminal() {
 
   // Function to stop all sound intervals
   const stopSoundCycle = () => {
+    // Clear the timeout to prevent new sounds from being scheduled
     if (soundIntervalRef.current) {
       clearTimeout(soundIntervalRef.current);
       soundIntervalRef.current = null;
     }
+
+    // Stop all currently playing audio instances
+    playingAudioInstances.current.forEach((audio) => {
+      try {
+        // Additional safety check for audio object
+        if (audio && typeof audio.pause === "function") {
+          audio.pause();
+          audio.currentTime = 0;
+        }
+      } catch (error) {
+        console.error("Error stopping audio:", error);
+      }
+    });
+
+    // Clear the tracking set
+    playingAudioInstances.current.clear();
   };
 
   // Show audio prompt on first visit if sound is enabled (web only)
