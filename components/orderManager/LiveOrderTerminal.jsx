@@ -93,6 +93,7 @@ export default function LiveOrderTerminal() {
   const { soundEnabled } = useGlobalAppContext();
   // Live connection status tracking
   const [isLiveConnected, setIsLiveConnected] = useState(false);
+  const isInitialConnectRef = useRef(true);
   const lastHeartbeatRef = useRef(null);
   const heartbeatTimeoutRef = useRef(null);
   // App foreground/background detection state (native mobile only)
@@ -111,6 +112,7 @@ export default function LiveOrderTerminal() {
   // Function to handle heartbeat and update live status
   const handleHeartbeat = () => {
     lastHeartbeatRef.current = Date.now();
+    isInitialConnectRef.current = false; // Mark as no longer initial connect (synchronous)
     setIsLiveConnected(true);
 
     // Clear existing timeout
@@ -128,6 +130,7 @@ export default function LiveOrderTerminal() {
   // Function to reset live connection status
   const resetLiveConnection = () => {
     setIsLiveConnected(false);
+    isInitialConnectRef.current = false; // Mark as no longer initial connect (synchronous)
     lastHeartbeatRef.current = null;
     if (heartbeatTimeoutRef.current) {
       clearTimeout(heartbeatTimeoutRef.current);
@@ -638,12 +641,12 @@ export default function LiveOrderTerminal() {
         eventSource.onerror = (error) => {
           console.error("SSE connection error here:", error);
           // Check if connection failed immediately
-          if (eventSource.readyState === EventSource.CLOSED) {
-            showCustomToast(
-              "Connection failed. Please refresh the page.",
-              "error",
-            );
-          }
+          // if (eventSource.readyState === EventSource.CLOSED) {
+          //   showCustomToast(
+          //     "Connection failed. Please refresh the page.",
+          //     "error",
+          //   );
+          // }
           // Don't reset live connection - let EventSource auto-reconnect
           // The heartbeat timeout will handle marking as offline if truly disconnected
         };
@@ -1759,6 +1762,54 @@ export default function LiveOrderTerminal() {
 
               {/* Tap anywhere to accept */}
               <div className="text-lg opacity-80">Tap anywhere to view</div>
+            </div>
+          </div>
+        )}
+
+        {/* Offline/Connecting Overlay */}
+        {!isLiveConnected && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+            <div className="mx-4 max-w-md rounded-xl bg-white p-8 text-center shadow-2xl">
+              {/* Icon */}
+              <div
+                className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full ${
+                  isInitialConnectRef.current ? "bg-blue-100" : "bg-red-100"
+                }`}
+              >
+                <div
+                  className={`h-8 w-8 rounded-full ${
+                    isInitialConnectRef.current
+                      ? "animate-pulse bg-blue-500"
+                      : "bg-red-500"
+                  }`}
+                ></div>
+              </div>
+
+              {/* Title */}
+              <h2 className="mb-2 text-2xl font-bold text-gray-900">
+                {isInitialConnectRef.current
+                  ? "Connecting to Live Server"
+                  : "Connection Lost"}
+              </h2>
+
+              {/* Status */}
+              <div
+                className={`rounded-lg p-4 ${
+                  isInitialConnectRef.current ? "bg-blue-50" : "bg-red-50"
+                }`}
+              >
+                <p
+                  className={`mt-2 text-sm ${
+                    isInitialConnectRef.current
+                      ? "text-blue-600"
+                      : "text-red-600"
+                  }`}
+                >
+                  {isInitialConnectRef.current
+                    ? "Establishing connection to receive live orders..."
+                    : "Attempting to reconnect automatically..."}
+                </p>
+              </div>
             </div>
           </div>
         )}
