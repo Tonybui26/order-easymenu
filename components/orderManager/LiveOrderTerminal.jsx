@@ -133,6 +133,14 @@ export default function LiveOrderTerminal() {
       ) {
         console.log("Attempting to reconnect SSE after timeout...");
         reconnectSSE();
+      } else if (!eventSourceRef.current) {
+        console.log("No SSE connection exists, establishing new connection...");
+        connectToSSE();
+      } else {
+        console.log(
+          "EventSource exists but in unknown state:",
+          eventSourceRef.current.readyState,
+        );
       }
     }, 45000);
   };
