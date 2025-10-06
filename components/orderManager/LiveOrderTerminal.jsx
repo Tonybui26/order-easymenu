@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import OrderCard from "./OrderCard";
 import Logo from "../../public/images/logo.svg";
 import {
@@ -96,6 +96,7 @@ export default function LiveOrderTerminal() {
   const isInitialConnectRef = useRef(true);
   const lastHeartbeatRef = useRef(null);
   const heartbeatTimeoutRef = useRef(null);
+  const eventSourceRef = useRef(null);
   // App foreground/background detection state (native mobile only)
   const lastPollTimeRef = useRef(null);
   const pollingTimeoutRef = useRef(null);
@@ -124,6 +125,15 @@ export default function LiveOrderTerminal() {
     heartbeatTimeoutRef.current = setTimeout(() => {
       setIsLiveConnected(false);
       console.log("Live connection timeout - no heartbeat received");
+
+      // Immediately attempt reconnection if EventSource is not working
+      if (
+        eventSourceRef.current &&
+        eventSourceRef.current.readyState !== EventSource.OPEN
+      ) {
+        console.log("Attempting to reconnect SSE after timeout...");
+        reconnectSSE();
+      }
     }, 45000);
   };
 
@@ -137,6 +147,99 @@ export default function LiveOrderTerminal() {
       heartbeatTimeoutRef.current = null;
     }
   };
+
+  // Function to close current EventSource connection
+  const closeSSEConnection = () => {
+    if (eventSourceRef.current) {
+      console.log("Closing current SSE connection");
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+  };
+
+  // Function to reconnect SSE
+  const reconnectSSE = async () => {
+    console.log("Reconnecting SSE...");
+    closeSSEConnection();
+    resetLiveConnection();
+
+    // Wait a moment before reconnecting
+    setTimeout(async () => {
+      await connectToSSE();
+    }, 2000);
+  };
+
+  // Function to establish SSE connection
+  const connectToSSE = useCallback(async () => {
+    try {
+      const jwtToken = await getJWTTokenAction();
+
+      eventSourceRef.current = new EventSource(
+        `${process.env.NEXT_PUBLIC_MAIN_APP_URL}/api/order-app/stream?token=${jwtToken}`,
+      );
+
+      eventSourceRef.current.addEventListener(
+        "connection-established",
+        async (event) => {
+          const updateData = JSON.parse(event.data);
+          console.log("connection established from SSE:", updateData);
+          console.log("polling orders after connection established");
+          await pollingOrders(); // Add await
+          handleHeartbeat(); // Mark as connected
+          toast.success("Live order is now connected!");
+        },
+      );
+
+      eventSourceRef.current.addEventListener("heartbeat", (event) => {
+        const updateData = JSON.parse(event.data);
+        console.log("heartbeat from SSE:", updateData);
+        handleHeartbeat(); // Update live status
+      });
+
+      // Listen for order status updates
+      eventSourceRef.current.addEventListener(
+        "order-status-update",
+        async (event) => {
+          const data = JSON.parse(event.data);
+          console.log("new order status update from SSE:", data);
+          await pollingOrders(); // Add await
+          console.log("polling orders after new order status update");
+        },
+      );
+
+      // Listen for order paid by card
+      eventSourceRef.current.addEventListener(
+        "new-card-order-paid",
+        async (event) => {
+          const data = JSON.parse(event.data);
+          console.log("new card order paid from SSE:", data);
+          await pollingOrders(); // Add await
+          console.log("polling orders after new card order paid");
+          toast.success("New order");
+        },
+      );
+
+      eventSourceRef.current.onerror = (error) => {
+        console.error("SSE connection error here:", error);
+        // Check if connection failed immediately
+        // if (eventSource.readyState === EventSource.CLOSED) {
+        //   showCustomToast(
+        //     "Connection failed. Please refresh the page.",
+        //     "error",
+        //   );
+        // }
+        // Don't reset live connection - let EventSource auto-reconnect
+        // The heartbeat timeout will handle marking as offline if truly disconnected
+      };
+
+      eventSourceRef.current.onopen = () => {
+        console.log("SSE connection opened");
+      };
+    } catch (error) {
+      console.error("Failed to connect to SSE:", error);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Function to check if polling is actually working
   const isPollingHealthy = () => {
@@ -602,82 +705,15 @@ export default function LiveOrderTerminal() {
 
   useEffect(() => {
     if (!session?.user?.id) return;
-    let eventSource = null;
-    const connectToSSE = async () => {
-      try {
-        const jwtToken = await getJWTTokenAction();
-
-        eventSource = new EventSource(
-          `${process.env.NEXT_PUBLIC_MAIN_APP_URL}/api/order-app/stream?token=${jwtToken}`,
-        );
-
-        eventSource.addEventListener(
-          "connection-established",
-          async (event) => {
-            const updateData = JSON.parse(event.data);
-            console.log("connection established from SSE:", updateData);
-            console.log("polling orders after connection established");
-            await pollingOrders(); // Add await
-            handleHeartbeat(); // Mark as connected
-            toast.success("Live order is now connected!");
-          },
-        );
-
-        eventSource.addEventListener("heartbeat", (event) => {
-          const updateData = JSON.parse(event.data);
-          console.log("heartbeat from SSE:", updateData);
-          handleHeartbeat(); // Update live status
-        });
-
-        // Listen for order status updates
-        eventSource.addEventListener("order-status-update", async (event) => {
-          const data = JSON.parse(event.data);
-          console.log("new order status update from SSE:", data);
-          await pollingOrders(); // Add await
-          console.log("polling orders after new order status update");
-        });
-
-        // Listen for order paid by card
-        eventSource.addEventListener("new-card-order-paid", async (event) => {
-          const data = JSON.parse(event.data);
-          console.log("new card order paid from SSE:", data);
-          await pollingOrders(); // Add await
-          console.log("polling orders after new card order paid");
-          toast.success("New order");
-        });
-
-        eventSource.onerror = (error) => {
-          console.error("SSE connection error here:", error);
-          // Check if connection failed immediately
-          // if (eventSource.readyState === EventSource.CLOSED) {
-          //   showCustomToast(
-          //     "Connection failed. Please refresh the page.",
-          //     "error",
-          //   );
-          // }
-          // Don't reset live connection - let EventSource auto-reconnect
-          // The heartbeat timeout will handle marking as offline if truly disconnected
-        };
-
-        eventSource.onopen = () => {
-          console.log("SSE connection opened");
-        };
-      } catch (error) {
-        console.error("Failed to connect to SSE:", error);
-      }
-    };
 
     connectToSSE();
 
     // Cleanup function to close the connection
     return () => {
-      if (eventSource) {
-        console.log("Closing SSE connection");
-        eventSource.close();
-      }
+      closeSSEConnection();
       resetLiveConnection(); // Reset live status on cleanup
     };
-  }, [session?.user?.id]);
+  }, [session?.user?.id, connectToSSE]);
 
   const pollingOrders = async () => {
     setIsPolling(true);
