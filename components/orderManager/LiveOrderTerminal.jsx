@@ -605,35 +605,10 @@ export default function LiveOrderTerminal() {
         eventSource.onerror = (error) => {
           console.error("SSE connection error here:", error);
 
-          // Check if connection failed immediately
-          if (eventSource.readyState === EventSource.CLOSED) {
-            // Make a quick request to check the actual error
-            fetch(
-              `${process.env.NEXT_PUBLIC_MAIN_APP_URL}/api/order-app/stream?token=${jwtToken}`,
-            )
-              .then((response) => {
-                if (response.status === 409) {
-                  return response.json();
-                }
-                return null;
-              })
-              .then((errorData) => {
-                if (errorData) {
-                  showCustomToast(errorData.message, "error");
-                } else {
-                  showCustomToast(
-                    "Connection failed. Please refresh the page.",
-                    "error",
-                  );
-                }
-              })
-              .catch(() => {
-                showCustomToast(
-                  "Connection failed. Please refresh the page.",
-                  "error",
-                );
-              });
-          }
+          showCustomToast(
+            "Connection failed. Please refresh the page.",
+            "error",
+          );
         };
 
         eventSource.onopen = () => {
