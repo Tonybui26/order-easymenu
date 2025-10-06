@@ -127,20 +127,21 @@ export default function LiveOrderTerminal() {
       console.log("Live connection timeout - no heartbeat received");
 
       // Immediately attempt reconnection if EventSource is not working
-      if (
-        eventSourceRef.current &&
-        eventSourceRef.current.readyState !== EventSource.OPEN
-      ) {
-        console.log("Attempting to reconnect SSE after timeout...");
-        reconnectSSE();
-      } else if (!eventSourceRef.current) {
+      if (!eventSourceRef.current) {
         console.log("No SSE connection exists, establishing new connection...");
         connectToSSE();
-      } else {
+      } else if (eventSourceRef.current.readyState !== EventSource.OPEN) {
         console.log(
-          "EventSource exists but in unknown state:",
+          "SSE connection is closed/connecting, attempting reconnection...",
+        );
+        reconnectSSE();
+      } else {
+        // EventSource shows as OPEN but no heartbeat received - likely a zombie connection
+        console.log(
+          "EventSource shows as OPEN but no heartbeat received (zombie connection), forcing reconnection...",
           eventSourceRef.current.readyState,
         );
+        reconnectSSE();
       }
     }, 45000);
   };
