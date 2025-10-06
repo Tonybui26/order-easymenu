@@ -630,6 +630,14 @@ export default function LiveOrderTerminal() {
         });
 
         // Listen for order status updates
+        eventSource.addEventListener("order-status-update", async (event) => {
+          const data = JSON.parse(event.data);
+          console.log("new order status update from SSE:", data);
+          await pollingOrders(); // Add await
+          console.log("polling orders after new order status update");
+        });
+
+        // Listen for order paid by card
         eventSource.addEventListener("new-card-order-paid", async (event) => {
           const data = JSON.parse(event.data);
           console.log("new card order paid from SSE:", data);
