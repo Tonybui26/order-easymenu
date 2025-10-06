@@ -1819,7 +1819,7 @@ export default function LiveOrderTerminal() {
           {/* quick settings */}
           <div className="mb-3 flex gap-3">
             {/* logo */}
-            <div className="hidden h-auto flex-col items-center justify-center gap-0 rounded-lg bg-gray-100 px-4 py-1 text-left transition-colors hover:bg-gray-200 md:flex">
+            <div className="hidden h-auto flex-col items-center justify-center gap-0 rounded-lg bg-gray-100 px-4 py-1 text-left transition-colors hover:bg-gray-200">
               <Image
                 src={Logo}
                 alt="GoEasyMenu"
@@ -1833,14 +1833,14 @@ export default function LiveOrderTerminal() {
             </div>
             {/* Live Status Indicator */}
             <div
-              className={`flex h-auto items-center gap-2 rounded-lg px-3 py-1 text-sm font-medium transition-colors ${
+              className={`hidden h-auto items-center gap-2 rounded-lg px-3 py-1 text-sm font-medium transition-colors md:flex ${
                 isLiveConnected
-                  ? "bg-green-100 text-green-800"
+                  ? "border-2 border-[#8ad9a7] bg-green-100 text-green-500"
                   : "bg-red-100 text-red-800"
               }`}
             >
               <div
-                className={`h-2 w-2 rounded-full ${
+                className={`h-3 w-3 rounded-full ${
                   isLiveConnected ? "animate-pulse bg-green-500" : "bg-red-500"
                 }`}
               ></div>
