@@ -91,6 +91,10 @@ export default function LiveOrderTerminal() {
   const [pollingInitialized, setPollingInitialized] = useState(false);
   const [showAudioPrompt, setShowAudioPrompt] = useState(false);
   const { soundEnabled } = useGlobalAppContext();
+  // Live connection status tracking
+  const [isLiveConnected, setIsLiveConnected] = useState(false);
+  const lastHeartbeatRef = useRef(null);
+  const heartbeatTimeoutRef = useRef(null);
   // App foreground/background detection state (native mobile only)
   const lastPollTimeRef = useRef(null);
   const pollingTimeoutRef = useRef(null);
@@ -103,6 +107,33 @@ export default function LiveOrderTerminal() {
 
   // Platform detection
   const isNative = isNativeApp();
+
+  // Function to handle heartbeat and update live status
+  const handleHeartbeat = () => {
+    lastHeartbeatRef.current = Date.now();
+    setIsLiveConnected(true);
+
+    // Clear existing timeout
+    if (heartbeatTimeoutRef.current) {
+      clearTimeout(heartbeatTimeoutRef.current);
+    }
+
+    // Set timeout to mark as disconnected if no heartbeat in 45 seconds (30s + 15s buffer)
+    heartbeatTimeoutRef.current = setTimeout(() => {
+      setIsLiveConnected(false);
+      console.log("Live connection timeout - no heartbeat received");
+    }, 45000);
+  };
+
+  // Function to reset live connection status
+  const resetLiveConnection = () => {
+    setIsLiveConnected(false);
+    lastHeartbeatRef.current = null;
+    if (heartbeatTimeoutRef.current) {
+      clearTimeout(heartbeatTimeoutRef.current);
+      heartbeatTimeoutRef.current = null;
+    }
+  };
 
   // Function to check if polling is actually working
   const isPollingHealthy = () => {
@@ -584,6 +615,7 @@ export default function LiveOrderTerminal() {
             console.log("connection established from SSE:", updateData);
             console.log("polling orders after connection established");
             await pollingOrders(); // Add await
+            handleHeartbeat(); // Mark as connected
             toast.success("Live order is now connected!");
           },
         );
@@ -591,6 +623,7 @@ export default function LiveOrderTerminal() {
         eventSource.addEventListener("heartbeat", (event) => {
           const updateData = JSON.parse(event.data);
           console.log("heartbeat from SSE:", updateData);
+          handleHeartbeat(); // Update live status
         });
 
         // Listen for order status updates
@@ -604,11 +637,15 @@ export default function LiveOrderTerminal() {
 
         eventSource.onerror = (error) => {
           console.error("SSE connection error here:", error);
-
-          showCustomToast(
-            "Connection failed. Please refresh the page.",
-            "error",
-          );
+          // Check if connection failed immediately
+          if (eventSource.readyState === EventSource.CLOSED) {
+            showCustomToast(
+              "Connection failed. Please refresh the page.",
+              "error",
+            );
+          }
+          // Don't reset live connection - let EventSource auto-reconnect
+          // The heartbeat timeout will handle marking as offline if truly disconnected
         };
 
         eventSource.onopen = () => {
@@ -627,6 +664,7 @@ export default function LiveOrderTerminal() {
         console.log("Closing SSE connection");
         eventSource.close();
       }
+      resetLiveConnection(); // Reset live status on cleanup
     };
   }, [session?.user?.id]);
 
@@ -1246,6 +1284,7 @@ export default function LiveOrderTerminal() {
   useEffect(() => {
     return () => {
       stopSoundCycle();
+      resetLiveConnection(); // Clean up heartbeat tracking
     };
   }, []);
 
@@ -1740,6 +1779,21 @@ export default function LiveOrderTerminal() {
               {/* <h1 className="font-bold">
                 {storeProfile?.storeName || "Store Name"}
               </h1> */}
+            </div>
+            {/* Live Status Indicator */}
+            <div
+              className={`flex h-auto items-center gap-2 rounded-lg px-3 py-1 text-sm font-medium transition-colors ${
+                isLiveConnected
+                  ? "bg-green-100 text-green-800"
+                  : "bg-red-100 text-red-800"
+              }`}
+            >
+              <div
+                className={`h-2 w-2 rounded-full ${
+                  isLiveConnected ? "animate-pulse bg-green-500" : "bg-red-500"
+                }`}
+              ></div>
+              <span>{isLiveConnected ? "LIVE" : "OFFLINE"}</span>
             </div>
             {/* Button for controlling online orders */}
             <OnlineOrderControlButton />
