@@ -875,12 +875,14 @@ export default function LiveOrderTerminal() {
         }
       }
 
-      // Only trigger notification if it's not already showing
-      if (!showNotificationRef.current) {
+      // Only trigger notification if it's not already showing AND view mode is not "preparing"
+      if (!showNotificationRef.current && viewMode !== "preparing") {
         console.log("Showing notification");
         setShowNotification(true);
         showNotificationRef.current = true; // Update ref immediately
         playSoundCycle();
+      } else if (viewMode === "preparing") {
+        console.log("Skipping notification - currently in preparing view mode");
       }
     }
 
