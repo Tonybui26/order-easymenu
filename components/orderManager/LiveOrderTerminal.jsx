@@ -1962,12 +1962,15 @@ export default function LiveOrderTerminal() {
           // Unpaid Counter Orders View
           <div className="space-y-6">
             {Object.keys(unpaidOrdersByTable).length === 0 ? (
-              <div className="rounded-lg bg-gray-50 p-12 text-center">
-                <DollarSign size={48} className="mx-auto mb-4 text-gray-400" />
-                <h3 className="mb-2 text-xl font-semibold">
+              <div className="rounded-lg bg-transparent p-12 text-center">
+                <DollarSign
+                  size={48}
+                  className="mx-auto mb-4 text-brand_accent"
+                />
+                <h3 className="mb-2 text-xl font-semibold text-white">
                   No Unpaid Counter Orders
                 </h3>
-                <p className="text-gray-500">
+                <p className="text-gray-400">
                   All counter orders have been paid
                 </p>
               </div>
