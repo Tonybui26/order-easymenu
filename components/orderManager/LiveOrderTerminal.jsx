@@ -254,6 +254,17 @@ export default function LiveOrderTerminal() {
           toast.success("New order");
         },
       );
+      // Listen for order paid at counter
+      eventSourceRef.current.addEventListener(
+        "new-order-paid-at-counter",
+        async (event) => {
+          const data = JSON.parse(event.data);
+          console.log("new counter order paid from SSE:", data);
+          await pollingOrders(); // Add await
+          console.log("polling orders after new counter order paid");
+          toast.success("New order!");
+        },
+      );
 
       eventSourceRef.current.onerror = (error) => {
         console.error("SSE connection error here:", error);
@@ -716,7 +727,7 @@ export default function LiveOrderTerminal() {
             }
             // 2. Now only Pending orders are left, so we need to check if the order is cash payment method and still need payment
             if (
-              order.paymentMethod === "cash" &&
+              order.paymentMethod === "counter-cash" &&
               order.paymentStatus === "pending"
             ) {
               return true;
@@ -725,7 +736,6 @@ export default function LiveOrderTerminal() {
             return false;
           }
         });
-
         setOrders(activeOrders);
         console.log("activeOrders initial", activeOrders);
         setLastDismissedIds(new Set(activeOrders.map((order) => order._id)));
@@ -767,7 +777,7 @@ export default function LiveOrderTerminal() {
         }
         // 2. Now only Pending orders are left, so we need to check if the order is cash payment method and still need payment
         if (
-          order.paymentMethod === "cash" &&
+          order.paymentMethod === "counter-cash" &&
           order.paymentStatus === "pending"
         ) {
           return true;
@@ -1525,12 +1535,12 @@ export default function LiveOrderTerminal() {
         paymentMethod,
       );
 
-      // If it's a dine-in order that was pending, also update status to confirmed
+      // If it's a dine-in order that was pending, also update status to preparing
       if (isDineIn && isPending) {
         try {
           const orderWithUpdatedStatus = await updateOrderStatus(
             orderId,
-            "confirmed",
+            "preparing",
           );
           // Update local state with the order that has both payment and status updated
           setOrders((prevOrders) =>
@@ -1666,6 +1676,7 @@ export default function LiveOrderTerminal() {
       (order.status === "delivered" && order.paymentStatus === "pending")
     );
   }).length;
+
   const preparingCount = orders.filter(
     (order) => order.status === "preparing",
   ).length;
