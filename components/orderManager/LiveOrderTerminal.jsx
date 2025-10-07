@@ -181,6 +181,27 @@ export default function LiveOrderTerminal() {
     }, 1500);
   };
 
+  // Function for app foreground reconnection
+  const reconnectSSEForForeground = async () => {
+    console.log("Reconnecting SSE for app foreground...");
+    closeSSEConnection();
+
+    // Reset connection but preserve reconnecting state
+    setIsLiveConnected(false);
+    isInitialConnectRef.current = false;
+    // Keep isReconnectingRef.current = true
+    lastHeartbeatRef.current = null;
+    if (heartbeatTimeoutRef.current) {
+      clearTimeout(heartbeatTimeoutRef.current);
+      heartbeatTimeoutRef.current = null;
+    }
+
+    // Wait a moment before reconnecting
+    setTimeout(async () => {
+      await connectToSSE();
+    }, 1500);
+  };
+
   // Function to establish SSE connection
   const connectToSSE = useCallback(async () => {
     try {
@@ -1102,7 +1123,7 @@ export default function LiveOrderTerminal() {
           toast.success("App returned to foreground, reconnecting...");
           isReconnectingRef.current = true; // Mark as reconnecting
           setIsLiveConnected(false);
-          await reconnectSSE();
+          await reconnectSSEForForeground(); // Use dedicated function
         } catch (error) {
           showCustomToast(
             "Error reconnecting on app foreground, reload the app",
