@@ -1979,11 +1979,9 @@ export default function LiveOrderTerminal() {
                   className="mx-auto mb-4 text-brand_accent"
                 />
                 <h3 className="mb-2 text-xl font-semibold text-white">
-                  No Unpaid Counter Orders
+                  No Unpaid Tables
                 </h3>
-                <p className="text-gray-400">
-                  All counter orders have been paid
-                </p>
+                <p className="text-gray-400">All tables have been paid</p>
               </div>
             ) : (
               Object.entries(unpaidOrdersByTable).map(
