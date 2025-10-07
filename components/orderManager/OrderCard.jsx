@@ -291,7 +291,7 @@ export default function OrderCard({
   };
 
   return (
-    <div className="flex flex-col justify-between overflow-hidden rounded-2xl border border-gray-100 bg-neutral-100 shadow-md transition-all duration-200 hover:border-gray-200">
+    <div className="flex flex-col justify-between overflow-hidden rounded-xl border border-gray-100 bg-neutral-100 shadow-md transition-all duration-200 hover:border-gray-200">
       <div>
         {/* Header */}
         <div className="p-6 pb-4">

@@ -155,10 +155,12 @@ export default function MoreMenuButton({
     <>
       <button
         onClick={() => setShowModal(true)}
-        className="flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-gray-200 bg-white p-2 text-gray-600 transition-all duration-200 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-700 hover:shadow-md"
+        className="flex flex-col items-center justify-center gap-1 rounded-xl bg-transparent p-2 pt-1 text-brand_accent transition-all duration-200 hover:bg-neutral-600 hover:text-white hover:shadow-md"
       >
-        <Menu className="size-7 text-gray-500" />
-        <span className="hidden text-xs font-medium md:block">More</span>
+        <Menu className="size-7 text-brand_accent" />
+        <span className="hidden text-xs font-medium text-white md:block">
+          More
+        </span>
       </button>
 
       {/* More Features Modal */}

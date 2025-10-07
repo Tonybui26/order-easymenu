@@ -36,9 +36,9 @@ export default function OnlineOrderControlButton() {
     <>
       <button
         onClick={() => setShowModal(true)}
-        className={`btn flex h-auto flex-col items-start gap-0 rounded-xl px-4 py-1 text-left transition-colors ${
+        className={`flex h-auto flex-col items-start gap-0 rounded-xl px-4 py-1 text-left transition-all duration-200 ${
           isOnline
-            ? "bg-gray-100 hover:bg-gray-200"
+            ? "bg-neutral-700 text-brand_accent shadow-lg hover:bg-neutral-600"
             : "bg-red-50 hover:bg-red-100"
         }`}
       >
@@ -47,7 +47,9 @@ export default function OnlineOrderControlButton() {
         >
           {isOnline ? "OPEN" : "PAUSED"}
         </span>
-        <span className="text-lg font-semibold text-gray-800">
+        <span
+          className={`text-lg font-semibold ${isOnline ? "text-white" : "text-gray-800"}`}
+        >
           <TimeDisplay />
         </span>
       </button>

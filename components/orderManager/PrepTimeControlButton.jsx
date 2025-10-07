@@ -45,10 +45,10 @@ export default function PrepTimeControlButton() {
     <>
       <button
         onClick={handleOpenModal}
-        className="btn flex h-auto flex-col items-start gap-0 rounded-xl bg-gray-100 px-4 py-1 text-left transition-colors hover:bg-gray-200"
+        className="flex h-auto flex-col items-start gap-0 rounded-xl bg-neutral-700 px-4 py-1 text-left shadow-lg transition-all duration-200 hover:bg-neutral-600"
       >
-        <span className="text-xs font-bold text-gray-600">PREP TIME</span>
-        <span className="text-lg font-semibold text-gray-800">
+        <span className="text-xs font-bold text-brand_accent">PREP TIME</span>
+        <span className="text-lg font-semibold text-white">
           {menuConfig?.prepTime || 30} mins
         </span>
       </button>

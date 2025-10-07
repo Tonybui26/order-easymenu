@@ -1721,7 +1721,7 @@ export default function LiveOrderTerminal() {
 
   return (
     <>
-      <div className="p-3">
+      <div className="min-h-screen bg-[#1a1a1a] p-3">
         {/* Audio element for notifications */}
         <audio ref={audioRef} src="/sounds/notification.mp3" />
 
@@ -1871,7 +1871,7 @@ export default function LiveOrderTerminal() {
             <div
               className={`hidden h-auto items-center gap-2 rounded-lg px-3 py-1 text-sm font-medium transition-colors md:flex ${
                 isLiveConnected
-                  ? "border-2 border-[#8ad9a7] bg-green-100 text-green-500"
+                  ? "bg-neutral-700 text-green-500"
                   : "bg-red-100 text-red-800"
               }`}
             >
