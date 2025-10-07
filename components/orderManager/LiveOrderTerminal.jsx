@@ -88,19 +88,20 @@ export default function LiveOrderTerminal() {
   const lastDismissedIdsRef = useRef(new Set());
   const printedOrderIdsRef = useRef(new Set());
   const [audioInitialized, setAudioInitialized] = useState(false);
-  const [pollingInitialized, setPollingInitialized] = useState(false);
+  // const [pollingInitialized, setPollingInitialized] = useState(false);
   const [showAudioPrompt, setShowAudioPrompt] = useState(false);
   const { soundEnabled } = useGlobalAppContext();
   // Live connection status tracking
   const [isLiveConnected, setIsLiveConnected] = useState(false);
   const isInitialConnectRef = useRef(true);
+  const isReconnectingRef = useRef(false);
   const lastHeartbeatRef = useRef(null);
   const heartbeatTimeoutRef = useRef(null);
   const eventSourceRef = useRef(null);
   // App foreground/background detection state (native mobile only)
   const lastPollTimeRef = useRef(null);
-  const pollingTimeoutRef = useRef(null);
-  const pollingScheduleTimeoutRef = useRef(null);
+  // const pollingTimeoutRef = useRef(null);
+  // const pollingScheduleTimeoutRef = useRef(null);
 
   const { storeProfile, menuId, menuConfig, refreshMenuDataWithToast } =
     useMenuContext();
@@ -114,6 +115,7 @@ export default function LiveOrderTerminal() {
   const handleHeartbeat = () => {
     lastHeartbeatRef.current = Date.now();
     isInitialConnectRef.current = false; // Mark as no longer initial connect (synchronous)
+    isReconnectingRef.current = false; // Mark as no longer reconnecting (synchronous)
     setIsLiveConnected(true);
 
     // Clear existing timeout
@@ -150,6 +152,7 @@ export default function LiveOrderTerminal() {
   const resetLiveConnection = () => {
     setIsLiveConnected(false);
     isInitialConnectRef.current = false; // Mark as no longer initial connect (synchronous)
+    isReconnectingRef.current = false; // Mark as no longer reconnecting (synchronous)
     lastHeartbeatRef.current = null;
     if (heartbeatTimeoutRef.current) {
       clearTimeout(heartbeatTimeoutRef.current);
@@ -175,7 +178,7 @@ export default function LiveOrderTerminal() {
     // Wait a moment before reconnecting
     setTimeout(async () => {
       await connectToSSE();
-    }, 2000);
+    }, 1500);
   };
 
   // Function to establish SSE connection
@@ -265,105 +268,105 @@ export default function LiveOrderTerminal() {
   };
 
   // Function to set up polling health timeout
-  const setupPollingHealthTimeout = () => {
-    // Clear existing timeout
-    // toast.success("Clearing polling timeout ref", pollingTimeoutRef.current);
-    if (pollingTimeoutRef.current) {
-      // toast.error("Clearing polling timeout ref", pollingTimeoutRef.current);
-      clearTimeout(pollingTimeoutRef.current);
-    }
-    // toast.success("Setting up polling timeout ref", pollingTimeoutRef.current);
+  // const setupPollingHealthTimeout = () => {
+  //   // Clear existing timeout
+  //   // toast.success("Clearing polling timeout ref", pollingTimeoutRef.current);
+  //   if (pollingTimeoutRef.current) {
+  //     // toast.error("Clearing polling timeout ref", pollingTimeoutRef.current);
+  //     clearTimeout(pollingTimeoutRef.current);
+  //   }
+  //   // toast.success("Setting up polling timeout ref", pollingTimeoutRef.current);
 
-    // Set timeout to mark polling as unhealthy if no poll occurs within 35 seconds
-    pollingTimeoutRef.current = setTimeout(async () => {
-      try {
-        const appState = await App.getState();
-        if (!appState.isActive) {
-          // Polling heath timeout fired while app is in background
-          return;
-        } else {
-          // Polling heath timeout fired while app is in foreground
-          // Don't automatically restart here, let the app state change handler do it
-          showCustomToast(
-            "Order receiving might not be working properly, check the internet connection or restart the app",
-            "error",
-          );
-        }
-      } catch (error) {
-        toast.error(`Error checking app state: ${error}`);
-      }
-    }, 35000); // 35 seconds (5 seconds buffer after 30 second threshold)
-    // toast.success("Setting up polling timeout ref", pollingTimeoutRef.current);
-  };
+  //   // Set timeout to mark polling as unhealthy if no poll occurs within 35 seconds
+  //   pollingTimeoutRef.current = setTimeout(async () => {
+  //     try {
+  //       const appState = await App.getState();
+  //       if (!appState.isActive) {
+  //         // Polling heath timeout fired while app is in background
+  //         return;
+  //       } else {
+  //         // Polling heath timeout fired while app is in foreground
+  //         // Don't automatically restart here, let the app state change handler do it
+  //         showCustomToast(
+  //           "Order receiving might not be working properly, check the internet connection or restart the app",
+  //           "error",
+  //         );
+  //       }
+  //     } catch (error) {
+  //       toast.error(`Error checking app state: ${error}`);
+  //     }
+  //   }, 35000); // 35 seconds (5 seconds buffer after 30 second threshold)
+  //   // toast.success("Setting up polling timeout ref", pollingTimeoutRef.current);
+  // };
 
   // Comprehensive refresh function for mobile app
-  const handleFullRefresh = async () => {
-    try {
-      if (isNative) {
-        // For Capacitor webview - comprehensive refresh
-        toast.loading("Refreshing app data...", { duration: 2000 });
+  // const handleFullRefresh = async () => {
+  //   try {
+  //     if (isNative) {
+  //       // For Capacitor webview - comprehensive refresh
+  //       toast.loading("Refreshing app data...", { duration: 2000 });
 
-        // 1. Refresh menu data
-        await refreshMenuDataWithToast();
+  //       // 1. Refresh menu data
+  //       await refreshMenuDataWithToast();
 
-        // 2. Stop any ongoing notification sounds
-        stopSoundCycle();
+  //       // 2. Stop any ongoing notification sounds
+  //       stopSoundCycle();
 
-        // 3. Reset all local state to force re-initialization
-        setOrders([]);
-        setCompletedOrders([]);
-        setShowNotification(false);
-        setNotificationOrderCount(0);
-        setLastDismissedIds(new Set());
-        printedOrderIdsRef.current.clear();
-        playingAudioInstances.current.clear(); // Clear audio tracking
-        setAudioInitialized(false);
-        setShowAudioPrompt(false);
+  //       // 3. Reset all local state to force re-initialization
+  //       setOrders([]);
+  //       setCompletedOrders([]);
+  //       setShowNotification(false);
+  //       setNotificationOrderCount(0);
+  //       setLastDismissedIds(new Set());
+  //       printedOrderIdsRef.current.clear();
+  //       playingAudioInstances.current.clear(); // Clear audio tracking
+  //       setAudioInitialized(false);
+  //       setShowAudioPrompt(false);
 
-        // 3. Force re-fetch initial orders
-        try {
-          setLoading(true);
-          const data = await fetchOrders();
-          const activeOrders = data.filter((order) => {
-            // Include orders that are still in progress - confirmed, preparing, ready
-            if (["confirmed", "preparing", "ready"].includes(order.status)) {
-              return true;
-            } else {
-              // For the rest of the orders(pending, delivered, cancelled)
+  //       // 3. Force re-fetch initial orders
+  //       try {
+  //         setLoading(true);
+  //         const data = await fetchOrders();
+  //         const activeOrders = data.filter((order) => {
+  //           // Include orders that are still in progress - confirmed, preparing, ready
+  //           if (["confirmed", "preparing", "ready"].includes(order.status)) {
+  //             return true;
+  //           } else {
+  //             // For the rest of the orders(pending, delivered, cancelled)
 
-              // 1. if the order is cancelled or delivered, then exclude the order
-              if (["cancelled", "delivered"].includes(order.status)) {
-                return false;
-              }
-              // 2. Now only Pending orders are left, so we need to check if the order is cash payment method and still need payment
-              if (
-                order.paymentMethod === "cash" &&
-                order.paymentStatus === "pending"
-              ) {
-                return true;
-              }
-              // 3. If the order is not cash payment method or not pending, then exclude the order
-              return false;
-            }
-          });
-          setOrders(activeOrders);
-          setLastDismissedIds(new Set(activeOrders.map((order) => order._id)));
-          setLoading(false);
-          toast.success("App refreshed successfully!");
-        } catch (error) {
-          setLoading(false);
-          console.error("Failed to reload orders:", error);
-          toast.error("Failed to refresh orders");
-        }
-      } else {
-        // For web browser - use regular page refresh
-        window.location.reload();
-      }
-    } catch (error) {
-      console.error("Error during refresh:", error);
-      toast.error("Failed to refresh app");
-    }
-  };
+  //             // 1. if the order is cancelled or delivered, then exclude the order
+  //             if (["cancelled", "delivered"].includes(order.status)) {
+  //               return false;
+  //             }
+  //             // 2. Now only Pending orders are left, so we need to check if the order is cash payment method and still need payment
+  //             if (
+  //               order.paymentMethod === "cash" &&
+  //               order.paymentStatus === "pending"
+  //             ) {
+  //               return true;
+  //             }
+  //             // 3. If the order is not cash payment method or not pending, then exclude the order
+  //             return false;
+  //           }
+  //         });
+  //         setOrders(activeOrders);
+  //         setLastDismissedIds(new Set(activeOrders.map((order) => order._id)));
+  //         setLoading(false);
+  //         toast.success("App refreshed successfully!");
+  //       } catch (error) {
+  //         setLoading(false);
+  //         console.error("Failed to reload orders:", error);
+  //         toast.error("Failed to refresh orders");
+  //       }
+  //     } else {
+  //       // For web browser - use regular page refresh
+  //       window.location.reload();
+  //     }
+  //   } catch (error) {
+  //     console.error("Error during refresh:", error);
+  //     toast.error("Failed to refresh app");
+  //   }
+  // };
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -868,214 +871,214 @@ export default function LiveOrderTerminal() {
   };
 
   // Effect for polling orders
-  useSkipInitialEffect(() => {
-    if (true) return;
-    if (pollinginitialized) return;
-    setPollingInitialized(true);
+  // useSkipInitialEffect(() => {
+  //   if (true) return;
+  //   if (pollinginitialized) return;
+  //   setPollingInitialized(true);
 
-    let isActive = true;
-    let timeoutId;
-    let retryCount = 0;
-    const maxRetries = 2;
-    const baseInterval = 10000; // 10 seconds
+  //   let isActive = true;
+  //   let timeoutId;
+  //   let retryCount = 0;
+  //   const maxRetries = 2;
+  //   const baseInterval = 10000; // 10 seconds
 
-    console.log("polling initialized in useSkipInitialEffect");
+  //   console.log("polling initialized in useSkipInitialEffect");
 
-    const pollOrders = async () => {
-      if (!isActive) return;
+  //   const pollOrders = async () => {
+  //     if (!isActive) return;
 
-      try {
-        console.log("polling orders time:", new Date().toISOString());
+  //     try {
+  //       console.log("polling orders time:", new Date().toISOString());
 
-        // Update last poll time to track polling health
-        lastPollTimeRef.current = Date.now();
+  //       // Update last poll time to track polling health
+  //       lastPollTimeRef.current = Date.now();
 
-        // Set up initial polling health timeout
-        setupPollingHealthTimeout();
+  //       // Set up initial polling health timeout
+  //       setupPollingHealthTimeout();
 
-        const data = await fetchOrders();
+  //       const data = await fetchOrders();
 
-        if (!isActive) return; // Check again after async operation
+  //       if (!isActive) return; // Check again after async operation
 
-        // Your existing order processing logic (unchanged)
-        const activeOrders = data.filter((order) => {
-          // Include orders that are still in progress - confirmed, preparing, ready
-          if (["confirmed", "preparing", "ready"].includes(order.status)) {
-            return true;
-          } else {
-            // For the rest of the orders(pending, delivered, cancelled)
+  //       // Your existing order processing logic (unchanged)
+  //       const activeOrders = data.filter((order) => {
+  //         // Include orders that are still in progress - confirmed, preparing, ready
+  //         if (["confirmed", "preparing", "ready"].includes(order.status)) {
+  //           return true;
+  //         } else {
+  //           // For the rest of the orders(pending, delivered, cancelled)
 
-            // 1. if the order is cancelled or delivered, then exclude the order
-            if (["cancelled", "delivered"].includes(order.status)) {
-              return false;
-            }
-            // 2. Now only Pending orders are left, so we need to check if the order is cash payment method and still need payment
-            if (
-              order.paymentMethod === "cash" &&
-              order.paymentStatus === "pending"
-            ) {
-              return true;
-            }
-            // 3. If the order is not cash payment method or not pending, then exclude the order
-            return false;
-          }
-        });
+  //           // 1. if the order is cancelled or delivered, then exclude the order
+  //           if (["cancelled", "delivered"].includes(order.status)) {
+  //             return false;
+  //           }
+  //           // 2. Now only Pending orders are left, so we need to check if the order is cash payment method and still need payment
+  //           if (
+  //             order.paymentMethod === "cash" &&
+  //             order.paymentStatus === "pending"
+  //           ) {
+  //             return true;
+  //           }
+  //           // 3. If the order is not cash payment method or not pending, then exclude the order
+  //           return false;
+  //         }
+  //       });
 
-        const currentOrderIdsAsSet = new Set(
-          activeOrders.map((order) => order._id),
-        );
+  //       const currentOrderIdsAsSet = new Set(
+  //         activeOrders.map((order) => order._id),
+  //       );
 
-        setOrders(activeOrders);
-        console.log("activeOrders", activeOrders);
+  //       setOrders(activeOrders);
+  //       console.log("activeOrders", activeOrders);
 
-        // Check for new orders since last dismissal (not just last poll)
-        // Now this is safe - lastDismissedIds is already set from initial loading
-        const newOrdersSinceLastDismissal = activeOrders.filter(
-          (order) => !lastDismissedIdsRef.current.has(order._id),
-        );
-        console.log("lastDismissedIds", lastDismissedIdsRef.current);
-        console.log("newOrdersSinceLastDismissal", newOrdersSinceLastDismissal);
+  //       // Check for new orders since last dismissal (not just last poll)
+  //       // Now this is safe - lastDismissedIds is already set from initial loading
+  //       const newOrdersSinceLastDismissal = activeOrders.filter(
+  //         (order) => !lastDismissedIdsRef.current.has(order._id),
+  //       );
+  //       console.log("lastDismissedIds", lastDismissedIdsRef.current);
+  //       console.log("newOrdersSinceLastDismissal", newOrdersSinceLastDismissal);
 
-        // Filter orders that should trigger notifications:
-        // 1. Paid orders (takeaway/dine-in, but not counter paid)
-        // 2. Pending counter orders for dine-in only
-        const notificationWorthyOrders = newOrdersSinceLastDismissal.filter(
-          (order) => {
-            // Case 1: Paid orders (but not counter paid - these don't need immediate attention)
-            if (
-              order.paymentStatus === "paid" &&
-              !isCounterPayment(order.paymentMethod)
-            ) {
-              return true;
-            }
+  //       // Filter orders that should trigger notifications:
+  //       // 1. Paid orders (takeaway/dine-in, but not counter paid)
+  //       // 2. Pending counter orders for dine-in only
+  //       const notificationWorthyOrders = newOrdersSinceLastDismissal.filter(
+  //         (order) => {
+  //           // Case 1: Paid orders (but not counter paid - these don't need immediate attention)
+  //           if (
+  //             order.paymentStatus === "paid" &&
+  //             !isCounterPayment(order.paymentMethod)
+  //           ) {
+  //             return true;
+  //           }
 
-            // Case 2: Pending counter orders for dine-in only (these need payment collection)
-            if (
-              order.paymentStatus === "pending" &&
-              isCounterPayment(order.paymentMethod) &&
-              order.table !== "takeaway"
-            ) {
-              return true;
-            }
+  //           // Case 2: Pending counter orders for dine-in only (these need payment collection)
+  //           if (
+  //             order.paymentStatus === "pending" &&
+  //             isCounterPayment(order.paymentMethod) &&
+  //             order.table !== "takeaway"
+  //           ) {
+  //             return true;
+  //           }
 
-            return false;
-          },
-        );
+  //           return false;
+  //         },
+  //       );
 
-        // Update count to reflect notification-worthy orders since last dismissal
-        if (notificationWorthyOrders.length > 0) {
-          setNotificationOrderCount(notificationWorthyOrders.length);
+  //       // Update count to reflect notification-worthy orders since last dismissal
+  //       if (notificationWorthyOrders.length > 0) {
+  //         setNotificationOrderCount(notificationWorthyOrders.length);
 
-          // Auto-print orders if auto-printing is enabled
-          const autoPrintingEnabled = menuConfig?.autoPrinting?.enabled;
-          if (autoPrintingEnabled && storeProfile && userData?.ownerEmail) {
-            // Filter out orders that have already been printed
-            const unprintedOrders = notificationWorthyOrders.filter(
-              (order) => !printedOrderIdsRef.current.has(order._id),
-            );
-            console.log(
-              "printedOrderIds right before filtering:",
-              printedOrderIdsRef.current,
-            );
-            console.log("unprintedOrders", unprintedOrders);
-            // Print only unprinted orders and collect printed IDs
-            const newlyPrintedIds = [];
-            for (const order of unprintedOrders) {
-              try {
-                const printResult = await handlePrintingOrder(order);
-                if (printResult.success) {
-                  console.log(
-                    `Auto-printed successfully order ${order._id.slice(-6)}:`,
-                    printResult,
-                  );
-                  newlyPrintedIds.push(order._id);
-                } else {
-                  console.error(
-                    `Error auto-printing order ${order._id}:`,
-                    printResult.message,
-                  );
-                  showCustomToast(
-                    "Failed to auto-print order - Double check the printer settings",
-                    "error",
-                  );
-                }
-              } catch (error) {
-                console.error(`Error auto-printing order ${order._id}:`, error);
-                // Don't block other orders if one fails
-              }
-            }
+  //         // Auto-print orders if auto-printing is enabled
+  //         const autoPrintingEnabled = menuConfig?.autoPrinting?.enabled;
+  //         if (autoPrintingEnabled && storeProfile && userData?.ownerEmail) {
+  //           // Filter out orders that have already been printed
+  //           const unprintedOrders = notificationWorthyOrders.filter(
+  //             (order) => !printedOrderIdsRef.current.has(order._id),
+  //           );
+  //           console.log(
+  //             "printedOrderIds right before filtering:",
+  //             printedOrderIdsRef.current,
+  //           );
+  //           console.log("unprintedOrders", unprintedOrders);
+  //           // Print only unprinted orders and collect printed IDs
+  //           const newlyPrintedIds = [];
+  //           for (const order of unprintedOrders) {
+  //             try {
+  //               const printResult = await handlePrintingOrder(order);
+  //               if (printResult.success) {
+  //                 console.log(
+  //                   `Auto-printed successfully order ${order._id.slice(-6)}:`,
+  //                   printResult,
+  //                 );
+  //                 newlyPrintedIds.push(order._id);
+  //               } else {
+  //                 console.error(
+  //                   `Error auto-printing order ${order._id}:`,
+  //                   printResult.message,
+  //                 );
+  //                 showCustomToast(
+  //                   "Failed to auto-print order - Double check the printer settings",
+  //                   "error",
+  //                 );
+  //               }
+  //             } catch (error) {
+  //               console.error(`Error auto-printing order ${order._id}:`, error);
+  //               // Don't block other orders if one fails
+  //             }
+  //           }
 
-            // Update both the ref and state with all newly printed order IDs at once
-            if (newlyPrintedIds.length > 0) {
-              // Update ref immediately (synchronous)
-              newlyPrintedIds.forEach((id) =>
-                printedOrderIdsRef.current.add(id),
-              );
-              console.log(
-                "Updated printed order ids ref:",
-                printedOrderIdsRef.current,
-              );
-            }
-          }
+  //           // Update both the ref and state with all newly printed order IDs at once
+  //           if (newlyPrintedIds.length > 0) {
+  //             // Update ref immediately (synchronous)
+  //             newlyPrintedIds.forEach((id) =>
+  //               printedOrderIdsRef.current.add(id),
+  //             );
+  //             console.log(
+  //               "Updated printed order ids ref:",
+  //               printedOrderIdsRef.current,
+  //             );
+  //           }
+  //         }
 
-          // Only trigger notification if it's not already showing
-          if (!showNotificationRef.current) {
-            console.log("Showing notification");
-            setShowNotification(true);
-            showNotificationRef.current = true; // Update ref immediately
-            playSoundCycle();
-          }
-        }
+  //         // Only trigger notification if it's not already showing
+  //         if (!showNotificationRef.current) {
+  //           console.log("Showing notification");
+  //           setShowNotification(true);
+  //           showNotificationRef.current = true; // Update ref immediately
+  //           playSoundCycle();
+  //         }
+  //       }
 
-        retryCount = 0; // Reset retry count on success
+  //       retryCount = 0; // Reset retry count on success
 
-        // Schedule next poll
-        timeoutId = setTimeout(pollOrders, baseInterval);
-        pollingScheduleTimeoutRef.current = timeoutId;
-        console.log("Scheduling next poll", timeoutId);
-      } catch (error) {
-        console.error("Failed to poll orders:", error);
+  //       // Schedule next poll
+  //       timeoutId = setTimeout(pollOrders, baseInterval);
+  //       pollingScheduleTimeoutRef.current = timeoutId;
+  //       console.log("Scheduling next poll", timeoutId);
+  //     } catch (error) {
+  //       console.error("Failed to poll orders:", error);
 
-        if (!isActive) return;
+  //       if (!isActive) return;
 
-        // Simple retry with exponential backoff
-        retryCount++;
-        const backoffDelay = Math.min(
-          baseInterval * Math.pow(2, retryCount),
-          60000,
-        ); // Max 1 minute
+  //       // Simple retry with exponential backoff
+  //       retryCount++;
+  //       const backoffDelay = Math.min(
+  //         baseInterval * Math.pow(2, retryCount),
+  //         60000,
+  //       ); // Max 1 minute
 
-        if (retryCount <= maxRetries) {
-          console.log(
-            `Retrying in ${backoffDelay}ms (attempt ${retryCount}/${maxRetries})`,
-          );
-          timeoutId = setTimeout(pollOrders, backoffDelay);
-        } else {
-          console.error(
-            "Max polling retries reached. Will retry in 5 minutes.",
-          );
-          // Don't give up completely - retry after 5 minutes
-          timeoutId = setTimeout(pollOrders, 300000);
-        }
-      }
-    };
+  //       if (retryCount <= maxRetries) {
+  //         console.log(
+  //           `Retrying in ${backoffDelay}ms (attempt ${retryCount}/${maxRetries})`,
+  //         );
+  //         timeoutId = setTimeout(pollOrders, backoffDelay);
+  //       } else {
+  //         console.error(
+  //           "Max polling retries reached. Will retry in 5 minutes.",
+  //         );
+  //         // Don't give up completely - retry after 5 minutes
+  //         timeoutId = setTimeout(pollOrders, 300000);
+  //       }
+  //     }
+  //   };
 
-    // Start polling immediately (no delay needed)
-    pollOrders();
-    // Store cleanup function in ref instead of returning it
-    cleanupRef.current = () => {
-      isActive = false;
-      console.log("Cleaning up polling");
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        console.log("Clearing timeout id", timeoutId);
-      }
-      if (pollingTimeoutRef.current) {
-        clearTimeout(pollingTimeoutRef.current);
-        console.log("Clearing polling timeout ref", pollingTimeoutRef.current);
-      }
-    };
-  }, [lastDismissedIds, pollingInitialized]);
+  //   // Start polling immediately (no delay needed)
+  //   pollOrders();
+  //   // Store cleanup function in ref instead of returning it
+  //   cleanupRef.current = () => {
+  //     isActive = false;
+  //     console.log("Cleaning up polling");
+  //     if (timeoutId) {
+  //       clearTimeout(timeoutId);
+  //       console.log("Clearing timeout id", timeoutId);
+  //     }
+  //     if (pollingTimeoutRef.current) {
+  //       clearTimeout(pollingTimeoutRef.current);
+  //       console.log("Clearing polling timeout ref", pollingTimeoutRef.current);
+  //     }
+  //   };
+  // }, [lastDismissedIds, pollingInitialized]);
 
   // Separate useEffect for unmount cleanup
   useEffect(() => {
@@ -1087,101 +1090,49 @@ export default function LiveOrderTerminal() {
   }, []); // Only runs on unmount
 
   // Effect to detect app foreground/background state using Capacitor App plugin
-  // Temporary disable app state detection
-  // useEffect(() => {
-  //   if (!isNative) {
-  //     console.log("Not native app, skipping app state detection");
-  //     return;
-  //   }
+  useEffect(() => {
+    if (!isNative) {
+      console.log("Not native app, skipping app state detection");
+      return;
+    }
 
-  //   const handleAppStateChange = async ({ isActive }) => {
-  //     if (isActive) {
-  //       appStateChangeCountRef.current += 1;
-  //       const currentCount = appStateChangeCountRef.current;
-  //       toast.success("App in active!");
-  //       // Check if polling is healthy
-  //       // Wait for 22 seconds to check if polling is healthy
-  //       await toast.promise(
-  //         new Promise((resolve) => setTimeout(resolve, 22000)),
-  //         {
-  //           loading: "Checking polling health...",
-  //         },
-  //       );
-  //       const pollingHealthy = isPollingHealthy();
+    const handleAppStateChange = async ({ isActive }) => {
+      if (isActive) {
+        try {
+          toast.success("App returned to foreground, reconnecting...");
+          isReconnectingRef.current = true; // Mark as reconnecting
+          setIsLiveConnected(false);
+          await reconnectSSE();
+        } catch (error) {
+          showCustomToast(
+            "Error reconnecting on app foreground, reload the app",
+            "error",
+          );
+        }
+      } else {
+        console.log("App went to background");
+      }
+    };
 
-  //       // toast.success("App in active!");
-  //       if (!pollingHealthy) {
-  //         showCustomToast(
-  //           `App idle in background for too long, please restart the app`,
-  //           "error",
-  //         );
-  //       } else {
-  //         // Use toast instead of alert for better visibility
-  //         toast.success(`Polling Healthy: ${currentCount}`);
-  //         // set the polling timeout when app go to foreground
-  //         // setupPollingHealthTimeout();
-  //       }
-  //     }
-  //   };
+    // Set up native app state listener
+    const appStateListener = App.addListener(
+      "appStateChange",
+      handleAppStateChange,
+    );
 
-  //   try {
-  //     // Set up native app state listener
-  //     const appStateListener = App.addListener(
-  //       "appStateChange",
-  //       handleAppStateChange,
-  //     );
-
-  //     // Cleanup function
-  //     return () => {
-  //       console.log("Cleaning up app state listener");
-  //       appStateListener.remove();
-  //     };
-  //   } catch (error) {
-  //     console.error("Error setting up app state listener:", error);
-  //     toast.error("Error setting up app state listener");
-  //     // Fallback to visibility API if Capacitor fails
-  //     const handleVisibilityChange = () => {
-  //       const isVisible = !document.hidden;
-  //       setIsAppInForeground(isVisible);
-
-  //       if (isVisible) {
-  //         setAppStateChangeCount((prev) => prev + 1);
-
-  //         // Check if polling is actually working, not just initialized
-  //         const pollingHealthy = isPollingHealthy();
-
-  //         if (!pollingHealthy) {
-  //           console.log(
-  //             "Polling not healthy (fallback), restarting polling...",
-  //           );
-  //           toast.success(`App VISIBLE (fallback)!\nRestarting polling...`);
-  //           // Reset polling state to allow re-initialization
-  //           setPollingInitialized(false);
-  //         } else {
-  //           toast.success(`App VISIBLE (fallback)!\nPolling: Healthy`);
-  //         }
-  //       } else {
-  //         toast.error(`App HIDDEN (fallback)!\nPolling: ${pollingInitialized}`);
-  //       }
-  //     };
-  //     // Temporary disable visibility change listener
-  //     // document.addEventListener("visibilitychange", handleVisibilityChange);
-
-  //     // return () => {
-  //     //   document.removeEventListener(
-  //     //     "visibilitychange",
-  //     //     handleVisibilityChange,
-  //     //   );
-  //     // };
-  //   }
-  // }, [isNative]);
+    // Cleanup function
+    return () => {
+      console.log("Cleaning up app state listener");
+      appStateListener.remove();
+    };
+  }, [isNative]);
 
   // Separate useEffect to log when state actually changes
-  useEffect(() => {
-    if (pollingInitialized) {
-      console.log("Polling initialized", pollingInitialized);
-    }
-  }, [pollingInitialized]);
+  // useEffect(() => {
+  //   if (pollingInitialized) {
+  //     console.log("Polling initialized", pollingInitialized);
+  //   }
+  // }, [pollingInitialized]);
 
   // Update refs when state changes
   useEffect(() => {
@@ -1829,12 +1780,14 @@ export default function LiveOrderTerminal() {
               {/* Icon */}
               <div
                 className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full ${
-                  isInitialConnectRef.current ? "bg-blue-100" : "bg-red-100"
+                  isInitialConnectRef.current || isReconnectingRef.current
+                    ? "bg-blue-100"
+                    : "bg-red-100"
                 }`}
               >
                 <div
                   className={`h-8 w-8 rounded-full ${
-                    isInitialConnectRef.current
+                    isInitialConnectRef.current || isReconnectingRef.current
                       ? "animate-pulse bg-blue-500"
                       : "bg-red-500"
                   }`}
@@ -1845,25 +1798,31 @@ export default function LiveOrderTerminal() {
               <h2 className="mb-2 text-2xl font-bold text-gray-900">
                 {isInitialConnectRef.current
                   ? "Connecting to Live Server"
-                  : "Connection Lost"}
+                  : isReconnectingRef.current
+                    ? "Reconnecting to Live Server"
+                    : "Connection Lost"}
               </h2>
 
               {/* Status */}
               <div
                 className={`rounded-lg p-4 ${
-                  isInitialConnectRef.current ? "bg-blue-50" : "bg-red-50"
+                  isInitialConnectRef.current || isReconnectingRef.current
+                    ? "bg-blue-50"
+                    : "bg-red-50"
                 }`}
               >
                 <p
                   className={`mt-2 text-sm ${
-                    isInitialConnectRef.current
+                    isInitialConnectRef.current || isReconnectingRef.current
                       ? "text-blue-600"
                       : "text-red-600"
                   }`}
                 >
                   {isInitialConnectRef.current
                     ? "Establishing connection to receive live orders..."
-                    : "Attempting to reconnect automatically..."}
+                    : isReconnectingRef.current
+                      ? "Re-establishing connection to receive live orders..."
+                      : "Attempting to reconnect automatically..."}
                 </p>
               </div>
             </div>
@@ -1972,7 +1931,7 @@ export default function LiveOrderTerminal() {
           </div>
         </div>
         {loading ? (
-          <div className="flex min-h-[200px] items-center justify-center">
+          <div className="hidden min-h-[200px] items-center justify-center">
             <div className="text-center">
               <span className="loading loading-spinner loading-lg text-brand_accent"></span>
               <h3 className="mt-2 text-lg font-medium">Loading orders...</h3>
