@@ -199,10 +199,13 @@ export default function LiveOrderTerminal() {
         },
       );
 
-      eventSourceRef.current.addEventListener("heartbeat", (event) => {
+      eventSourceRef.current.addEventListener("heartbeat", async (event) => {
         const updateData = JSON.parse(event.data);
         console.log("heartbeat from SSE:", updateData);
         handleHeartbeat(); // Update live status
+        // backup polling orders to prevent cross-instance issues on serverless functions
+        await pollingOrders();
+        console.log("polling orders after heartbeat");
       });
 
       // Listen for order status updates
