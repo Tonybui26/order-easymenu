@@ -73,6 +73,7 @@ export default function LiveOrderTerminal() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState("new"); // "new", "preparing", "ready", "unpaid", "all", or "completed"
+  const viewModeRef = useRef(viewMode);
   const [completedOrders, setCompletedOrders] = useState([]);
   const [completedOrdersLoading, setCompletedOrdersLoading] = useState(false);
   const audioRef = useRef(null);
@@ -876,12 +877,21 @@ export default function LiveOrderTerminal() {
       }
 
       // Only trigger notification if it's not already showing AND view mode is not "preparing"
-      if (!showNotificationRef.current && viewMode !== "preparing") {
+      if (!showNotificationRef.current && viewModeRef.current !== "preparing") {
         console.log("Showing notification");
+        console.log("viewMode in notification", viewModeRef.current);
         setShowNotification(true);
         showNotificationRef.current = true; // Update ref immediately
         playSoundCycle();
-      } else if (viewMode === "preparing") {
+      } else if (viewModeRef.current === "preparing") {
+        // Update dismissed IDs immediately with current activeOrders
+        const newDismissedIds = new Set(activeOrders.map((order) => order._id));
+        setLastDismissedIds(newDismissedIds);
+        lastDismissedIdsRef.current = newDismissedIds;
+        console.log(
+          "Auto-dismissed orders in preparing mode:",
+          newDismissedIds,
+        );
         console.log("Skipping notification - currently in preparing view mode");
       }
     }
@@ -1174,10 +1184,15 @@ export default function LiveOrderTerminal() {
   useEffect(() => {
     lastDismissedIdsRef.current = lastDismissedIds;
   }, [lastDismissedIds]);
+  useEffect(() => {
+    viewModeRef.current = viewMode;
+  }, [viewMode]);
 
   // Effect to fetch completed orders when view mode changes
   useEffect(() => {
     console.log("useEffect viewMode run");
+    console.log("viewMode", viewMode);
+
     if (viewMode === "completed") {
       fetchCompletedOrdersData();
     }
