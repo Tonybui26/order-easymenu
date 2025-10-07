@@ -1898,7 +1898,7 @@ export default function LiveOrderTerminal() {
 
           {/* View Mode Tabs */}
           <div className="mb-6 flex flex-wrap gap-3">
-            <div className="hidden flex-wrap gap-3 md:flex">
+            <div className="hidden flex-wrap gap-1 md:flex lg:gap-3">
               <ViewModeTab
                 icon={Bell}
                 label="New"
@@ -2227,9 +2227,9 @@ export default function LiveOrderTerminal() {
             )}
           </div>
         ) : filteredOrders.length === 0 ? (
-          <div className="rounded-lg bg-gray-50 p-12 text-center">
-            <Bell size={48} className="mx-auto mb-4 text-gray-400" />
-            <h3 className="mb-2 text-xl font-semibold">
+          <div className="rounded-lg bg-transparent p-12 text-center">
+            <Bell size={48} className="mx-auto mb-4 text-brand_accent" />
+            <h3 className="mb-2 text-xl font-semibold text-white">
               {(() => {
                 switch (viewMode) {
                   case "all":
@@ -2249,7 +2249,7 @@ export default function LiveOrderTerminal() {
                 }
               })()}
             </h3>
-            <p className="text-gray-500">
+            <p className="text-gray-400">
               {(() => {
                 switch (viewMode) {
                   case "all":
