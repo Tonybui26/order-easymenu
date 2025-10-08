@@ -1728,6 +1728,32 @@ export default function LiveOrderTerminal() {
     id: null,
   });
 
+  // Item tracking state - persists across view mode changes
+  const [orderItemTracking, setOrderItemTracking] = useState({});
+
+  // Item tracking management functions
+  const toggleItemCompletion = (orderId, itemIndex) => {
+    setOrderItemTracking((prev) => {
+      const orderTracking = prev[orderId] || [];
+      const newCompleted = orderTracking.includes(itemIndex)
+        ? orderTracking.filter((i) => i !== itemIndex)
+        : [...orderTracking, itemIndex];
+
+      return {
+        ...prev,
+        [orderId]: newCompleted,
+      };
+    });
+  };
+
+  const getCompletedItems = (orderId) => {
+    return orderItemTracking[orderId] || [];
+  };
+
+  const isItemCompleted = (orderId, itemIndex) => {
+    return getCompletedItems(orderId).includes(itemIndex);
+  };
+
   const showCustomToast = (message, type = "error") => {
     const id = Date.now() + Math.random();
     setCustomToast({
@@ -2246,6 +2272,8 @@ export default function LiveOrderTerminal() {
                     key={order._id}
                     order={order}
                     viewMode={viewMode}
+                    completedItems={getCompletedItems(order._id)}
+                    onToggleItemCompletion={toggleItemCompletion}
                     onPrepare={() => {}} // No action needed for completed orders
                     onReady={() => {}} // No action needed for completed orders
                     onDeliver={() => {}} // No action needed for completed orders
@@ -2306,6 +2334,8 @@ export default function LiveOrderTerminal() {
                 key={order._id}
                 order={order}
                 viewMode={viewMode}
+                completedItems={getCompletedItems(order._id)}
+                onToggleItemCompletion={toggleItemCompletion}
                 onPrepare={() => {
                   // Change: counter pending orders should go straight to preparing
                   const newStatus =

@@ -29,6 +29,8 @@ export default function OrderCard({
   onMarkAsPaid,
   showMarkAsPaid = false,
   viewMode,
+  completedItems = [],
+  onToggleItemCompletion,
 }) {
   const [showCustomerInfo, setShowCustomerInfo] = useState(false);
 
@@ -53,6 +55,32 @@ export default function OrderCard({
       paymentMethod === "counter-card"
     );
   };
+
+  // Helper functions for item completion tracking
+  const toggleItemCompletion = (itemIndex) => {
+    // Call parent function to update tracking state
+    onToggleItemCompletion(order._id, itemIndex);
+
+    // Check if all items are completed after this toggle
+    const newCompleted = completedItems.includes(itemIndex)
+      ? completedItems.filter((i) => i !== itemIndex)
+      : [...completedItems, itemIndex];
+
+    if (newCompleted.length === order.items.length) {
+      // Auto-update order status based on order type
+      if (showDeliverButton) {
+        console.log("delivering");
+        onDeliver();
+      } else {
+        if (showReadyButton) {
+          console.log("readying");
+          onReady();
+        }
+      }
+    }
+  };
+
+  const isItemCompleted = (itemIndex) => completedItems.includes(itemIndex);
 
   // Determine which action buttons to show based on current status and order type
   const isCounterOrder = isCounterPayment(order.paymentMethod);
@@ -500,29 +528,82 @@ export default function OrderCard({
 
         {/* Order Items */}
         <div className="p-6 pt-4">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <h4 className="font-medium text-gray-900">Items</h4>
-              <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
-                {order.items.length}
-              </span>
+          {/* Progress indicator - only show when order is preparing */}
+          {order.status === "preparing" ? (
+            <div className="mb-4">
+              <div className="mb-2 flex items-center justify-between text-sm text-gray-600">
+                <span>Kitchen Progress</span>
+                <span>
+                  {completedItems.length}/{order.items.length} completed
+                </span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-gray-200">
+                <div
+                  className="h-2 rounded-full bg-green-500 transition-all duration-300"
+                  style={{
+                    width: `${(completedItems.length / order.items.length) * 100}%`,
+                  }}
+                ></div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <h4 className="font-medium text-gray-900">Items</h4>
+                <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
+                  {order.items.length}
+                </span>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-3">
             {order.items.map((item, index) => (
               <div
                 key={index}
-                className="flex items-start justify-between py-2"
+                className={`flex items-start justify-between py-2 transition-all duration-200 ${
+                  isItemCompleted(index) && order.status === "preparing"
+                    ? "opacity-60"
+                    : ""
+                }`}
               >
                 <div className="flex flex-1 items-start space-x-3">
-                  <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-gray-900">
-                    <span className="text-xs font-semibold text-white">
-                      {item.quantity}
-                    </span>
-                  </div>
+                  {/* Completion checkbox - only show when order is preparing */}
+                  {order.status === "preparing" && (
+                    <button
+                      onClick={() => toggleItemCompletion(index)}
+                      className={`mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                        isItemCompleted(index)
+                          ? "border-green-500 bg-green-500 text-white"
+                          : "border-gray-300 hover:border-green-400"
+                      }`}
+                    >
+                      {isItemCompleted(index) && (
+                        <Check className="h-3 w-3" strokeWidth={2} />
+                      )}
+                    </button>
+                  )}
+
+                  {/* Quantity badge - only show when not preparing or item not completed */}
+                  {(!(order.status === "preparing") ||
+                    !isItemCompleted(index)) && (
+                    <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-gray-900">
+                      <span className="text-xs font-semibold text-white">
+                        {item.quantity}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-gray-900">{item.name}</p>
+                    <p
+                      className={`font-medium ${
+                        isItemCompleted(index) && order.status === "preparing"
+                          ? "text-gray-500 line-through"
+                          : "text-gray-900"
+                      }`}
+                    >
+                      {item.name}
+                    </p>
                     {item.selectedVariants &&
                       item.selectedVariants.length > 0 && (
                         <p className="text-sm text-gray-600">
@@ -556,7 +637,13 @@ export default function OrderCard({
                     )}
                   </div>
                 </div>
-                <p className="ml-4 font-semibold text-gray-900">
+                <p
+                  className={`ml-4 font-semibold ${
+                    isItemCompleted(index) && order.status === "preparing"
+                      ? "text-gray-500 line-through"
+                      : "text-gray-900"
+                  }`}
+                >
                   ${(item.price * item.quantity).toFixed(2)}
                 </p>
               </div>
