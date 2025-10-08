@@ -2014,9 +2014,9 @@ export default function LiveOrderTerminal() {
           </div>
         ) : viewMode === "unpaid" ? (
           // Unpaid Counter Orders View
-          <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:gap-6">
             {Object.keys(unpaidOrdersByTable).length === 0 ? (
-              <div className="rounded-lg bg-transparent p-12 text-center">
+              <div className="col-span-full rounded-lg bg-transparent p-12 text-center">
                 <DollarSign
                   size={48}
                   className="mx-auto mb-4 text-brand_accent"
@@ -2052,21 +2052,92 @@ export default function LiveOrderTerminal() {
                   return (
                     <div
                       key={table}
-                      className="overflow-hidden rounded-lg border border-gray-200 bg-white"
+                      className="flex flex-col justify-between overflow-hidden rounded-xl border border-gray-100 bg-neutral-100 shadow-md transition-all duration-200 hover:border-gray-200"
                     >
-                      {/* Table Header */}
-                      <div className="border-b border-gray-200 bg-gray-50 px-6 py-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="text-lg font-semibold text-gray-900">
-                              Table {table}
-                            </h3>
-                            <p className="text-sm text-gray-500">
-                              {tableOrders.length} order
-                              {tableOrders.length > 1 ? "s" : ""} • Total: $
-                              {totalAmount.toFixed(2)}
-                            </p>
+                      <div>
+                        {/* Header */}
+                        <div className="p-4 pb-4 xl:p-6">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center">
+                              <div>
+                                <h3 className="text-lg font-semibold leading-tight text-gray-900 xl:text-xl">
+                                  Table {table}
+                                </h3>
+                                <p className="text-xs font-medium text-gray-500 xl:text-sm">
+                                  {tableOrders.length} order
+                                  {tableOrders.length > 1 ? "s" : ""} • Total: $
+                                  {totalAmount.toFixed(2)}
+                                </p>
+                                <p className="text-xs text-gray-600">
+                                  {tableOrders
+                                    .map(
+                                      (order) =>
+                                        `${order.customerName || "Anonymous"} ($${order.total.toFixed(2)})`,
+                                    )
+                                    .join(", ")}
+                                </p>
+                              </div>
+                            </div>
                           </div>
+                        </div>
+
+                        {/* Divider */}
+                        <div className="h-px bg-gray-300"></div>
+
+                        {/* Order Items */}
+                        <div className="p-4 pb-6 pt-2 xl:p-6">
+                          <div className="space-y-2.5 xl:space-y-3">
+                            {combinedItemsArray.map((item, index) => (
+                              <div
+                                key={index}
+                                className="flex items-start justify-between py-1 transition-all duration-200 xl:py-2"
+                              >
+                                <div className="flex flex-1 items-start space-x-3">
+                                  <div className="mt-0.5 flex size-5 flex-shrink-0 items-center justify-center rounded-full bg-gray-900 xl:size-6">
+                                    <span className="text-xs font-semibold text-white">
+                                      {item.quantity}
+                                    </span>
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium text-gray-900 xl:text-base">
+                                      {item.name}
+                                    </p>
+                                    {item.selectedVariants &&
+                                      item.selectedVariants.length > 0 && (
+                                        <p className="text-sm text-gray-600">
+                                          {item.selectedVariants
+                                            .map(
+                                              (variant) =>
+                                                `${variant.groupName} (${variant.optionName})`,
+                                            )
+                                            .join(" - ")}
+                                        </p>
+                                      )}
+                                    {item.selectedModifiers &&
+                                      item.selectedModifiers.length > 0 && (
+                                        <p className="text-sm text-blue-600">
+                                          +{" "}
+                                          {item.selectedModifiers
+                                            .map(
+                                              (modifier) =>
+                                                `${modifier.groupName} (${modifier.optionName})`,
+                                            )
+                                            .join(", ")}
+                                        </p>
+                                      )}
+                                  </div>
+                                </div>
+                                <p className="ml-4 text-sm font-semibold text-gray-900 xl:text-base">
+                                  ${(item.price * item.quantity).toFixed(2)}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      {/* Actions */}
+                      <div className="p-4 pt-0 xl:p-6">
+                        <div className="flex space-x-3">
                           <button
                             onClick={() => {
                               // Show unified payment method modal for bulk operations
@@ -2077,76 +2148,10 @@ export default function LiveOrderTerminal() {
                                 show: true,
                               });
                             }}
-                            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700"
+                            className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-green-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 hover:bg-green-700 xl:text-base"
                           >
-                            Mark All Paid
+                            <span>Mark All Paid</span>
                           </button>
-                        </div>
-                      </div>
-
-                      {/* Items Table */}
-                      <div className="px-6 py-4">
-                        <div className="space-y-3">
-                          {combinedItemsArray.map((item, index) => (
-                            <div
-                              key={index}
-                              className="flex items-start justify-between border-b border-gray-100 py-2 last:border-b-0"
-                            >
-                              <div className="flex flex-1 items-start space-x-3">
-                                <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-gray-900">
-                                  <span className="text-xs font-semibold text-white">
-                                    {item.quantity}
-                                  </span>
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="font-medium text-gray-900">
-                                    {item.name}
-                                  </p>
-                                  {item.selectedVariants &&
-                                    item.selectedVariants.length > 0 && (
-                                      <p className="text-sm text-gray-600">
-                                        {item.selectedVariants
-                                          .map(
-                                            (variant) =>
-                                              `${variant.groupName} (${variant.optionName})`,
-                                          )
-                                          .join(" - ")}
-                                      </p>
-                                    )}
-                                  {item.selectedModifiers &&
-                                    item.selectedModifiers.length > 0 && (
-                                      <p className="text-sm text-blue-600">
-                                        +{" "}
-                                        {item.selectedModifiers
-                                          .map(
-                                            (modifier) =>
-                                              `${modifier.groupName} (${modifier.optionName})`,
-                                          )
-                                          .join(", ")}
-                                      </p>
-                                    )}
-                                </div>
-                              </div>
-                              <p className="ml-4 font-semibold text-gray-900">
-                                ${(item.price * item.quantity).toFixed(2)}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Order Details Summary */}
-                      <div className="border-t border-gray-200 bg-gray-50 px-6 py-3">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Orders:</span>
-                          <span className="font-medium text-gray-900">
-                            {tableOrders
-                              .map(
-                                (order) =>
-                                  `${order.customerName || "Anonymous"} ($${order.total.toFixed(2)})`,
-                              )
-                              .join(", ")}
-                          </span>
                         </div>
                       </div>
                     </div>
@@ -2266,7 +2271,7 @@ export default function LiveOrderTerminal() {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:gap-6">
                 {completedOrders.map((order) => (
                   <OrderCard
                     key={order._id}
@@ -2328,7 +2333,7 @@ export default function LiveOrderTerminal() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:gap-6">
             {filteredOrders.map((order) => (
               <OrderCard
                 key={order._id}

@@ -322,7 +322,7 @@ export default function OrderCard({
     <div className="flex flex-col justify-between overflow-hidden rounded-xl border border-gray-100 bg-neutral-100 shadow-md transition-all duration-200 hover:border-gray-200">
       <div>
         {/* Header */}
-        <div className="p-6 pb-4">
+        <div className="p-4 pb-4 xl:p-6">
           {/* show me a order status banner here and it only visible in order completed mode */}
           {viewMode === "completed" && (
             <div
@@ -397,15 +397,15 @@ export default function OrderCard({
                 )}
               </div>
               <div>
-                <h3 className="text-xl font-semibold leading-tight text-gray-900">
+                <h3 className="text-lg font-semibold leading-tight text-gray-900 xl:text-xl">
                   {isTableOrder ? `Table ${order.table}` : "Pick-up"}
                 </h3>
-                <p className="text-sm font-medium text-gray-500">
+                <p className="text-xs font-medium text-gray-500 xl:text-sm">
                   #{order._id.slice(-6).toUpperCase()}
                 </p>
                 {/* Pickup info */}
                 {!isTableOrder && (
-                  <div className="mt-2 rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-600">
+                  <div className="mt-2 rounded-lg bg-gray-100 text-sm text-gray-600">
                     Pickup at:{" "}
                     <span className="text-base font-semibold">
                       {order.pickupTime || "ASAP"}
@@ -434,7 +434,7 @@ export default function OrderCard({
                 <div className="rounded-xl">
                   <div className="flex items-center justify-between">
                     <div className="flex min-w-0 flex-1 flex-col items-end">
-                      <p className="truncate text-xl font-semibold text-gray-900">
+                      <p className="truncate text-lg font-semibold text-gray-900 xl:text-xl">
                         {order.customerName}
                       </p>
 
@@ -524,10 +524,10 @@ export default function OrderCard({
         </div>
 
         {/* Divider */}
-        <div className="mx-6 h-px bg-gray-100"></div>
+        <div className="h-px bg-gray-300"></div>
 
         {/* Order Items */}
-        <div className="p-6 pt-4">
+        <div className="p-4 pb-6 pt-2 xl:p-6">
           {/* Progress indicator - only show when order is preparing */}
           {order.status === "preparing" ? (
             <div className="mb-4">
@@ -547,7 +547,7 @@ export default function OrderCard({
               </div>
             </div>
           ) : (
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 hidden items-center justify-between">
               <div className="flex items-center space-x-2">
                 <h4 className="font-medium text-gray-900">Items</h4>
                 <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
@@ -557,11 +557,11 @@ export default function OrderCard({
             </div>
           )}
 
-          <div className="space-y-3">
+          <div className="space-y-2.5 xl:space-y-3">
             {order.items.map((item, index) => (
               <div
                 key={index}
-                className={`flex items-start justify-between py-2 transition-all duration-200 ${
+                className={`flex items-start justify-between py-1 transition-all duration-200 xl:py-2 ${
                   isItemCompleted(index) && order.status === "preparing"
                     ? "opacity-60"
                     : ""
@@ -572,7 +572,7 @@ export default function OrderCard({
                   {order.status === "preparing" && (
                     <button
                       onClick={() => toggleItemCompletion(index)}
-                      className={`mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                      className={`mt-0.5 flex size-5 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors xl:size-6 ${
                         isItemCompleted(index)
                           ? "border-green-500 bg-green-500 text-white"
                           : "border-gray-300 hover:border-green-400"
@@ -584,19 +584,28 @@ export default function OrderCard({
                     </button>
                   )}
 
-                  {/* Quantity badge - only show when not preparing or item not completed */}
-                  {(!(order.status === "preparing") ||
-                    !isItemCompleted(index)) && (
-                    <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-gray-900">
-                      <span className="text-xs font-semibold text-white">
-                        {item.quantity}
-                      </span>
-                    </div>
-                  )}
+                  {/* Quantity badge - always show, gray out if completed */}
+                  <div
+                    className={`mt-0.5 flex size-5 flex-shrink-0 items-center justify-center rounded-full xl:size-6 ${
+                      isItemCompleted(index) && order.status === "preparing"
+                        ? "bg-gray-300"
+                        : "bg-gray-900"
+                    }`}
+                  >
+                    <span
+                      className={`text-xs font-semibold ${
+                        isItemCompleted(index) && order.status === "preparing"
+                          ? "text-gray-600"
+                          : "text-white"
+                      }`}
+                    >
+                      {item.quantity}
+                    </span>
+                  </div>
 
                   <div className="min-w-0 flex-1">
                     <p
-                      className={`font-medium ${
+                      className={`text-sm font-medium xl:text-base ${
                         isItemCompleted(index) && order.status === "preparing"
                           ? "text-gray-500 line-through"
                           : "text-gray-900"
@@ -638,7 +647,7 @@ export default function OrderCard({
                   </div>
                 </div>
                 <p
-                  className={`ml-4 font-semibold ${
+                  className={`ml-4 hidden text-sm xl:text-base ${
                     isItemCompleted(index) && order.status === "preparing"
                       ? "text-gray-500 line-through"
                       : "text-gray-900"
@@ -664,7 +673,7 @@ export default function OrderCard({
         </div>
       </div>
       {/* Actions */}
-      <div className="p-6 pt-0">
+      <div className="p-4 pt-0 xl:p-6">
         <div className="flex space-x-3">
           {showConfirmButton && (
             <button
@@ -679,9 +688,8 @@ export default function OrderCard({
           {showPrepareButton && (
             <button
               onClick={onPrepare}
-              className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-blue-600 px-4 py-3 font-medium text-white transition-colors duration-200 hover:bg-blue-700"
+              className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 hover:bg-blue-700 xl:text-base"
             >
-              <ChefHat className="h-4 w-4" strokeWidth={1.5} />
               <span>Prepare</span>
             </button>
           )}
@@ -689,9 +697,8 @@ export default function OrderCard({
           {showReadyButton && (
             <button
               onClick={onReady}
-              className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-green-600 px-4 py-3 font-medium text-white transition-colors duration-200 hover:bg-green-700"
+              className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-green-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 hover:bg-green-700 xl:text-base"
             >
-              <Bell className="h-4 w-4" strokeWidth={1.5} />
               <span>Ready</span>
             </button>
           )}
@@ -699,9 +706,8 @@ export default function OrderCard({
           {showDeliverButton && (
             <button
               onClick={onDeliver}
-              className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-purple-600 px-4 py-3 font-medium text-white transition-colors duration-200 hover:bg-purple-700"
+              className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-purple-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 hover:bg-purple-700 xl:text-base"
             >
-              <Check className="h-4 w-4" strokeWidth={1.5} />
               <span>Complete</span>
             </button>
           )}
@@ -709,9 +715,8 @@ export default function OrderCard({
           {showMarkAsPaidButton && (
             <button
               onClick={() => onMarkAsPaid(order._id)}
-              className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-green-600 px-4 py-3 font-medium text-white transition-colors duration-200 hover:bg-green-700"
+              className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-green-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 hover:bg-green-700 xl:text-base"
             >
-              <Banknote className="h-4 w-4" strokeWidth={1.5} />
               <span>Mark as Paid</span>
             </button>
           )}
@@ -720,7 +725,7 @@ export default function OrderCard({
           {!["cancelled", "delivered"].includes(order.status) && (
             <button
               onClick={onCancel}
-              className="flex items-center justify-center space-x-2 rounded-xl bg-gray-100 px-4 py-3 font-medium text-gray-700 transition-colors duration-200 hover:bg-gray-200"
+              className="flex items-center justify-center space-x-2 rounded-xl bg-gray-100 px-4 py-3 text-sm font-medium text-gray-700 transition-colors duration-200 hover:bg-gray-200 xl:text-base"
             >
               <X className="h-4 w-4" strokeWidth={1.5} />
               <span>Cancel</span>
