@@ -21,7 +21,6 @@
     "@stripe/react-stripe-js": "^3.6.0",
     "@stripe/stripe-js": "^7.2.0",
     "bcryptjs": "^3.0.2",
-    "capacitor-tcp-socket": "^7.1.0",
     "clsx": "^2.1.1",
     "daisyui": "^4.12.24",
     "date-fns": "^4.1.0",
