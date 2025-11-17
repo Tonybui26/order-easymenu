@@ -591,18 +591,20 @@ export default function LiveOrderTerminal() {
               </div>
             </button>
 
-            <button
-              onClick={() => handlePaymentMethodSelect("card")}
-              className="btn btn-outline h-auto w-full justify-start gap-3 p-4"
-            >
-              <div className="text-2xl">💳</div>
-              <div className="text-left">
-                <div className="font-medium">Card</div>
-                <div className="text-sm text-gray-500">
-                  Credit/debit card payment
+            {menuConfig?.allowCardPaymentAtCounter && (
+              <button
+                onClick={() => handlePaymentMethodSelect("card")}
+                className="btn btn-outline h-auto w-full justify-start gap-3 p-4"
+              >
+                <div className="text-2xl">💳</div>
+                <div className="text-left">
+                  <div className="font-medium">Card</div>
+                  <div className="text-sm text-gray-500">
+                    Credit/debit card payment
+                  </div>
                 </div>
-              </div>
-            </button>
+              </button>
+            )}
           </div>
         </div>
         <div className="modal-backdrop" onClick={handleClose}></div>
