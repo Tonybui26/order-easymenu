@@ -1554,12 +1554,12 @@ export default function LiveOrderTerminal() {
         paymentMethod,
       );
 
-      // If it's a dine-in order that was pending, also update status to preparing
+      // If it's a dine-in order that was pending, also update status to confirmed
       if (isDineIn && isPending) {
         try {
           const orderWithUpdatedStatus = await updateOrderStatus(
             orderId,
-            "preparing",
+            "confirmed",
           );
           // Update local state with the order that has both payment and status updated
           setOrders((prevOrders) =>
