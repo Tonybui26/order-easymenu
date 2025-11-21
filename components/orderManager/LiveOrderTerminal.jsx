@@ -1402,6 +1402,14 @@ export default function LiveOrderTerminal() {
   // Handle order status updates and control printing
   // only printing docket when order status is changed to "preparing" and auto-printing is disabled
   const handleStatusUpdate = async (orderId, newStatus) => {
+    // Prevent double-clicks by checking if order is already being processed
+    if (processingOrders.has(orderId)) {
+      return;
+    }
+
+    // Mark order as processing
+    setProcessingOrders((prev) => new Set(prev).add(orderId));
+
     try {
       const updatedOrder = await updateOrderStatus(orderId, newStatus);
 
@@ -1513,6 +1521,13 @@ export default function LiveOrderTerminal() {
         `Failed to update order ${orderId} to ${newStatus}:`,
         error,
       );
+    } finally {
+      // Remove order from processing set when operation completes
+      setProcessingOrders((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
     }
   };
 
@@ -1539,6 +1554,14 @@ export default function LiveOrderTerminal() {
       setShowPaymentMethodModal({ orderId, show: true });
       return;
     }
+
+    // Prevent double-clicks by checking if order is already being processed
+    if (processingOrders.has(orderId)) {
+      return;
+    }
+
+    // Mark order as processing
+    setProcessingOrders((prev) => new Set(prev).add(orderId));
 
     try {
       // Find the current order to check if it's dine-in and pending
@@ -1595,6 +1618,13 @@ export default function LiveOrderTerminal() {
       setShowPaymentMethodModal({ orderId: null, show: false });
     } catch (error) {
       console.error(`Failed to mark order ${orderId} as paid:`, error);
+    } finally {
+      // Remove order from processing set when operation completes
+      setProcessingOrders((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
     }
   };
 
@@ -1732,6 +1762,9 @@ export default function LiveOrderTerminal() {
 
   // Item tracking state - persists across view mode changes
   const [orderItemTracking, setOrderItemTracking] = useState({});
+
+  // Track orders that are currently being processed to prevent double-clicks
+  const [processingOrders, setProcessingOrders] = useState(new Set());
 
   // Item tracking management functions
   const toggleItemCompletion = (orderId, itemIndex) => {
@@ -2357,6 +2390,7 @@ export default function LiveOrderTerminal() {
                 onCancel={() => handleCancelOrder(order)}
                 onMarkAsPaid={(orderId) => handleMarkAsPaid(orderId)}
                 showMarkAsPaid={true}
+                isProcessing={processingOrders.has(order._id)}
               />
             ))}
           </div>

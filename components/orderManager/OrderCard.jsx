@@ -31,6 +31,7 @@ export default function OrderCard({
   viewMode,
   completedItems = [],
   onToggleItemCompletion,
+  isProcessing = false,
 }) {
   const [showCustomerInfo, setShowCustomerInfo] = useState(false);
 
@@ -688,36 +689,56 @@ export default function OrderCard({
           {showPrepareButton && (
             <button
               onClick={onPrepare}
-              className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 hover:bg-blue-700 xl:text-base"
+              disabled={isProcessing}
+              className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
+                isProcessing
+                  ? "cursor-not-allowed opacity-50"
+                  : "hover:bg-blue-700"
+              }`}
             >
-              <span>Prepare</span>
+              <span>{isProcessing ? "Processing..." : "Prepare"}</span>
             </button>
           )}
 
           {showReadyButton && (
             <button
               onClick={onReady}
-              className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-green-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 hover:bg-green-700 xl:text-base"
+              disabled={isProcessing}
+              className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-green-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
+                isProcessing
+                  ? "cursor-not-allowed opacity-50"
+                  : "hover:bg-green-700"
+              }`}
             >
-              <span>Ready</span>
+              <span>{isProcessing ? "Processing..." : "Ready"}</span>
             </button>
           )}
 
           {showDeliverButton && (
             <button
               onClick={onDeliver}
-              className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-purple-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 hover:bg-purple-700 xl:text-base"
+              disabled={isProcessing}
+              className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-purple-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
+                isProcessing
+                  ? "cursor-not-allowed opacity-50"
+                  : "hover:bg-purple-700"
+              }`}
             >
-              <span>Complete</span>
+              <span>{isProcessing ? "Processing..." : "Complete"}</span>
             </button>
           )}
 
           {showMarkAsPaidButton && (
             <button
               onClick={() => onMarkAsPaid(order._id)}
-              className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-green-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 hover:bg-green-700 xl:text-base"
+              disabled={isProcessing}
+              className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-green-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
+                isProcessing
+                  ? "cursor-not-allowed opacity-50"
+                  : "hover:bg-green-700"
+              }`}
             >
-              <span>Mark as Paid</span>
+              <span>{isProcessing ? "Processing..." : "Mark as Paid"}</span>
             </button>
           )}
 
@@ -725,7 +746,12 @@ export default function OrderCard({
           {!["cancelled", "delivered"].includes(order.status) && (
             <button
               onClick={onCancel}
-              className="flex items-center justify-center space-x-2 rounded-xl bg-gray-100 px-4 py-3 text-sm font-medium text-gray-700 transition-colors duration-200 hover:bg-gray-200 xl:text-base"
+              disabled={isProcessing}
+              className={`flex items-center justify-center space-x-2 rounded-xl bg-gray-100 px-4 py-3 text-sm font-medium text-gray-700 transition-colors duration-200 xl:text-base ${
+                isProcessing
+                  ? "cursor-not-allowed opacity-50"
+                  : "hover:bg-gray-200"
+              }`}
             >
               <X className="h-4 w-4" strokeWidth={1.5} />
               <span>Cancel</span>
