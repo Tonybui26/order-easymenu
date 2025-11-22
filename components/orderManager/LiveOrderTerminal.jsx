@@ -1365,6 +1365,7 @@ export default function LiveOrderTerminal() {
           order: order,
           orderId: order._id.slice(-6).toUpperCase(),
           printers: printersAvailability.printers,
+          menuLink: storeProfile?.menuLink || null,
         };
 
         console.log("printData", printData);
