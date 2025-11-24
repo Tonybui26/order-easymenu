@@ -2400,6 +2400,7 @@ export default function LiveOrderTerminal() {
                 onDeliver={() => handleStatusUpdate(order._id, "delivered")}
                 onCancel={() => handleCancelOrder(order)}
                 onMarkAsPaid={(orderId) => handleMarkAsPaid(orderId)}
+                onPrint={handlePrintingOrder}
                 showMarkAsPaid={true}
                 isProcessing={processingOrders.has(order._id)}
               />

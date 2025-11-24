@@ -18,6 +18,7 @@ import {
   Eye,
   EyeOff,
   Users,
+  Printer,
 } from "lucide-react";
 
 export default function OrderCard({
@@ -32,6 +33,7 @@ export default function OrderCard({
   completedItems = [],
   onToggleItemCompletion,
   isProcessing = false,
+  onPrint,
 }) {
   const [showCustomerInfo, setShowCustomerInfo] = useState(false);
 
@@ -739,6 +741,22 @@ export default function OrderCard({
               }`}
             >
               <span>{isProcessing ? "Processing..." : "Mark as Paid"}</span>
+            </button>
+          )}
+
+          {/* Print button - only show when order is in preparing status */}
+          {order.status === "preparing" && onPrint && (
+            <button
+              onClick={() => onPrint(order)}
+              disabled={isProcessing}
+              className={`flex items-center justify-center rounded-xl bg-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition-colors duration-200 xl:text-base ${
+                isProcessing
+                  ? "cursor-not-allowed opacity-50"
+                  : "hover:bg-gray-300"
+              }`}
+              title="Print Order"
+            >
+              <Printer className="size-5 text-brand_accent" strokeWidth={2} />
             </button>
           )}
 
