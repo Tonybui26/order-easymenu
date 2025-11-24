@@ -832,9 +832,17 @@ export default function LiveOrderTerminal() {
       const autoPrintingEnabled = menuConfig?.autoPrinting?.enabled;
       if (autoPrintingEnabled && storeProfile && userData?.ownerEmail) {
         // Filter out orders that have already been printed
-        const unprintedOrders = notificationWorthyOrders.filter(
-          (order) => !printedOrderIdsRef.current.has(order._id),
-        );
+        // Also exclude pending counter orders - they should only print when status changes to "preparing"
+        const unprintedOrders = notificationWorthyOrders.filter((order) => {
+          // Don't auto-print pending counter orders
+          if (
+            order.paymentStatus === "pending" &&
+            isCounterPayment(order.paymentMethod)
+          ) {
+            return false;
+          }
+          return !printedOrderIdsRef.current.has(order._id);
+        });
         console.log(
           "printedOrderIds right before filtering:",
           printedOrderIdsRef.current,
@@ -1491,18 +1499,20 @@ export default function LiveOrderTerminal() {
         }
       }
 
-      // Print order when order status is changed to "preparing" ONLY if auto-printing is disabled without creating print jobs
+      // Print order when order status is changed to "preparing"
+      // Counter orders should always print when status changes to "preparing"
+      // Non-counter orders only print if auto-printing is disabled
       const autoPrintingEnabled = menuConfig?.autoPrinting?.enabled;
-      if (
-        newStatus === "preparing" &&
-        storeProfile &&
-        userData?.ownerEmail &&
-        !autoPrintingEnabled
-      ) {
+      if (newStatus === "preparing" && storeProfile && userData?.ownerEmail) {
         try {
           const order = orders.find((o) => o._id === orderId);
           if (order) {
-            const printResult = await handlePrintingOrder(order);
+            // Always print counter orders when status changes to "preparing"
+            // For non-counter orders, only print if auto-printing is disabled
+            const isCounterOrder = isCounterPayment(order.paymentMethod);
+            if (isCounterOrder || !autoPrintingEnabled) {
+              const printResult = await handlePrintingOrder(order);
+            }
           }
         } catch (error) {
           console.error("Error printing order:", error);
