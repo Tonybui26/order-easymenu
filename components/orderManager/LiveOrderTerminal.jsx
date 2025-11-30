@@ -24,6 +24,7 @@ import {
   ShoppingCart,
   Users,
   X,
+  Printer,
 } from "lucide-react";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import OnlineOrderControlButton from "./OnlineOrderControlButton";
@@ -410,6 +411,12 @@ export default function LiveOrderTerminal() {
     isBulk: false,
     show: false,
   });
+  const [showPrinterSelectionModal, setShowPrinterSelectionModal] = useState({
+    order: null,
+    show: false,
+  });
+  const [availablePrinters, setAvailablePrinters] = useState([]);
+  const [loadingPrinters, setLoadingPrinters] = useState(false);
 
   // Helper function to format date for display in user's local timezone
   const formatDateForDisplay = (date) => {
@@ -606,6 +613,88 @@ export default function LiveOrderTerminal() {
               </button>
             )}
           </div>
+        </div>
+        <div className="modal-backdrop" onClick={handleClose}></div>
+      </div>
+    );
+  };
+
+  // Printer selection modal
+  const PrinterSelectionModal = () => {
+    const handleClose = () => {
+      setShowPrinterSelectionModal({
+        order: null,
+        show: false,
+      });
+      setAvailablePrinters([]);
+    };
+
+    if (!showPrinterSelectionModal.show || !showPrinterSelectionModal.order) {
+      return null;
+    }
+
+    const order = showPrinterSelectionModal.order;
+    const isTakeaway = order.table === "takeaway";
+    const orderType = isTakeaway ? "takeaway" : "dinein";
+
+    return (
+      <div
+        className={`modal ${showPrinterSelectionModal.show ? "modal-open" : ""}`}
+      >
+        <div className="modal-box w-96 max-w-md">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Select Printer
+            </h3>
+            <button
+              onClick={handleClose}
+              className="btn btn-circle btn-ghost btn-sm"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <p className="mb-4 text-sm text-gray-600">
+            Choose which printer to print order #
+            {order._id.slice(-6).toUpperCase()} to
+          </p>
+
+          {loadingPrinters ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-sm text-gray-500">Loading printers...</div>
+            </div>
+          ) : availablePrinters.length === 0 ? (
+            <div className="rounded-lg bg-yellow-50 p-4 text-center">
+              <p className="text-sm text-yellow-800">
+                No printers available for {orderType} orders
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {availablePrinters.map((printer) => (
+                <button
+                  key={printer._id}
+                  onClick={() => handlePrinterSelectAndPrint(printer)}
+                  className="btn btn-outline h-auto w-full justify-start gap-3 p-4 text-left"
+                >
+                  <Printer className="h-5 w-5 flex-shrink-0 text-gray-600" />
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">
+                      {printer.name}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {printer.localIp}:{printer.port}
+                      {printer.isActive ? (
+                        <span className="ml-2 text-green-600">● Active</span>
+                      ) : (
+                        <span className="ml-2 text-gray-400">● Inactive</span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="modal-backdrop" onClick={handleClose}></div>
       </div>
@@ -1357,22 +1446,37 @@ export default function LiveOrderTerminal() {
   }, []);
 
   // Add this function inside the LiveOrderTerminal component
-  const handlePrintingOrder = async (order, retryCount = 0) => {
+  const handlePrintingOrder = async (
+    order,
+    selectedPrinters = null,
+    retryCount = 0,
+  ) => {
     try {
       // Determine order type
       const isTakeaway = order.table === "takeaway";
       const orderType = isTakeaway ? "takeaway" : "dinein";
 
-      // Check printer availability for the order type
-      const printersAvailability = await checkPrinterAvailability(orderType);
-      console.log("printersAvailability", printersAvailability);
+      // Use selected printers if provided, otherwise check availability
+      let printersToUse = selectedPrinters;
 
-      if (printersAvailability.available) {
+      if (!printersToUse || printersToUse.length === 0) {
+        // Fallback to checking printer availability (for auto-print scenarios)
+        const printersAvailability = await checkPrinterAvailability(orderType);
+        console.log("printersAvailability", printersAvailability);
+
+        if (!printersAvailability.available) {
+          return { success: false, message: "No printers available" };
+        }
+
+        printersToUse = printersAvailability.printers;
+      }
+
+      if (printersToUse && printersToUse.length > 0) {
         // Create print data object for the order
         const printData = {
           order: order,
           orderId: order._id.slice(-6).toUpperCase(),
-          printers: printersAvailability.printers,
+          printers: printersToUse,
           menuLink: storeProfile?.menuLink || null,
         };
 
@@ -1550,13 +1654,67 @@ export default function LiveOrderTerminal() {
       if (retryCount === 0) {
         console.log("Print error occurred, retrying after 1 second...");
         await new Promise((resolve) => setTimeout(resolve, 1000));
-        return handlePrintingOrder(order, 1); // Retry once
+        return handlePrintingOrder(order, selectedPrinters, 1); // Retry once
       }
 
       // If retry also failed, show error toast
       const errorMessage = `Print failed: ${error.message || "Unknown error"}`;
       showCustomToast(errorMessage, "error");
       return { success: false, error: error.message };
+    }
+  };
+
+  // Handle opening printer selection modal
+  const handleOpenPrinterSelection = async (order) => {
+    try {
+      setLoadingPrinters(true);
+
+      // Determine order type
+      const isTakeaway = order.table === "takeaway";
+      const orderType = isTakeaway ? "takeaway" : "dinein";
+
+      // Fetch available printers for this order type
+      const printersAvailability = await checkPrinterAvailability(orderType);
+
+      if (printersAvailability.available && printersAvailability.printers) {
+        setAvailablePrinters(printersAvailability.printers);
+        setShowPrinterSelectionModal({
+          order: order,
+          show: true,
+        });
+      } else {
+        showCustomToast(
+          `No printers available for ${orderType} orders`,
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Error fetching printers:", error);
+      showCustomToast("Failed to load printers", "error");
+    } finally {
+      setLoadingPrinters(false);
+    }
+  };
+
+  // Handle printer selection and print
+  const handlePrinterSelectAndPrint = async (selectedPrinter) => {
+    if (!showPrinterSelectionModal.order) return;
+
+    const order = showPrinterSelectionModal.order;
+
+    // Close modal first
+    setShowPrinterSelectionModal({
+      order: null,
+      show: false,
+    });
+
+    // Print to selected printer
+    const printResult = await handlePrintingOrder(order, [selectedPrinter]);
+
+    if (printResult.success) {
+      toast.success(`Order printed to ${selectedPrinter.name}`);
+    } else {
+      showCustomToast(printResult.message || "Failed to print order", "error");
     }
   };
 
@@ -2552,7 +2710,7 @@ export default function LiveOrderTerminal() {
                 onDeliver={() => handleStatusUpdate(order._id, "delivered")}
                 onCancel={() => handleCancelOrder(order)}
                 onMarkAsPaid={(orderId) => handleMarkAsPaid(orderId)}
-                onPrint={handlePrintingOrder}
+                onPrint={handleOpenPrinterSelection}
                 showMarkAsPaid={true}
                 isProcessing={processingOrders.has(order._id)}
               />
@@ -2561,6 +2719,7 @@ export default function LiveOrderTerminal() {
         )}
         <PaymentMethodModal />
         <DatePickerModal />
+        <PrinterSelectionModal />
       </div>
       {/* Custom Toast Component */}
       {customToast.show && (
