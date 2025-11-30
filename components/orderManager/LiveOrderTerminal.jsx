@@ -1357,7 +1357,7 @@ export default function LiveOrderTerminal() {
   }, []);
 
   // Add this function inside the LiveOrderTerminal component
-  const handlePrintingOrder = async (order) => {
+  const handlePrintingOrder = async (order, retryCount = 0) => {
     try {
       // Determine order type
       const isTakeaway = order.table === "takeaway";
@@ -1383,18 +1383,159 @@ export default function LiveOrderTerminal() {
           delayAfterDisconnect: 300, // Longer delay for production
         });
 
+        // Check if we need to retry:
+        // 1. All printers failed (!printResult.success)
+        // 2. Some printers failed (printResult.failedPrints > 0) - partial failure
+        const hasFailures =
+          !printResult.success || printResult.failedPrints > 0;
+
+        // If there are any failures and we haven't retried yet, retry only failed printers
+        if (hasFailures && retryCount === 0) {
+          console.log(
+            `Print ${!printResult.success ? "completely" : "partially"} failed, retrying failed printers after 1 second...`,
+          );
+
+          // Extract failed printer names from the result
+          const failedPrinterNamesSet = new Set();
+          if (printResult.failedPrinterErrors) {
+            printResult.failedPrinterErrors.forEach((err) => {
+              failedPrinterNamesSet.add(err.printerName);
+            });
+          } else if (printResult.failedPrinterNames) {
+            // Fallback: parse comma-separated names
+            printResult.failedPrinterNames
+              .split(",")
+              .map((name) => name.trim())
+              .forEach((name) => failedPrinterNamesSet.add(name));
+          }
+
+          // Filter printers to only include failed ones
+          const failedPrinters = printersAvailability.printers.filter(
+            (printer) => failedPrinterNamesSet.has(printer.name),
+          );
+
+          if (failedPrinters.length > 0) {
+            console.log(
+              `Retrying ${failedPrinters.length} failed printer(s): ${failedPrinters.map((p) => p.name).join(", ")}`,
+            );
+
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+
+            // Retry only failed printers
+            const retryPrintData = {
+              order: order,
+              orderId: order._id.slice(-6).toUpperCase(),
+              printers: failedPrinters, // Only failed printers
+              menuLink: storeProfile?.menuLink || null,
+            };
+
+            const retryResult = await printOrderQueued(retryPrintData, {
+              delayAfterDisconnect: 300,
+            });
+
+            // Merge results: combine successful from first attempt with retry results
+            const firstAttemptSuccessful = printResult.successfulPrints || 0;
+            const retrySuccessful = retryResult.successfulPrints || 0;
+            const totalSuccessful = firstAttemptSuccessful + retrySuccessful;
+            const totalPrinters =
+              printResult.totalPrinters || printData.printers.length;
+            const totalFailed = totalPrinters - totalSuccessful;
+
+            // Combine successful printer names
+            const firstSuccessNames = printResult.successfulPrinterNames
+              ? printResult.successfulPrinterNames.split(", ")
+              : [];
+            const retrySuccessNames = retryResult.successfulPrinterNames
+              ? retryResult.successfulPrinterNames.split(", ")
+              : [];
+            const allSuccessNames = [
+              ...firstSuccessNames,
+              ...retrySuccessNames,
+            ];
+
+            const mergedResult = {
+              success: totalSuccessful > 0,
+              successfulPrints: totalSuccessful,
+              failedPrints: totalFailed,
+              totalPrinters: totalPrinters,
+              failedPrinterNames: retryResult.failedPrinterNames || "",
+              failedPrinterErrors: retryResult.failedPrinterErrors || [],
+              successfulPrinterNames: allSuccessNames.join(", "),
+              message:
+                totalSuccessful > 0
+                  ? `Order printed successfully to ${totalSuccessful}/${totalPrinters} printer(s)${retrySuccessful > 0 ? " after retry" : ""}!`
+                  : printResult.message,
+            };
+
+            // Show results after retry
+            if (mergedResult.success) {
+              toast.success(mergedResult.message);
+              if (mergedResult.failedPrints > 0) {
+                let errorMessage =
+                  mergedResult.failedPrinterNames + " failed to print";
+                if (
+                  mergedResult.failedPrinterErrors &&
+                  mergedResult.failedPrinterErrors.length > 0
+                ) {
+                  const errorDetails = mergedResult.failedPrinterErrors
+                    .map((err) => `${err.printerName}: ${err.error}`)
+                    .join("; ");
+                  errorMessage += ` - ${errorDetails}`;
+                }
+                showCustomToast(errorMessage, "error");
+              }
+            } else {
+              let errorMessage = mergedResult.message;
+              if (
+                mergedResult.failedPrinterErrors &&
+                mergedResult.failedPrinterErrors.length > 0
+              ) {
+                const errorDetails = mergedResult.failedPrinterErrors
+                  .map((err) => `${err.printerName}: ${err.error}`)
+                  .join("; ");
+                errorMessage += ` - ${errorDetails}`;
+              }
+              showCustomToast(errorMessage, "error");
+            }
+
+            return mergedResult;
+          }
+        }
+
+        // After retry (or if no retry needed), show results
         if (printResult.success) {
           toast.success(printResult.message);
+          // Show error for any failed printers (even after retry)
           if (printResult.failedPrints > 0) {
-            showCustomToast(
-              printResult.failedPrinterNames + " failed to print",
-              "error",
-            );
+            // Build error message with details
+            let errorMessage =
+              printResult.failedPrinterNames + " failed to print";
+            if (
+              printResult.failedPrinterErrors &&
+              printResult.failedPrinterErrors.length > 0
+            ) {
+              const errorDetails = printResult.failedPrinterErrors
+                .map((err) => `${err.printerName}: ${err.error}`)
+                .join("; ");
+              errorMessage += ` - ${errorDetails}`;
+            }
+            showCustomToast(errorMessage, "error");
           }
         } else {
-          // toast.error(printResult.message);
-          // create for me a similar toast but not use the plugin, just use the state to show the message with the same style and add the dismiss button
-          showCustomToast(printResult.message, "error");
+          // All printers failed - show error message with details
+          let errorMessage = printResult.message;
+          if (
+            printResult.failedPrinterErrors &&
+            printResult.failedPrinterErrors.length > 0
+          ) {
+            const errorDetails = printResult.failedPrinterErrors
+              .map((err) => `${err.printerName}: ${err.error}`)
+              .join("; ");
+            errorMessage += ` - ${errorDetails}`;
+          } else if (printResult.error) {
+            errorMessage += ` - ${printResult.error}`;
+          }
+          showCustomToast(errorMessage, "error");
         }
 
         return printResult;
@@ -1404,6 +1545,17 @@ export default function LiveOrderTerminal() {
       }
     } catch (error) {
       console.error("Error printing order:", error);
+
+      // If error occurred and we haven't retried yet, retry once after 1 second
+      if (retryCount === 0) {
+        console.log("Print error occurred, retrying after 1 second...");
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        return handlePrintingOrder(order, 1); // Retry once
+      }
+
+      // If retry also failed, show error toast
+      const errorMessage = `Print failed: ${error.message || "Unknown error"}`;
+      showCustomToast(errorMessage, "error");
       return { success: false, error: error.message };
     }
   };
