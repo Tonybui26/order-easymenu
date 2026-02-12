@@ -82,7 +82,6 @@ export default function LiveOrderTerminal() {
   const soundIntervalRef = useRef(null);
   const playingAudioInstances = useRef(new Set());
   const appStateChangeCountRef = useRef(0);
-  const cleanupRef = useRef(null);
   const [showNotification, setShowNotification] = useState(false);
   const showNotificationRef = useRef(false);
   const [notificationOrderCount, setNotificationOrderCount] = useState(0);
@@ -93,17 +92,16 @@ export default function LiveOrderTerminal() {
   // const [pollingInitialized, setPollingInitialized] = useState(false);
   const [showAudioPrompt, setShowAudioPrompt] = useState(false);
   const { soundEnabled } = useGlobalAppContext();
-  // Live connection status tracking
-  const [isLiveConnected, setIsLiveConnected] = useState(false);
-  const isInitialConnectRef = useRef(true);
-  const isReconnectingRef = useRef(false);
-  const lastHeartbeatRef = useRef(null);
-  const heartbeatTimeoutRef = useRef(null);
-  const eventSourceRef = useRef(null);
-  // App foreground/background detection state (native mobile only)
+  // Polling configuration
+  const POLLING_INTERVALS = {
+    ACTIVE: 5000,    // 5 seconds when app is active
+    IDLE: 15000,     // 15 seconds when no active orders
+  };
+
+  // Polling state tracking
+  const [isPollingActive, setIsPollingActive] = useState(true);
+  const pollingTimeoutRef = useRef(null);
   const lastPollTimeRef = useRef(null);
-  // const pollingTimeoutRef = useRef(null);
-  // const pollingScheduleTimeoutRef = useRef(null);
 
   const { storeProfile, menuId, menuConfig, refreshMenuDataWithToast } =
     useMenuContext();
@@ -113,181 +111,209 @@ export default function LiveOrderTerminal() {
   // Platform detection
   const isNative = isNativeApp();
 
-  // Function to handle heartbeat and update live status
-  const handleHeartbeat = () => {
-    lastHeartbeatRef.current = Date.now();
-    isInitialConnectRef.current = false; // Mark as no longer initial connect (synchronous)
-    isReconnectingRef.current = false; // Mark as no longer reconnecting (synchronous)
-    setIsLiveConnected(true);
-
-    // Clear existing timeout
-    if (heartbeatTimeoutRef.current) {
-      clearTimeout(heartbeatTimeoutRef.current);
+  // Polling function (defined before startPolling to avoid initialization error)
+  const pollingOrders = useCallback(async () => {
+    // Don't poll if app is in background
+    if (!isPollingActive) {
+      return;
     }
 
-    // Set timeout to mark as disconnected if no heartbeat in 45 seconds (30s + 15s buffer)
-    heartbeatTimeoutRef.current = setTimeout(() => {
-      setIsLiveConnected(false);
-      console.log("Live connection timeout - no heartbeat received");
-
-      // Immediately attempt reconnection if EventSource is not working
-      if (!eventSourceRef.current) {
-        console.log("No SSE connection exists, establishing new connection...");
-        connectToSSE();
-      } else if (eventSourceRef.current.readyState !== EventSource.OPEN) {
-        console.log(
-          "SSE connection is closed/connecting, attempting reconnection...",
-        );
-        reconnectSSE();
-      } else {
-        // EventSource shows as OPEN but no heartbeat received - likely a zombie connection
-        console.log(
-          "EventSource shows as OPEN but no heartbeat received (zombie connection), forcing reconnection...",
-          eventSourceRef.current.readyState,
-        );
-        reconnectSSE();
-      }
-    }, 45000);
-  };
-
-  // Function to reset live connection status
-  const resetLiveConnection = () => {
-    setIsLiveConnected(false);
-    isInitialConnectRef.current = false; // Mark as no longer initial connect (synchronous)
-    isReconnectingRef.current = false; // Mark as no longer reconnecting (synchronous)
-    lastHeartbeatRef.current = null;
-    if (heartbeatTimeoutRef.current) {
-      clearTimeout(heartbeatTimeoutRef.current);
-      heartbeatTimeoutRef.current = null;
-    }
-  };
-
-  // Function to close current EventSource connection
-  const closeSSEConnection = () => {
-    if (eventSourceRef.current) {
-      console.log("Closing current SSE connection");
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-  };
-
-  // Function to reconnect SSE
-  const reconnectSSE = async () => {
-    console.log("Reconnecting SSE...");
-    closeSSEConnection();
-    resetLiveConnection();
-
-    // Wait a moment before reconnecting
-    setTimeout(async () => {
-      await connectToSSE();
-    }, 1500);
-  };
-
-  // Function for app foreground reconnection
-  const reconnectSSEForForeground = async () => {
-    console.log("Reconnecting SSE for app foreground...");
-    closeSSEConnection();
-
-    // Reset connection but preserve reconnecting state
-    setIsLiveConnected(false);
-    isInitialConnectRef.current = false;
-    // Keep isReconnectingRef.current = true
-    lastHeartbeatRef.current = null;
-    if (heartbeatTimeoutRef.current) {
-      clearTimeout(heartbeatTimeoutRef.current);
-      heartbeatTimeoutRef.current = null;
-    }
-
-    // Wait a moment before reconnecting
-    setTimeout(async () => {
-      await connectToSSE();
-    }, 1500);
-  };
-
-  // Function to establish SSE connection
-  const connectToSSE = useCallback(async () => {
+    setIsPolling(true);
+    lastPollTimeRef.current = Date.now();
+    
     try {
-      const jwtToken = await getJWTTokenAction();
+      const data = await fetchOrders();
+    const activeOrders = data.filter((order) => {
+      // Include orders that are still in progress - confirmed, preparing, ready
+      if (["confirmed", "preparing", "ready"].includes(order.status)) {
+        return true;
+      } else {
+        // For the rest of the orders(pending, delivered, cancelled)
 
-      eventSourceRef.current = new EventSource(
-        `${process.env.NEXT_PUBLIC_MAIN_APP_URL}/api/order-app/stream?token=${jwtToken}`,
-      );
+        // 1. if the order is cancelled or delivered, then exclude the order
+        if (["cancelled", "delivered"].includes(order.status)) {
+          return false;
+        }
+        // 2. Now only Pending orders are left, so we need to check if the order is cash payment method and still need payment
+        if (
+          order.paymentMethod === "counter-cash" &&
+          order.paymentStatus === "pending"
+        ) {
+          return true;
+        }
+        // 3. If the order is not cash payment method or not pending, then exclude the order
+        return false;
+      }
+    });
+    // toast.success("polling orders");
+    const currentOrderIdsAsSet = new Set(
+      activeOrders.map((order) => order._id),
+    );
+    setOrders(activeOrders);
+    // Check for new orders since last dismissal (not just last poll)
+    const newOrdersSinceLastDismissal = activeOrders.filter(
+      (order) => !lastDismissedIdsRef.current.has(order._id),
+    );
+    // Filter orders that should trigger notifications:
+    // 1. Paid orders (takeaway/dine-in, but not counter paid)
+    // 2. Pending counter orders for dine-in only
+    const notificationWorthyOrders = newOrdersSinceLastDismissal.filter(
+      (order) => {
+        // Case 1: Paid orders (but not counter paid - these don't need immediate attention)
+        if (
+          order.paymentStatus === "paid" &&
+          !isCounterPayment(order.paymentMethod)
+        ) {
+          return true;
+        }
 
-      eventSourceRef.current.addEventListener(
-        "connection-established",
-        async (event) => {
-          const updateData = JSON.parse(event.data);
-          console.log("connection established from SSE:", updateData);
-          console.log("polling orders after connection established");
-          await pollingOrders(); // Add await
-          handleHeartbeat(); // Mark as connected
-          toast.success("Live order is now connected!");
-        },
-      );
+        // Case 2: Pending counter orders for dine-in only (these need payment collection)
+        if (
+          order.paymentStatus === "pending" &&
+          isCounterPayment(order.paymentMethod) &&
+          order.table !== "takeaway"
+        ) {
+          return true;
+        }
 
-      eventSourceRef.current.addEventListener("heartbeat", async (event) => {
-        const updateData = JSON.parse(event.data);
-        console.log("heartbeat from SSE:", updateData);
-        handleHeartbeat(); // Update live status
-        // backup polling orders to prevent cross-instance issues on serverless functions
-        await pollingOrders();
-        console.log("polling orders after heartbeat");
-      });
+        return false;
+      },
+    );
 
-      // Listen for order status updates
-      eventSourceRef.current.addEventListener(
-        "order-status-update",
-        async (event) => {
-          const data = JSON.parse(event.data);
-          console.log("new order status update from SSE:", data);
-          await pollingOrders(); // Add await
-          console.log("polling orders after new order status update");
-        },
-      );
+    // Update count to reflect notification-worthy orders since last dismissal
+    if (notificationWorthyOrders.length > 0) {
+      setNotificationOrderCount(notificationWorthyOrders.length);
+      // Auto-print orders if auto-printing is enabled
+      const autoPrintingEnabled = menuConfig?.autoPrinting?.enabled;
+      if (autoPrintingEnabled && storeProfile && userData?.ownerEmail) {
+        // Filter out orders that have already been printed
+        // Also exclude pending counter orders - they should only print when status changes to "preparing"
+        const unprintedOrders = notificationWorthyOrders.filter((order) => {
+          // Don't auto-print pending counter orders
+          if (
+            order.paymentStatus === "pending" &&
+            isCounterPayment(order.paymentMethod)
+          ) {
+            return false;
+          }
+          return !printedOrderIdsRef.current.has(order._id);
+        });
+        console.log(
+          "printedOrderIds right before filtering:",
+          printedOrderIdsRef.current,
+        );
+        console.log("unprintedOrders", unprintedOrders);
+        // Print only unprinted orders and collect printed IDs
+        const newlyPrintedIds = [];
+        for (const order of unprintedOrders) {
+          try {
+            const printResult = await handlePrintingOrder(order);
+            if (printResult.success) {
+              console.log(
+                `Auto-printed successfully order ${order._id.slice(-6)}:`,
+                printResult,
+              );
+              newlyPrintedIds.push(order._id);
+            } else {
+              console.error(
+                `Error auto-printing order ${order._id}:`,
+                printResult.message,
+              );
+              showCustomToast(
+                "Failed to auto-print order - Double check the printer settings",
+                "error",
+              );
+            }
+          } catch (error) {
+            console.error(`Error auto-printing order ${order._id}:`, error);
+            // Don't block other orders if one fails
+          }
+        }
 
-      // Listen for order paid by card
-      eventSourceRef.current.addEventListener(
-        "new-card-order-paid",
-        async (event) => {
-          const data = JSON.parse(event.data);
-          console.log("new card order paid from SSE:", data);
-          await pollingOrders(); // Add await
-          console.log("polling orders after new card order paid");
-          toast.success("New order");
-        },
-      );
-      // Listen for order paid at counter
-      eventSourceRef.current.addEventListener(
-        "new-order-paid-at-counter",
-        async (event) => {
-          const data = JSON.parse(event.data);
-          console.log("new counter order paid from SSE:", data);
-          await pollingOrders(); // Add await
-          console.log("polling orders after new counter order paid");
-          toast.success("New order!");
-        },
-      );
+        // Update both the ref and state with all newly printed order IDs at once
+        if (newlyPrintedIds.length > 0) {
+          // Update ref immediately (synchronous)
+          newlyPrintedIds.forEach((id) => printedOrderIdsRef.current.add(id));
+          console.log(
+            "Updated printed order ids ref:",
+            printedOrderIdsRef.current,
+          );
+        }
+      }
 
-      eventSourceRef.current.onerror = (error) => {
-        console.error("SSE connection error here:", error);
-        // Check if connection failed immediately
-        // if (eventSource.readyState === EventSource.CLOSED) {
-        //   showCustomToast(
-        //     "Connection failed. Please refresh the page.",
-        //     "error",
-        //   );
-        // }
-        // Don't reset live connection - let EventSource auto-reconnect
-        // The heartbeat timeout will handle marking as offline if truly disconnected
-      };
-
-      eventSourceRef.current.onopen = () => {
-        console.log("SSE connection opened");
-      };
-    } catch (error) {
-      console.error("Failed to connect to SSE:", error);
+      // Only trigger notification if it's not already showing AND view mode is not "preparing"
+      if (!showNotificationRef.current && viewModeRef.current !== "preparing") {
+        console.log("Showing notification");
+        console.log("viewMode in notification", viewModeRef.current);
+        setShowNotification(true);
+        showNotificationRef.current = true; // Update ref immediately
+        playSoundCycle();
+      } else if (viewModeRef.current === "preparing") {
+        // Update dismissed IDs immediately with current activeOrders
+        const newDismissedIds = new Set(activeOrders.map((order) => order._id));
+        setLastDismissedIds(newDismissedIds);
+        lastDismissedIdsRef.current = newDismissedIds;
+        console.log(
+          "Auto-dismissed orders in preparing mode:",
+          newDismissedIds,
+        );
+        console.log("Skipping notification - currently in preparing view mode");
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
+    // Calculate next interval based on order activity
+    const hasActiveOrders = activeOrders.length > 0;
+    const nextInterval = hasActiveOrders 
+      ? POLLING_INTERVALS.ACTIVE 
+      : POLLING_INTERVALS.IDLE;
+    
+    // Schedule next poll only if app is still active
+    if (isPollingActive) {
+      pollingTimeoutRef.current = setTimeout(() => {
+        pollingOrders();
+      }, nextInterval);
+    }
+    
+  } catch (error) {
+    console.error("Polling error:", error);
+    // Retry after error interval
+    if (isPollingActive) {
+      pollingTimeoutRef.current = setTimeout(() => {
+        pollingOrders();
+      }, POLLING_INTERVALS.ACTIVE);
+    }
+  } finally {
+    setIsPolling(false);
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPollingActive]);
+
+  // Start polling (clears any existing timeout to prevent duplicates)
+  const startPolling = useCallback(() => {
+    // Clear any existing polling to prevent overlap
+    if (pollingTimeoutRef.current) {
+      clearTimeout(pollingTimeoutRef.current);
+      pollingTimeoutRef.current = null;
+    }
+    
+    setIsPollingActive(true);
+    
+    // Poll immediately when resuming
+    pollingOrders();
+    
+    // Show toast notification
+    toast.success("Live orders connected!");
+  }, [pollingOrders]);
+
+  // Stop polling when app goes to background
+  const stopPolling = useCallback(() => {
+    setIsPollingActive(false);
+    
+    // Clear any scheduled polls
+    if (pollingTimeoutRef.current) {
+      clearTimeout(pollingTimeoutRef.current);
+      pollingTimeoutRef.current = null;
+    }
   }, []);
 
   // Function to check if polling is actually working
@@ -841,162 +867,21 @@ export default function LiveOrderTerminal() {
     loadInitialOrders();
   }, []);
 
+  // Initialize polling on mount (replace SSE connection effect)
   useEffect(() => {
     if (!session?.user?.id) return;
-
-    connectToSSE();
-
-    // Cleanup function to close the connection
+    
+    // Start polling when component mounts
+    startPolling();
+    
+    // Cleanup on unmount
     return () => {
-      closeSSEConnection();
-      resetLiveConnection(); // Reset live status on cleanup
+      stopPolling();
+      if (pollingTimeoutRef.current) {
+        clearTimeout(pollingTimeoutRef.current);
+      }
     };
-  }, [session?.user?.id, connectToSSE]);
-
-  const pollingOrders = async () => {
-    setIsPolling(true);
-    const data = await fetchOrders();
-    const activeOrders = data.filter((order) => {
-      // Include orders that are still in progress - confirmed, preparing, ready
-      if (["confirmed", "preparing", "ready"].includes(order.status)) {
-        return true;
-      } else {
-        // For the rest of the orders(pending, delivered, cancelled)
-
-        // 1. if the order is cancelled or delivered, then exclude the order
-        if (["cancelled", "delivered"].includes(order.status)) {
-          return false;
-        }
-        // 2. Now only Pending orders are left, so we need to check if the order is cash payment method and still need payment
-        if (
-          order.paymentMethod === "counter-cash" &&
-          order.paymentStatus === "pending"
-        ) {
-          return true;
-        }
-        // 3. If the order is not cash payment method or not pending, then exclude the order
-        return false;
-      }
-    });
-    // toast.success("polling orders");
-    const currentOrderIdsAsSet = new Set(
-      activeOrders.map((order) => order._id),
-    );
-    setOrders(activeOrders);
-    // Check for new orders since last dismissal (not just last poll)
-    const newOrdersSinceLastDismissal = activeOrders.filter(
-      (order) => !lastDismissedIdsRef.current.has(order._id),
-    );
-    // Filter orders that should trigger notifications:
-    // 1. Paid orders (takeaway/dine-in, but not counter paid)
-    // 2. Pending counter orders for dine-in only
-    const notificationWorthyOrders = newOrdersSinceLastDismissal.filter(
-      (order) => {
-        // Case 1: Paid orders (but not counter paid - these don't need immediate attention)
-        if (
-          order.paymentStatus === "paid" &&
-          !isCounterPayment(order.paymentMethod)
-        ) {
-          return true;
-        }
-
-        // Case 2: Pending counter orders for dine-in only (these need payment collection)
-        if (
-          order.paymentStatus === "pending" &&
-          isCounterPayment(order.paymentMethod) &&
-          order.table !== "takeaway"
-        ) {
-          return true;
-        }
-
-        return false;
-      },
-    );
-
-    // Update count to reflect notification-worthy orders since last dismissal
-    if (notificationWorthyOrders.length > 0) {
-      setNotificationOrderCount(notificationWorthyOrders.length);
-
-      // Auto-print orders if auto-printing is enabled
-      const autoPrintingEnabled = menuConfig?.autoPrinting?.enabled;
-      if (autoPrintingEnabled && storeProfile && userData?.ownerEmail) {
-        // Filter out orders that have already been printed
-        // Also exclude pending counter orders - they should only print when status changes to "preparing"
-        const unprintedOrders = notificationWorthyOrders.filter((order) => {
-          // Don't auto-print pending counter orders
-          if (
-            order.paymentStatus === "pending" &&
-            isCounterPayment(order.paymentMethod)
-          ) {
-            return false;
-          }
-          return !printedOrderIdsRef.current.has(order._id);
-        });
-        console.log(
-          "printedOrderIds right before filtering:",
-          printedOrderIdsRef.current,
-        );
-        console.log("unprintedOrders", unprintedOrders);
-        // Print only unprinted orders and collect printed IDs
-        const newlyPrintedIds = [];
-        for (const order of unprintedOrders) {
-          try {
-            const printResult = await handlePrintingOrder(order);
-            if (printResult.success) {
-              console.log(
-                `Auto-printed successfully order ${order._id.slice(-6)}:`,
-                printResult,
-              );
-              newlyPrintedIds.push(order._id);
-            } else {
-              console.error(
-                `Error auto-printing order ${order._id}:`,
-                printResult.message,
-              );
-              showCustomToast(
-                "Failed to auto-print order - Double check the printer settings",
-                "error",
-              );
-            }
-          } catch (error) {
-            console.error(`Error auto-printing order ${order._id}:`, error);
-            // Don't block other orders if one fails
-          }
-        }
-
-        // Update both the ref and state with all newly printed order IDs at once
-        if (newlyPrintedIds.length > 0) {
-          // Update ref immediately (synchronous)
-          newlyPrintedIds.forEach((id) => printedOrderIdsRef.current.add(id));
-          console.log(
-            "Updated printed order ids ref:",
-            printedOrderIdsRef.current,
-          );
-        }
-      }
-
-      // Only trigger notification if it's not already showing AND view mode is not "preparing"
-      if (!showNotificationRef.current && viewModeRef.current !== "preparing") {
-        console.log("Showing notification");
-        console.log("viewMode in notification", viewModeRef.current);
-        setShowNotification(true);
-        showNotificationRef.current = true; // Update ref immediately
-        playSoundCycle();
-      } else if (viewModeRef.current === "preparing") {
-        // Update dismissed IDs immediately with current activeOrders
-        const newDismissedIds = new Set(activeOrders.map((order) => order._id));
-        setLastDismissedIds(newDismissedIds);
-        lastDismissedIdsRef.current = newDismissedIds;
-        console.log(
-          "Auto-dismissed orders in preparing mode:",
-          newDismissedIds,
-        );
-        console.log("Skipping notification - currently in preparing view mode");
-      }
-    }
-
-    setIsPolling(false);
-  };
+  }, [session?.user?.id, startPolling, stopPolling]);
 
   // Function to handle notification dismissal
   const handleNotificationDismiss = () => {
@@ -1222,52 +1107,62 @@ export default function LiveOrderTerminal() {
   //   };
   // }, [lastDismissedIds, pollingInitialized]);
 
-  // Separate useEffect for unmount cleanup
-  useEffect(() => {
-    return () => {
-      if (cleanupRef.current) {
-        cleanupRef.current();
-      }
-    };
-  }, []); // Only runs on unmount
+  // Removed unused cleanup effect
 
-  // Effect to detect app foreground/background state using Capacitor App plugin
+  // Handle app foreground/background (replace existing SSE handler)
   useEffect(() => {
-    if (!isNative) {
-      console.log("Not native app, skipping app state detection");
-      return;
-    }
-
-    const handleAppStateChange = async ({ isActive }) => {
-      if (isActive) {
-        try {
-          toast.success("App returned to foreground, reconnecting...");
-          isReconnectingRef.current = true; // Mark as reconnecting
-          setIsLiveConnected(false);
-          await reconnectSSEForForeground(); // Use dedicated function
-        } catch (error) {
-          showCustomToast(
-            "Error reconnecting on app foreground, reload the app",
-            "error",
-          );
+    let appStateListener = null;
+    
+    if (isNative) {
+      // Native app: Use Capacitor App plugin
+      const handleAppStateChange = async ({ isActive }) => {
+        console.log("App state changed:", isActive ? "foreground" : "background");
+        
+        if (isActive) {
+          // App came to foreground - resume polling
+          console.log("App returned to foreground, resuming polling...");
+          startPolling();
+        } else {
+          // App went to background - stop polling
+          console.log("App went to background, pausing polling...");
+          stopPolling();
         }
-      } else {
-        console.log("App went to background");
+      };
+      
+      appStateListener = App.addListener("appStateChange", handleAppStateChange);
+      
+    } else {
+      // Web: Use Page Visibility API
+      const handleVisibilityChange = () => {
+        const isVisible = !document.hidden;
+        console.log("Page visibility changed:", isVisible ? "visible" : "hidden");
+        
+        if (isVisible) {
+          // Page became visible - resume polling
+          console.log("Page became visible, resuming polling...");
+          startPolling();
+        } else {
+          // Page became hidden - stop polling
+          console.log("Page became hidden, pausing polling...");
+          stopPolling();
+        }
+      };
+      
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+      
+      // Cleanup for web
+      return () => {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      };
+    }
+    
+    // Cleanup for native
+    return () => {
+      if (appStateListener) {
+        appStateListener.remove();
       }
     };
-
-    // Set up native app state listener
-    const appStateListener = App.addListener(
-      "appStateChange",
-      handleAppStateChange,
-    );
-
-    // Cleanup function
-    return () => {
-      console.log("Cleaning up app state listener");
-      appStateListener.remove();
-    };
-  }, [isNative]);
+  }, [isNative, startPolling, stopPolling]);
 
   // Separate useEffect to log when state actually changes
   // useEffect(() => {
@@ -1441,7 +1336,6 @@ export default function LiveOrderTerminal() {
   useEffect(() => {
     return () => {
       stopSoundCycle();
-      resetLiveConnection(); // Clean up heartbeat tracking
     };
   }, []);
 
@@ -2204,61 +2098,7 @@ export default function LiveOrderTerminal() {
           </div>
         )}
 
-        {/* Offline/Connecting Overlay */}
-        {!isLiveConnected && (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
-            <div className="mx-4 max-w-md rounded-xl bg-white p-8 text-center shadow-2xl">
-              {/* Icon */}
-              <div
-                className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full ${
-                  isInitialConnectRef.current || isReconnectingRef.current
-                    ? "bg-blue-100"
-                    : "bg-red-100"
-                }`}
-              >
-                <div
-                  className={`h-8 w-8 rounded-full ${
-                    isInitialConnectRef.current || isReconnectingRef.current
-                      ? "animate-pulse bg-blue-500"
-                      : "bg-red-500"
-                  }`}
-                ></div>
-              </div>
-
-              {/* Title */}
-              <h2 className="mb-2 text-2xl font-bold text-gray-900">
-                {isInitialConnectRef.current
-                  ? "Connecting to Live Server"
-                  : isReconnectingRef.current
-                    ? "Reconnecting to Live Server"
-                    : "Connection Lost"}
-              </h2>
-
-              {/* Status */}
-              <div
-                className={`rounded-lg p-4 ${
-                  isInitialConnectRef.current || isReconnectingRef.current
-                    ? "bg-blue-50"
-                    : "bg-red-50"
-                }`}
-              >
-                <p
-                  className={`mt-2 text-sm ${
-                    isInitialConnectRef.current || isReconnectingRef.current
-                      ? "text-blue-600"
-                      : "text-red-600"
-                  }`}
-                >
-                  {isInitialConnectRef.current
-                    ? "Establishing connection to receive live orders..."
-                    : isReconnectingRef.current
-                      ? "Re-establishing connection to receive live orders..."
-                      : "Attempting to reconnect automatically..."}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Removed offline overlay - using simple polling now */}
 
         {/* header */}
         <div className="flex items-start justify-between">
@@ -2277,20 +2117,20 @@ export default function LiveOrderTerminal() {
                 {storeProfile?.storeName || "Store Name"}
               </h1> */}
             </div>
-            {/* Live Status Indicator */}
+            {/* Polling Status Indicator */}
             <div
               className={`hidden h-auto items-center gap-2 rounded-lg px-3 py-1 text-sm font-medium transition-colors md:flex ${
-                isLiveConnected
+                isPollingActive
                   ? "bg-neutral-700 text-green-500"
                   : "bg-red-100 text-red-800"
               }`}
             >
               <div
                 className={`h-3 w-3 rounded-full ${
-                  isLiveConnected ? "animate-pulse bg-green-500" : "bg-red-500"
+                  isPollingActive ? "animate-pulse bg-green-500" : "bg-red-500"
                 }`}
               ></div>
-              <span>{isLiveConnected ? "LIVE" : "OFFLINE"}</span>
+              <span>{isPollingActive ? "LIVE" : "OFFLINE"}</span>
             </div>
             {/* Button for controlling online orders */}
             <OnlineOrderControlButton />
