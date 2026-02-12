@@ -513,7 +513,7 @@ export default function LiveOrderTerminal() {
     }
   };
 
-  // Payment method selection modal
+  // UI Components: Payment method selection modal
   const PaymentMethodModal = () => {
     const handlePaymentMethodSelect = (method) => {
       const paymentMethod = method === "cash" ? "counter-cash" : "counter-card";
@@ -645,7 +645,7 @@ export default function LiveOrderTerminal() {
     );
   };
 
-  // Printer selection modal
+  // UI Components: Printer selection modal
   const PrinterSelectionModal = () => {
     const handleClose = () => {
       setShowPrinterSelectionModal({
@@ -728,6 +728,7 @@ export default function LiveOrderTerminal() {
   };
 
   // Date picker modal
+  // UI Components: Date picker modal
   const DatePickerModal = () => {
     if (!showDatePicker) return null;
 
@@ -843,20 +844,23 @@ export default function LiveOrderTerminal() {
             if (["cancelled", "delivered"].includes(order.status)) {
               return false;
             }
-            // 2. Now only Pending orders are left, so we need to check if the order is cash payment method and still need payment
+            // 2. Now only Pending orders are left, so we need to check if the order is counter payment method and still need payment
             if (
-              order.paymentMethod === "counter-cash" &&
+              isCounterPayment(order.paymentMethod) &&
               order.paymentStatus === "pending"
             ) {
               return true;
             }
-            // 3. If the order is not cash payment method or not pending, then exclude the order
+            // 3. If the order is not counter payment method or not pending, then exclude the order
             return false;
           }
         });
         setOrders(activeOrders);
         console.log("activeOrders initial", activeOrders);
-        setLastDismissedIds(new Set(activeOrders.map((order) => order._id)));
+        // Update both state and ref immediately to prevent notifications for existing orders
+        const initialDismissedIds = new Set(activeOrders.map((order) => order._id));
+        setLastDismissedIds(initialDismissedIds);
+        lastDismissedIdsRef.current = initialDismissedIds; // Sync ref immediately
         setLoading(false);
       } catch (error) {
         setLoading(false);
@@ -868,10 +872,12 @@ export default function LiveOrderTerminal() {
   }, []);
 
   // Initialize polling on mount (replace SSE connection effect)
+  // Wait for initial orders to load before starting polling to prevent duplicate notifications
   useEffect(() => {
     if (!session?.user?.id) return;
+    if (loading) return; // Wait for initial orders to load first
     
-    // Start polling when component mounts
+    // Start polling after initial orders are loaded
     startPolling();
     
     // Cleanup on unmount
@@ -881,7 +887,7 @@ export default function LiveOrderTerminal() {
         clearTimeout(pollingTimeoutRef.current);
       }
     };
-  }, [session?.user?.id, startPolling, stopPolling]);
+  }, [session?.user?.id, loading, startPolling, stopPolling]);
 
   // Function to handle notification dismissal
   const handleNotificationDismiss = () => {
