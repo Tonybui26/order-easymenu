@@ -2,7 +2,7 @@
 
 import { updateMenuConfig, fetchGetMenuByOwnerEmail } from "@/lib/api/fetchApi";
 import { useSkipInitialEffect } from "@/lib/hooks/useSkipInitialEffect";
-import { useEffect, useState, createContext, useContext } from "react";
+import { useEffect, useState, createContext, useContext, useRef } from "react";
 import toast from "react-hot-toast";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 
@@ -12,6 +12,8 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   const { userData } = useGlobalAppContext();
   const [dataLoaded, setDataLoaded] = useState(!!menuData);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // Ref to track if we're loading initial data to prevent save toast
+  const isInitialLoadRef = useRef(false);
 
   const [menuConfig, setMenuConfig] = useState(
     (menuData && menuData.config) || {},
@@ -42,6 +44,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
       // Only fetch if we don't have data AND we have a session
 
       try {
+        isInitialLoadRef.current = true; // Set flag before fetching to prevent save toast
         console.log("Fetching menu data client-side...");
         const data = await fetchGetMenuByOwnerEmail(userData.ownerEmail);
 
@@ -64,6 +67,11 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
       } catch (error) {
         console.error("Error fetching menu data:", error);
         setDataLoaded(true); // Mark as loaded even on error to prevent infinite retries
+      } finally {
+        // Reset flag after a short delay to allow state updates to complete
+        setTimeout(() => {
+          isInitialLoadRef.current = false;
+        }, 100);
       }
     };
     if (!dataLoaded && userData?.ownerEmail) {
@@ -171,9 +179,9 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
 
   // Use the effect for database update when menu config changes
   useSkipInitialEffect(() => {
-    // Skip if we're currently refreshing to prevent double toast
-    if (isRefreshing) {
-      console.log("⏸️ Skipping save - currently refreshing menu data");
+    // Skip if we're currently refreshing or loading initial data to prevent double toast
+    if (isRefreshing || isInitialLoadRef.current) {
+      console.log("⏸️ Skipping save - currently refreshing/loading menu data");
       return;
     }
 
