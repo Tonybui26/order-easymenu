@@ -94,14 +94,21 @@ export default function LiveOrderTerminal() {
   const { soundEnabled } = useGlobalAppContext();
   // Polling configuration
   const POLLING_INTERVALS = {
-    ACTIVE: 5000,    // 5 seconds when app is active
-    IDLE: 15000,     // 15 seconds when no active orders
+    ACTIVE: 10000,    // 10 seconds when app is active
+    IDLE: 30000,     // 30 seconds when no active orders
+    ERROR_BASE: 20000, // Base interval for errors (20 seconds)
+    ERROR_MAX: 60000,  // Max interval for errors (60 seconds)
   };
 
   // Polling state tracking
   const [isPollingActive, setIsPollingActive] = useState(true);
+  const [isOnline, setIsOnline] = useState(true);
+  const [consecutiveErrors, setConsecutiveErrors] = useState(0);
+  const consecutiveErrorsRef = useRef(0); // Ref for use in callbacks
   const pollingTimeoutRef = useRef(null);
   const lastPollTimeRef = useRef(null);
+  const hasShownConnectedToastRef = useRef(false); // Track if we've shown the connected toast
+  const isPollingInProgressRef = useRef(false); // Prevent concurrent polling instances
 
   const { storeProfile, menuId, menuConfig, refreshMenuDataWithToast } =
     useMenuContext();
@@ -117,7 +124,15 @@ export default function LiveOrderTerminal() {
     if (!isPollingActive) {
       return;
     }
-
+    
+    // Prevent concurrent polling instances
+    if (isPollingInProgressRef.current) {
+      console.log("Polling already in progress, skipping...");
+      return;
+    }
+    
+    // Mark as in progress
+    isPollingInProgressRef.current = true;
     setIsPolling(true);
     lastPollTimeRef.current = Date.now();
     
@@ -150,6 +165,27 @@ export default function LiveOrderTerminal() {
       activeOrders.map((order) => order._id),
     );
     setOrders(activeOrders);
+    
+    // Reset error tracking on successful poll
+    const hadErrors = consecutiveErrorsRef.current > 0;
+    const wasOffline = !isOnline;
+    
+    if (hadErrors) {
+      consecutiveErrorsRef.current = 0;
+      setConsecutiveErrors(0);
+      setIsOnline(true);
+      // Show reconnection toast if we were offline
+      if (wasOffline) {
+        toast.success("Connection restored!", { duration: 2000 });
+      }
+    }
+    
+    // Show connected toast on first successful poll after starting
+    if (!hasShownConnectedToastRef.current) {
+      hasShownConnectedToastRef.current = true;
+      toast.success("Live orders connected!", { duration: 2000 });
+    }
+    
     // Check for new orders since last dismissal (not just last poll)
     const newOrdersSinceLastDismissal = activeOrders.filter(
       (order) => !lastDismissedIdsRef.current.has(order._id),
@@ -209,12 +245,12 @@ export default function LiveOrderTerminal() {
           try {
             const printResult = await handlePrintingOrder(order);
             if (printResult.success) {
-              console.log(
+        console.log(
                 `Auto-printed successfully order ${order._id.slice(-6)}:`,
                 printResult,
               );
               newlyPrintedIds.push(order._id);
-            } else {
+      } else {
               console.error(
                 `Error auto-printing order ${order._id}:`,
                 printResult.message,
@@ -234,7 +270,7 @@ export default function LiveOrderTerminal() {
         if (newlyPrintedIds.length > 0) {
           // Update ref immediately (synchronous)
           newlyPrintedIds.forEach((id) => printedOrderIdsRef.current.add(id));
-          console.log(
+        console.log(
             "Updated printed order ids ref:",
             printedOrderIdsRef.current,
           );
@@ -269,6 +305,10 @@ export default function LiveOrderTerminal() {
     
     // Schedule next poll only if app is still active
     if (isPollingActive) {
+      // Clear any existing timeout before scheduling new one
+      if (pollingTimeoutRef.current) {
+        clearTimeout(pollingTimeoutRef.current);
+      }
       pollingTimeoutRef.current = setTimeout(() => {
         pollingOrders();
       }, nextInterval);
@@ -276,21 +316,78 @@ export default function LiveOrderTerminal() {
     
   } catch (error) {
     console.error("Polling error:", error);
-    // Retry after error interval
+    
+    // Check if it's a network error
+    const isNetworkError = 
+      error.message?.includes('fetch') ||
+      error.message?.includes('network') ||
+      error.message?.includes('Failed to fetch') ||
+      !navigator.onLine;
+    
+    // Update online status
+    setIsOnline(navigator.onLine);
+    
+    // Increment consecutive errors for network issues
+    if (isNetworkError) {
+      consecutiveErrorsRef.current += 1;
+      setConsecutiveErrors(consecutiveErrorsRef.current);
+    } else {
+      // Reset on non-network errors (might be temporary server issues)
+      consecutiveErrorsRef.current = Math.max(0, consecutiveErrorsRef.current - 1);
+      setConsecutiveErrors(consecutiveErrorsRef.current);
+    }
+    
+    // Calculate exponential backoff for network errors
+    // Formula: min(ERROR_BASE * 2^errors, ERROR_MAX)
+    const errorCount = isNetworkError ? consecutiveErrorsRef.current : 1;
+    const backoffInterval = Math.min(
+      POLLING_INTERVALS.ERROR_BASE * Math.pow(2, Math.min(errorCount - 1, 4)),
+      POLLING_INTERVALS.ERROR_MAX
+    );
+    
+    // Retry after calculated interval (will keep retrying until success)
     if (isPollingActive) {
+      console.log(
+        `Polling failed (attempt ${consecutiveErrorsRef.current}). Retrying in ${backoffInterval / 1000}s...`
+      );
+      
+      // Clear any existing timeout before scheduling new one
+      if (pollingTimeoutRef.current) {
+        clearTimeout(pollingTimeoutRef.current);
+      }
       pollingTimeoutRef.current = setTimeout(() => {
-        pollingOrders();
-      }, POLLING_INTERVALS.ACTIVE);
+        pollingOrders(); // This will retry, and if it fails again, it will retry again
+      }, backoffInterval);
+      
+      // Show user feedback for network errors
+      if (isNetworkError && consecutiveErrorsRef.current === 1) {
+        // Only show toast on first network error to avoid spam
+        toast.error("Connection lost. Retrying...", { duration: 3000 });
+      } else if (isNetworkError && consecutiveErrorsRef.current > 1 && consecutiveErrorsRef.current % 3 === 0) {
+        // Show periodic updates every 3 retries to let user know it's still trying
+        toast.error(
+          `Still retrying... (attempt ${consecutiveErrorsRef.current})`,
+          { duration: 2000 }
+        );
+      }
     }
   } finally {
     setIsPolling(false);
+    // Clear the in-progress flag
+    isPollingInProgressRef.current = false;
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPollingActive]);
 
   // Start polling (clears any existing timeout to prevent duplicates)
   const startPolling = useCallback(() => {
-    // Clear any existing polling to prevent overlap
+    // Don't start if already polling
+    if (isPollingInProgressRef.current) {
+      console.log("Polling already in progress, not starting new instance");
+      return;
+    }
+    
+    // Clear any existing polling timeout to prevent overlap
     if (pollingTimeoutRef.current) {
       clearTimeout(pollingTimeoutRef.current);
       pollingTimeoutRef.current = null;
@@ -298,11 +395,13 @@ export default function LiveOrderTerminal() {
     
     setIsPollingActive(true);
     
-    // Poll immediately when resuming
-    pollingOrders();
+    // Reset the connected toast flag so it shows after successful poll
+    hasShownConnectedToastRef.current = false;
     
-    // Show toast notification
-    toast.success("Live orders connected!");
+    // Poll immediately when resuming (only if not already polling)
+    if (!isPollingInProgressRef.current) {
+      pollingOrders();
+    }
   }, [pollingOrders]);
 
   // Stop polling when app goes to background
@@ -314,6 +413,9 @@ export default function LiveOrderTerminal() {
       clearTimeout(pollingTimeoutRef.current);
       pollingTimeoutRef.current = null;
     }
+    
+    // Note: Don't clear isPollingInProgressRef here because the current poll
+    // should be allowed to finish. It will check isPollingActive and return early.
   }, []);
 
   // Function to check if polling is actually working
@@ -876,10 +978,10 @@ export default function LiveOrderTerminal() {
   useEffect(() => {
     if (!session?.user?.id) return;
     if (loading) return; // Wait for initial orders to load first
-    
+
     // Start polling after initial orders are loaded
     startPolling();
-    
+
     // Cleanup on unmount
     return () => {
       stopPolling();
@@ -1118,13 +1220,13 @@ export default function LiveOrderTerminal() {
   // Handle app foreground/background (replace existing SSE handler)
   useEffect(() => {
     let appStateListener = null;
-    
+
     if (isNative) {
       // Native app: Use Capacitor App plugin
-      const handleAppStateChange = async ({ isActive }) => {
+    const handleAppStateChange = async ({ isActive }) => {
         console.log("App state changed:", isActive ? "foreground" : "background");
         
-        if (isActive) {
+      if (isActive) {
           // App came to foreground - resume polling
           console.log("App returned to foreground, resuming polling...");
           startPolling();
@@ -1137,7 +1239,7 @@ export default function LiveOrderTerminal() {
       
       appStateListener = App.addListener("appStateChange", handleAppStateChange);
       
-    } else {
+      } else {
       // Web: Use Page Visibility API
       const handleVisibilityChange = () => {
         const isVisible = !document.hidden;
@@ -1157,7 +1259,7 @@ export default function LiveOrderTerminal() {
       document.addEventListener("visibilitychange", handleVisibilityChange);
       
       // Cleanup for web
-      return () => {
+    return () => {
         document.removeEventListener("visibilitychange", handleVisibilityChange);
       };
     }
@@ -1165,10 +1267,52 @@ export default function LiveOrderTerminal() {
     // Cleanup for native
     return () => {
       if (appStateListener) {
-        appStateListener.remove();
+      appStateListener.remove();
       }
     };
   }, [isNative, startPolling, stopPolling]);
+
+  // Network connectivity detection and recovery
+  useEffect(() => {
+    // Set initial online status
+    setIsOnline(navigator.onLine);
+    
+    const handleOnline = () => {
+      console.log("Network connection restored");
+      setIsOnline(true);
+      consecutiveErrorsRef.current = 0;
+      setConsecutiveErrors(0);
+      
+      // If polling is active, poll immediately to catch up on missed orders
+      if (isPollingActive && !isPolling && !isPollingInProgressRef.current) {
+        // Clear any pending retry
+        if (pollingTimeoutRef.current) {
+          clearTimeout(pollingTimeoutRef.current);
+          pollingTimeoutRef.current = null;
+        }
+        // Reset the connected toast flag so it shows after successful poll
+        hasShownConnectedToastRef.current = false;
+        // Poll immediately - toast will show after successful poll
+        pollingOrders();
+      }
+    };
+    
+    const handleOffline = () => {
+      console.log("Network connection lost");
+      setIsOnline(false);
+      toast.error("Connection lost. Will retry when connection is restored.", { duration: 4000 });
+    };
+    
+    // Listen for online/offline events
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [isPollingActive, isPolling, pollingOrders]);
 
   // Separate useEffect to log when state actually changes
   // useEffect(() => {
@@ -2104,7 +2248,120 @@ export default function LiveOrderTerminal() {
           </div>
         )}
 
-        {/* Removed offline overlay - using simple polling now */}
+        {/* Polling Status Modal - Shows connection issues and retry status */}
+        {(!isOnline || consecutiveErrors > 0) && isPollingActive && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm">
+            <div className="mx-4 max-w-md rounded-2xl bg-white p-8 text-center shadow-2xl">
+              {/* Status Icon */}
+              <div className="relative mx-auto mb-6 flex h-24 w-24 items-center justify-center">
+                {!isOnline ? (
+                  // Offline - Red pulsing circle
+                  <>
+                    <span
+                      className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-30"
+                      style={{ animationDuration: "2s" }}
+                    ></span>
+                    <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-red-100">
+                      <div className="flex flex-col items-center">
+                        <div className="mb-1 text-4xl">📡</div>
+                        <div className="h-2 w-2 rounded-full bg-red-500"></div>
+                      </div>
+                    </div>
+                  </>
+                ) : consecutiveErrors > 0 ? (
+                  // Retrying - Yellow/Orange pulsing circle
+                  <>
+                    <span
+                      className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-500 opacity-30"
+                      style={{ animationDuration: "1.5s" }}
+                    ></span>
+                    <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-yellow-100">
+                      <div className="flex flex-col items-center">
+                        <div className="mb-1 text-4xl animate-spin" style={{ animationDuration: "2s" }}>
+                          🔄
+                        </div>
+                        <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+
+              {/* Status Title */}
+              <h2
+                className={`mb-3 text-2xl font-bold ${
+                  !isOnline
+                    ? "text-red-600"
+                    : consecutiveErrors > 0
+                      ? "text-yellow-600"
+                      : "text-gray-900"
+                }`}
+              >
+                {!isOnline
+                  ? "Connection Lost"
+                  : consecutiveErrors > 0
+                    ? "Retrying Connection"
+                    : "Connecting"}
+              </h2>
+
+              {/* Status Message */}
+              <div
+                className={`mb-4 rounded-lg p-4 ${
+                  !isOnline
+                    ? "bg-red-50"
+                    : consecutiveErrors > 0
+                      ? "bg-yellow-50"
+                      : "bg-blue-50"
+                }`}
+              >
+                <p
+                  className={`text-sm ${
+                    !isOnline
+                      ? "text-red-600"
+                      : consecutiveErrors > 0
+                        ? "text-yellow-700"
+                        : "text-blue-600"
+                  }`}
+                >
+                  {!isOnline
+                    ? "No network connection detected. The app will automatically retry when connection is restored."
+                    : consecutiveErrors > 0
+                      ? `Attempting to reconnect... (Attempt ${consecutiveErrors})`
+                      : "Establishing connection..."}
+                </p>
+              </div>
+
+              {/* Retry Info */}
+              {consecutiveErrors > 0 && (
+                <div className="mt-4 text-xs text-gray-500">
+                  {consecutiveErrors === 1
+                    ? "Retrying in 10 seconds..."
+                    : consecutiveErrors === 2
+                      ? "Retrying in 20 seconds..."
+                      : consecutiveErrors === 3
+                        ? "Retrying in 40 seconds..."
+                        : "Retrying every 60 seconds..."}
+                </div>
+              )}
+
+              {/* Connection Status Indicator */}
+              <div className="mt-6 flex items-center justify-center gap-2 text-sm text-gray-600">
+                <div
+                  className={`h-2 w-2 rounded-full ${
+                    !isOnline ? "bg-red-500" : "bg-yellow-500 animate-pulse"
+                  }`}
+                ></div>
+                <span>
+                  {!isOnline
+                    ? "Offline"
+                    : consecutiveErrors > 0
+                      ? "Reconnecting"
+                      : "Connecting"}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* header */}
         <div className="flex items-start justify-between">
@@ -2126,17 +2383,31 @@ export default function LiveOrderTerminal() {
             {/* Polling Status Indicator */}
             <div
               className={`hidden h-auto items-center gap-2 rounded-lg px-3 py-1 text-sm font-medium transition-colors md:flex ${
-                isPollingActive
+                isPollingActive && isOnline
                   ? "bg-neutral-700 text-green-500"
-                  : "bg-red-100 text-red-800"
+                  : !isOnline || consecutiveErrors > 0
+                    ? "bg-red-100 text-red-800"
+                    : "bg-yellow-100 text-yellow-800"
               }`}
             >
               <div
                 className={`h-3 w-3 rounded-full ${
-                  isPollingActive ? "animate-pulse bg-green-500" : "bg-red-500"
+                  isPollingActive && isOnline
+                    ? "animate-pulse bg-green-500"
+                    : !isOnline || consecutiveErrors > 0
+                      ? "bg-red-500"
+                      : "bg-yellow-500"
                 }`}
               ></div>
-              <span>{isPollingActive ? "LIVE" : "OFFLINE"}</span>
+              <span>
+                {!isOnline
+                  ? "OFFLINE"
+                  : consecutiveErrors > 0
+                    ? "CONNECTING"
+                    : isPollingActive
+                      ? "LIVE"
+                      : "OFFLINE"}
+              </span>
             </div>
             {/* Button for controlling online orders */}
             <OnlineOrderControlButton />
