@@ -54,7 +54,7 @@ export default function VersionBanner() {
     // Poll every 60 seconds
     pollIntervalRef.current = setInterval(() => {
       checkVersion();
-      console.log(" polling version");
+      console.log(" polling version testing script");
     }, 10000);
     
     return () => {
