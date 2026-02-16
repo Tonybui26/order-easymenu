@@ -27,13 +27,14 @@ export default function VersionBanner() {
       
       const data = await response.json();
       const currentBuildId = data.buildId;
-      
+
+      console.log("currentBuildId", currentBuildId);
       // Set initial build ID on first check
       if (initialBuildIdRef.current === null) {
         initialBuildIdRef.current = currentBuildId;
+        console.log("initialBuildIdRef", initialBuildIdRef.current);
         return;
       }
-      
       // Show banner if build ID changed and not dismissed
       if (
         currentBuildId !== initialBuildIdRef.current &&
