@@ -7,6 +7,7 @@ import { NextAuthOptions } from "@/lib/auth/nextAuthOptions";
 import { MenuContextProvider } from "@/components/context/MenuContext";
 import { fetchGetMenuByOwnerEmail } from "@/lib/api/fetchApi";
 import { Toaster } from "react-hot-toast";
+import VersionBanner from "@/components/VersionBanner";
 
 const inter = Inter({
   weight: ["400", "500", "600", "700", "800", "900"],
@@ -34,6 +35,7 @@ export default async function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={`${inter.className} min-h-[100vh] antialiased`}>
+        <VersionBanner />
         <NextAuthProvider>
           <GlobalAppContextProvider userData={user}>
             <MenuContextProvider data={menuData}>
