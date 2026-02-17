@@ -52,11 +52,11 @@ export default function VersionBanner() {
     // Initial check
     checkVersion();
     
-    // Poll every 60 seconds
+    // Poll every 5 minutes
     pollIntervalRef.current = setInterval(() => {
       checkVersion();
       console.log(" polling version testing script");
-    }, 10000);
+    }, 300000);
     
     return () => {
       if (pollIntervalRef.current) {
