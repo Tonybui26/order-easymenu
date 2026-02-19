@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "order.goeasy.menu",
+  appId: "menu.order.goeasy.menu",
   appName: "Order Manager by GoEasyMenu",
   webDir: ".next",
   server: {

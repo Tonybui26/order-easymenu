@@ -1,0 +1,46 @@
+PODS:
+  - Capacitor (7.4.3):
+    - CapacitorCordova
+  - CapacitorApp (7.1.0):
+    - Capacitor
+  - CapacitorCordova (7.4.3)
+  - CapacitorNetwork (7.0.2):
+    - Capacitor
+  - CapacitorSplashScreen (7.0.2):
+    - Capacitor
+  - PrinterTcpSocket (0.0.1):
+    - Capacitor
+
+DEPENDENCIES:
+  - "Capacitor (from `../../node_modules/@capacitor/ios`)"
+  - "CapacitorApp (from `../../node_modules/@capacitor/app`)"
+  - "CapacitorCordova (from `../../node_modules/@capacitor/ios`)"
+  - "CapacitorNetwork (from `../../node_modules/@capacitor/network`)"
+  - "CapacitorSplashScreen (from `../../node_modules/@capacitor/splash-screen`)"
+  - PrinterTcpSocket (from `../../printer-tcp-socket`)
+
+EXTERNAL SOURCES:
+  Capacitor:
+    :path: "../../node_modules/@capacitor/ios"
+  CapacitorApp:
+    :path: "../../node_modules/@capacitor/app"
+  CapacitorCordova:
+    :path: "../../node_modules/@capacitor/ios"
+  CapacitorNetwork:
+    :path: "../../node_modules/@capacitor/network"
+  CapacitorSplashScreen:
+    :path: "../../node_modules/@capacitor/splash-screen"
+  PrinterTcpSocket:
+    :path: "../../printer-tcp-socket"
+
+SPEC CHECKSUMS:
+  Capacitor: 28d6c01026a9a3f7156529498ec1f389a2a28dbc
+  CapacitorApp: 26587c2ce485d88ddb39adb21cac64f8e481afe3
+  CapacitorCordova: 435121e81a2df4d0034f0fb11fcefab5104cfdb5
+  CapacitorNetwork: 695069886b3c5ed514db69aa3d026b8dc3c03a6b
+  CapacitorSplashScreen: 157947576b59d913792063a8d442a79e6d283ee5
+  PrinterTcpSocket: 7e98c3a4ea4c6bb335ab753e563d18505bb16f03
+
+PODFILE CHECKSUM: c76fcb5decf148b6e9d0593880784b99a9ee8d75
+
+COCOAPODS: 1.16.2
