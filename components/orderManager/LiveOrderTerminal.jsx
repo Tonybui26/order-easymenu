@@ -2039,9 +2039,9 @@ export default function LiveOrderTerminal() {
         )}
 
         {/* header */}
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between mt-8 lg:mt-2">
           {/* quick settings */}
-          <div className="mb-3 flex gap-3">
+          <div className="mb-3 flex gap-4 bg-[#0000003d] rounded-3xl p-4">
             {/* logo */}
             <div className="hidden h-auto flex-col items-center justify-center gap-0 rounded-lg bg-gray-100 px-4 py-1 text-left transition-colors hover:bg-gray-200">
               <Image
@@ -2057,7 +2057,7 @@ export default function LiveOrderTerminal() {
             </div>
             {/* Polling Status Indicator */}
             <div
-              className={`hidden h-auto items-center gap-2 rounded-lg px-3 py-1 text-sm font-medium transition-colors md:flex ${
+              className={`hidden h-auto items-center gap-2 rounded-lg px-3 py-1 text-sm font-medium transition-colors lg:flex ${
                 isPollingActive && isOnline
                   ? "bg-neutral-700 text-green-500"
                   : !isOnline || consecutiveErrors > 0
@@ -2100,7 +2100,7 @@ export default function LiveOrderTerminal() {
 
           {/* View Mode Tabs */}
           <div className="mb-6 flex flex-wrap gap-3">
-            <div className="hidden flex-wrap gap-1 md:flex lg:gap-3">
+            <div className="hidden flex-wrap gap-1 md:flex lg:gap-3 bg-[#0000003d] rounded-3xl p-4">
               <ViewModeTab
                 icon={Bell}
                 label="New"
