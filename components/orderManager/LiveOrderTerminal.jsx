@@ -25,6 +25,7 @@ import {
   Users,
   X,
   Printer,
+  CalendarClock,
 } from "lucide-react";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import OnlineOrderControlButton from "./OnlineOrderControlButton";
@@ -73,7 +74,7 @@ import { getJWTTokenAction } from "@/lib/actions/orderActions";
 export default function LiveOrderTerminal() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState("new"); // "new", "preparing", "ready", "unpaid", "all", or "completed"
+  const [viewMode, setViewMode] = useState("new"); // "new", "scheduled", "preparing", "ready", "unpaid", "all", or "completed"
   const viewModeRef = useRef(viewMode);
   const [completedOrders, setCompletedOrders] = useState([]);
   const [completedOrdersLoading, setCompletedOrdersLoading] = useState(false);
@@ -117,6 +118,16 @@ export default function LiveOrderTerminal() {
   // Platform detection
   const isNative = isNativeApp();
 
+  const hasPreorderEnabled =
+    Boolean(menuConfig?.preOrderingSettings?.pickUpEnabled) ||
+    Boolean(menuConfig?.preOrderingSettings?.deliveryEnabled);
+
+  useEffect(() => {
+    if (!hasPreorderEnabled && viewMode === "scheduled") {
+      setViewMode("new");
+    }
+  }, [hasPreorderEnabled, viewMode]);
+
   // Polling function (defined before startPolling to avoid initialization error)
   const pollingOrders = useCallback(async () => {
     // Don't poll if app is in background
@@ -138,8 +149,8 @@ export default function LiveOrderTerminal() {
     try {
       const data = await fetchOrders();
     const activeOrders = data.filter((order) => {
-      // Include orders that are still in progress - confirmed, preparing, ready
-      if (["confirmed", "preparing", "ready"].includes(order.status)) {
+      // Include orders that are still in progress
+      if (["confirmed", "accepted", "preparing", "ready"].includes(order.status)) {
         return true;
       } else {
         // For the rest of the orders(pending, delivered, cancelled)
@@ -823,8 +834,10 @@ export default function LiveOrderTerminal() {
       try {
         const data = await fetchOrders();
         const activeOrders = data.filter((order) => {
-          // Include orders that are still in progress - confirmed, preparing, ready
-          if (["confirmed", "preparing", "ready"].includes(order.status)) {
+          // Include orders that are still in progress
+          if (
+            ["confirmed", "accepted", "preparing", "ready"].includes(order.status)
+          ) {
             return true;
           } else {
             // For the rest of the orders(pending, delivered, cancelled)
@@ -1609,6 +1622,11 @@ export default function LiveOrderTerminal() {
       const isDineIn =
         currentOrder && currentOrder.table && currentOrder.table !== "takeaway";
       const isPending = currentOrder && currentOrder.status === "pending";
+      const isPreorderCounterPending =
+        currentOrder &&
+        currentOrder.isPreorder &&
+        isPending &&
+        isCounterPayment(currentOrder.paymentMethod);
 
       // Update payment status first
       const updatedOrder = await updateOrderPaymentStatus(
@@ -1618,7 +1636,8 @@ export default function LiveOrderTerminal() {
       );
 
       // If it's a dine-in order that was pending, also update status to confirmed
-      if (isDineIn && isPending) {
+      // Counter pre-order pending should also move to confirmed after payment.
+      if ((isDineIn && isPending) || isPreorderCounterPending) {
         try {
           const orderWithUpdatedStatus = await updateOrderStatus(
             orderId,
@@ -1677,6 +1696,18 @@ export default function LiveOrderTerminal() {
     );
   };
 
+  function preorderScheduleSortKey(order) {
+    const fs = order?.fulfillmentSchedule;
+    if (
+      fs?.dateKey &&
+      typeof fs.minutesFromMidnight === "number" &&
+      Number.isFinite(fs.minutesFromMidnight)
+    ) {
+      return `${fs.dateKey}T${String(fs.minutesFromMidnight).padStart(4, "0")}`;
+    }
+    return String(order?.pickupTime || order?.createdAt || "");
+  }
+
   // Filter orders based on view mode
   const getFilteredOrders = () => {
     if (viewMode === "all") {
@@ -1687,7 +1718,7 @@ export default function LiveOrderTerminal() {
         }
         // For other statuses, show all orders including delivered with pending payment
         return (
-          ["confirmed", "preparing", "ready"].includes(order.status) ||
+          ["confirmed", "accepted", "preparing", "ready"].includes(order.status) ||
           (order.status === "delivered" && order.paymentStatus === "pending")
         );
       });
@@ -1698,10 +1729,25 @@ export default function LiveOrderTerminal() {
           order.paymentStatus === "pending" &&
           isCounterPayment(order.paymentMethod) &&
           order.table !== "takeaway" &&
-          ["pending", "confirmed", "preparing", "ready", "delivered"].includes(
+          ["pending", "confirmed", "accepted", "preparing", "ready", "delivered"].includes(
             order.status,
           ),
       );
+    } else if (viewMode === "scheduled") {
+      return orders
+        .filter(
+          (order) =>
+            order.isPreorder &&
+            order.status === "accepted" &&
+            order.paymentStatus === "paid",
+        )
+        .sort((a, b) => {
+          const ak = preorderScheduleSortKey(a);
+          const bk = preorderScheduleSortKey(b);
+          if (ak < bk) return -1;
+          if (ak > bk) return 1;
+          return 0;
+        });
     } else if (viewMode === "new") {
       // New incoming orders:
       // - confirmed + paid for non-counter (card) orders
@@ -1745,6 +1791,12 @@ export default function LiveOrderTerminal() {
 
   const filteredOrders = getFilteredOrders();
   const unpaidOrdersByTable = getUnpaidOrdersByTable();
+  const scheduledCount = orders.filter(
+    (order) =>
+      order.isPreorder &&
+      order.status === "accepted" &&
+      order.paymentStatus === "paid",
+  ).length;
   const newOrdersCount = orders.filter(
     (order) =>
       (order.status === "confirmed" &&
@@ -1761,7 +1813,7 @@ export default function LiveOrderTerminal() {
     if (order.status === "pending")
       return isCounterPayment(order.paymentMethod);
     return (
-      ["confirmed", "preparing", "ready"].includes(order.status) ||
+      ["confirmed", "accepted", "preparing", "ready"].includes(order.status) ||
       (order.status === "delivered" && order.paymentStatus === "pending")
     );
   }).length;
@@ -1783,6 +1835,7 @@ export default function LiveOrderTerminal() {
             [
               "pending",
               "confirmed",
+              "accepted",
               "preparing",
               "ready",
               "delivered",
@@ -2108,6 +2161,15 @@ export default function LiveOrderTerminal() {
                 isActive={viewMode === "new"}
                 onClick={() => setViewMode("new")}
               />
+              {hasPreorderEnabled ? (
+                <ViewModeTab
+                  icon={CalendarClock}
+                  label="Scheduled"
+                  count={scheduledCount}
+                  isActive={viewMode === "scheduled"}
+                  onClick={() => setViewMode("scheduled")}
+                />
+              ) : null}
               <ViewModeTab
                 icon={ChefHat}
                 label="Preparing"
@@ -2428,6 +2490,7 @@ export default function LiveOrderTerminal() {
                     completedItems={getCompletedItems(order._id)}
                     onToggleItemCompletion={toggleItemCompletion}
                     onPrepare={() => {}} // No action needed for completed orders
+                    onAccept={() => {}}
                     onReady={() => {}} // No action needed for completed orders
                     onDeliver={() => {}} // No action needed for completed orders
                     onCancel={() => {}} // No action needed for completed orders
@@ -2446,6 +2509,8 @@ export default function LiveOrderTerminal() {
                     return "No Active Orders";
                   case "new":
                     return "No New Orders";
+                  case "scheduled":
+                    return "No Scheduled Pre-orders";
                   case "preparing":
                     return "No Orders Preparing";
                   case "ready":
@@ -2466,6 +2531,8 @@ export default function LiveOrderTerminal() {
                     return "All active orders will show here.";
                   case "new":
                     return "You'll see new incoming orders here automatically.";
+                  case "scheduled":
+                    return "Paid pre-orders awaiting acceptance appear here, sorted by fulfilment time.";
                   case "preparing":
                     return "Orders being prepared will appear here.";
                   case "ready":
@@ -2493,11 +2560,13 @@ export default function LiveOrderTerminal() {
                   // Change: counter pending orders should go straight to preparing
                   const newStatus =
                     isCounterPayment(order.paymentMethod) &&
-                    order.status === "pending"
+                    order.status === "pending" &&
+                    !order.isPreorder
                       ? "preparing"
                       : "preparing";
                   handleStatusUpdate(order._id, newStatus);
                 }}
+                onAccept={() => handleStatusUpdate(order._id, "accepted")}
                 onReady={() => handleStatusUpdate(order._id, "ready")}
                 onDeliver={() => handleStatusUpdate(order._id, "delivered")}
                 onCancel={() => handleCancelOrder(order)}

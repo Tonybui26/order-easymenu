@@ -24,6 +24,7 @@ import {
 export default function OrderCard({
   order,
   onPrepare,
+  onAccept,
   onReady,
   onDeliver,
   onCancel,
@@ -93,12 +94,22 @@ export default function OrderCard({
     order.status === "confirmed" &&
     order.paymentStatus === "pending";
 
+  const isPreorder = Boolean(order.isPreorder);
+
   // ===== COMPREHENSIVE BUTTON LOGIC =====
 
   // 1. CONFIRM BUTTON (Legacy - not used for counter orders)
   const showConfirmButton = false;
 
-  // 2. PREPARE BUTTON
+  // 2. ACCEPT BUTTON (pre-order flow: confirmed -> accepted -> preparing)
+  const showAcceptButton = (() => {
+    if (!isPreorder) return false;
+    if (order.paymentStatus !== "paid") return false;
+    if (order.status !== "confirmed") return false;
+    return true;
+  })();
+
+  // 3. PREPARE BUTTON
   const showPrepareButton = (() => {
     // Never show prepare button for completed/cancelled orders
     if (["ready", "delivered", "cancelled"].includes(order.status)) {
@@ -107,22 +118,22 @@ export default function OrderCard({
 
     // For non-counter orders (online payments)
     if (!isCounterOrder) {
+      if (isPreorder) return order.status === "accepted";
       return order.status === "confirmed"; // Only when confirmed
     }
 
     // For counter orders (dine-in)
     if (isCounterOrder) {
       // Must be paid AND in a state where preparation can start
-      return (
-        order.paymentStatus === "paid" &&
-        ["pending", "confirmed"].includes(order.status)
-      );
+      if (order.paymentStatus !== "paid") return false;
+      if (isPreorder) return order.status === "accepted";
+      return ["pending", "confirmed"].includes(order.status);
     }
 
     return false;
   })();
 
-  // 3. READY BUTTON
+  // 4. READY BUTTON
   const showReadyButton = (() => {
     // Only for online takeaway/pickup orders that are preparing
     if (
@@ -135,7 +146,7 @@ export default function OrderCard({
     return false;
   })();
 
-  // 4. DELIVER/COMPLETE BUTTON
+  // 5. DELIVER/COMPLETE BUTTON
   const showDeliverButton = (() => {
     // For online dine-in orders: show after preparing (skip ready status)
     if (!isCounterOrder && isTableOrder && order.status === "preparing") {
@@ -159,7 +170,7 @@ export default function OrderCard({
     return false;
   })();
 
-  // 5. MARK AS PAID BUTTON
+  // 6. MARK AS PAID BUTTON
   const showMarkAsPaidButton = (() => {
     // Only show if explicitly enabled and order needs payment
     if (!showMarkAsPaid) return false;
@@ -192,6 +203,13 @@ export default function OrderCard({
           text: "text-blue-700",
           border: "border-blue-200",
           dot: "bg-blue-500",
+        };
+      case "accepted":
+        return {
+          background: "bg-teal-100",
+          text: "text-teal-800",
+          border: "border-teal-200",
+          dot: "bg-teal-500",
         };
       case "preparing":
         return {
@@ -278,6 +296,8 @@ export default function OrderCard({
         return "Pending";
       case "confirmed":
         return "Confirmed";
+      case "accepted":
+        return "Accepted";
       case "preparing":
         return "Preparing";
       case "ready":
@@ -402,6 +422,11 @@ export default function OrderCard({
               <div>
                 <h3 className="text-lg font-semibold leading-tight text-gray-900 xl:text-xl">
                   {isTableOrder ? `Table ${order.table}` : "Pick-up"}
+                  {isPreorder ? (
+                    <span className="ml-2 align-middle text-sm font-medium text-teal-700">
+                      · Pre-order
+                    </span>
+                  ) : null}
                 </h3>
                 <p className="text-xs font-medium text-gray-500 xl:text-sm">
                   #{order._id.slice(-6).toUpperCase()}
@@ -409,10 +434,17 @@ export default function OrderCard({
                 {/* Pickup info */}
                 {!isTableOrder && (
                   <div className="mt-2 rounded-lg bg-gray-100 text-sm text-gray-600">
-                    Pickup at:{" "}
-                    <span className="text-base font-semibold">
-                      {order.pickupTime || "ASAP"}
-                    </span>
+                    {isPreorder ? (
+                      <span className="mb-1 inline-block rounded-full bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-800">
+                        Pre-order
+                      </span>
+                    ) : null}
+                    <div>
+                      Pickup at:{" "}
+                      <span className="text-base font-semibold">
+                        {order.pickupTime || "ASAP"}
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -685,6 +717,21 @@ export default function OrderCard({
             >
               <ChefHat className="h-4 w-4" strokeWidth={1.5} />
               <span>Prepare</span>
+            </button>
+          )}
+
+          {showAcceptButton && typeof onAccept === "function" && (
+            <button
+              type="button"
+              onClick={onAccept}
+              disabled={isProcessing}
+              className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-teal-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
+                isProcessing
+                  ? "cursor-not-allowed opacity-50"
+                  : "hover:bg-teal-700"
+              }`}
+            >
+              <span>{isProcessing ? "Processing..." : "Accept"}</span>
             </button>
           )}
 
