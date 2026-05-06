@@ -12,6 +12,7 @@ import {
   Banknote,
   Radio,
   Volume2,
+  CalendarClock,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { isNativeApp, getPlatform } from "../../lib/helper/platformDetection";
@@ -21,6 +22,8 @@ export default function MoreMenuButton({
   setViewMode,
   viewMode,
   newOrdersCount,
+  scheduledCount = 0,
+  hasPreorderEnabled = false,
   preparingCount,
   readyCount,
   allActiveCount,
@@ -153,6 +156,20 @@ export default function MoreMenuButton({
             },
             isActive: viewMode === "new",
           },
+          ...(hasPreorderEnabled
+            ? [
+                {
+                  icon: CalendarClock,
+                  title: "Scheduled",
+                  description: `${scheduledCount} scheduled pre-orders`,
+                  action: () => {
+                    setViewMode("scheduled");
+                    setShowModal(false);
+                  },
+                  isActive: viewMode === "scheduled",
+                },
+              ]
+            : []),
           {
             icon: ChefHat,
             title: "Preparing",
