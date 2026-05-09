@@ -43,8 +43,23 @@ export default function OrderCard({
     addSuffix: true,
   });
 
-  // Check if this is a table order or takeaway
-  const isTableOrder = order.table && order.table !== "takeaway";
+  /**
+   * Canonical type is `order.orderType` (newer orders).
+   * Fallback to legacy inference from `table` for older records.
+   */
+  const canonicalOrderType = String(order?.orderType ?? "").trim();
+  console.log("order", order);
+
+  const isDineIn =
+    canonicalOrderType === "dine-in" ||
+    (order.table && order.table !== "takeaway");
+  const isDelivery = canonicalOrderType === "delivery";
+  const isPickUp =
+    canonicalOrderType === "pick-up" ||
+    (!canonicalOrderType && !isDineIn && !isDelivery);
+
+  // Table (dine-in) vs off-premise (pick-up/delivery)
+  const isTableOrder = isDineIn;
 
   // Check payment status
   const isPaid = order.paymentStatus === "paid";
@@ -138,7 +153,10 @@ export default function OrderCard({
     // Only for online takeaway/pickup orders that are preparing
     if (
       !isCounterOrder &&
-      (order.table === "takeaway" || order.table === "pickup") &&
+      (isPickUp ||
+        isDelivery ||
+        order.table === "takeaway" ||
+        order.table === "pickup") &&
       order.status === "preparing"
     ) {
       return true;
@@ -156,7 +174,10 @@ export default function OrderCard({
     // For online takeaway/pickup orders: show after ready status
     if (
       !isCounterOrder &&
-      (order.table === "takeaway" || order.table === "pickup") &&
+      (isPickUp ||
+        isDelivery ||
+        order.table === "takeaway" ||
+        order.table === "pickup") &&
       order.status === "ready"
     ) {
       return true;
@@ -421,7 +442,11 @@ export default function OrderCard({
               </div>
               <div>
                 <h3 className="text-lg font-semibold leading-tight text-gray-900 xl:text-xl">
-                  {isTableOrder ? `Table ${order.table}` : "Pick-up"}
+                  {isTableOrder
+                    ? `Table ${order.table}`
+                    : isDelivery
+                      ? "Delivery"
+                      : "Pick-up"}
                   {isPreorder ? (
                     <span className="ml-2 align-middle text-sm font-medium text-teal-700">
                       · Pre-order
@@ -440,7 +465,7 @@ export default function OrderCard({
                       </span>
                     ) : null}
                     <div>
-                      Pickup at:{" "}
+                      {isDelivery ? "Deliver at: " : "Pickup at: "}
                       <span className="text-base font-semibold">
                         {order.pickupTime || "ASAP"}
                       </span>

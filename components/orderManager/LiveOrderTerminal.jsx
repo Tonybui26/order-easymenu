@@ -675,8 +675,12 @@ export default function LiveOrderTerminal() {
     }
 
     const order = showPrinterSelectionModal.order;
-    const isTakeaway = order.table === "takeaway";
-    const orderType = isTakeaway ? "takeaway" : "dinein";
+    // Printer routing uses two buckets: dine-in vs off-premise.
+    // Delivery prints with takeaway/pick-up by default unless you add a dedicated delivery printer group.
+    const canonical = String(order?.orderType ?? "").trim();
+    const isDineIn =
+      canonical === "dine-in" || (order.table && order.table !== "takeaway");
+    const orderType = isDineIn ? "dinein" : "takeaway";
 
     return (
       <div
@@ -1217,8 +1221,10 @@ export default function LiveOrderTerminal() {
   ) => {
     try {
       // Determine order type
-      const isTakeaway = order.table === "takeaway";
-      const orderType = isTakeaway ? "takeaway" : "dinein";
+      const canonical = String(order?.orderType ?? "").trim();
+      const isDineIn =
+        canonical === "dine-in" || (order.table && order.table !== "takeaway");
+      const orderType = isDineIn ? "dinein" : "takeaway";
 
       // Use selected printers if provided, otherwise check availability
       let printersToUse = selectedPrinters;
@@ -1434,8 +1440,10 @@ export default function LiveOrderTerminal() {
       setLoadingPrinters(true);
 
       // Determine order type
-      const isTakeaway = order.table === "takeaway";
-      const orderType = isTakeaway ? "takeaway" : "dinein";
+      const canonical = String(order?.orderType ?? "").trim();
+      const isDineIn =
+        canonical === "dine-in" || (order.table && order.table !== "takeaway");
+      const orderType = isDineIn ? "dinein" : "takeaway";
 
       // Fetch available printers for this order type
       const printersAvailability = await checkPrinterAvailability(orderType);
@@ -1522,8 +1530,11 @@ export default function LiveOrderTerminal() {
             // Only create print jobs if auto-printing is DISABLED
             if (!autoPrintingEnabled) {
               // Determine order type
-              const isTakeaway = order.table === "takeaway";
-              const orderType = isTakeaway ? "takeaway" : "dinein";
+              const canonical = String(order?.orderType ?? "").trim();
+              const isDineIn =
+                canonical === "dine-in" ||
+                (order.table && order.table !== "takeaway");
+              const orderType = isDineIn ? "dinein" : "takeaway";
 
               // Check printer availability first
               const availability = await checkPrinterAvailability(
