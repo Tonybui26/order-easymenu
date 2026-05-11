@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Menu,
   Printer,
@@ -11,6 +11,7 @@ import {
   Check,
   Banknote,
   Radio,
+  Volume2,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { isNativeApp, getPlatform } from "../../lib/helper/platformDetection";
@@ -28,7 +29,81 @@ export default function MoreMenuButton({
 }) {
   const [showModal, setShowModal] = useState(false);
   const [isSmallScreen, setIsSmallScreen] = useState(false);
+  const [isTestingSound, setIsTestingSound] = useState(false);
   const router = useRouter();
+
+  // Track audio instances + scheduled replay so the 2s test can be torn down cleanly
+  const testAudioInstancesRef = useRef(new Set());
+  const testReplayTimeoutRef = useRef(null);
+  const testStopTimeoutRef = useRef(null);
+
+  const stopTestNotificationSound = () => {
+    if (testReplayTimeoutRef.current) {
+      clearTimeout(testReplayTimeoutRef.current);
+      testReplayTimeoutRef.current = null;
+    }
+    if (testStopTimeoutRef.current) {
+      clearTimeout(testStopTimeoutRef.current);
+      testStopTimeoutRef.current = null;
+    }
+    testAudioInstancesRef.current.forEach((audio) => {
+      try {
+        if (audio && typeof audio.pause === "function") {
+          audio.pause();
+          audio.currentTime = 0;
+        }
+      } catch (error) {
+        console.error("Error stopping test audio:", error);
+      }
+    });
+    testAudioInstancesRef.current.clear();
+    setIsTestingSound(false);
+  };
+
+  const handleTestNotificationSound = async () => {
+    if (isTestingSound) return;
+    setIsTestingSound(true);
+
+    const TEST_DURATION_MS = 2000;
+    const REPLAY_INTERVAL_MS = 900; // matches LiveOrderTerminal notification cycle
+    const startedAt = Date.now();
+
+    const playOnce = async () => {
+      try {
+        const audio = new Audio("/sounds/notification.mp3");
+        audio.volume = 1;
+        testAudioInstancesRef.current.add(audio);
+
+        const cleanup = () => testAudioInstancesRef.current.delete(audio);
+        audio.addEventListener("ended", cleanup, { once: true });
+        audio.addEventListener("error", cleanup, { once: true });
+
+        await audio.play();
+
+        if (Date.now() - startedAt + REPLAY_INTERVAL_MS < TEST_DURATION_MS) {
+          testReplayTimeoutRef.current = setTimeout(
+            playOnce,
+            REPLAY_INTERVAL_MS,
+          );
+        }
+      } catch (error) {
+        console.error("Failed to play test notification sound:", error);
+      }
+    };
+
+    testStopTimeoutRef.current = setTimeout(
+      stopTestNotificationSound,
+      TEST_DURATION_MS,
+    );
+
+    playOnce();
+  };
+
+  useEffect(() => {
+    return () => {
+      stopTestNotificationSound();
+    };
+  }, []);
 
   // Check screen size on mount and resize
   useEffect(() => {
@@ -143,6 +218,15 @@ export default function MoreMenuButton({
       // description: "Set up and manage your receipt printers",
       action: handlePrinterManagement,
     },
+    {
+      icon: Volume2,
+      title: "Test Notification Sound",
+      description: isTestingSound
+        ? "Playing..."
+        : "Tap to play the order notification sound",
+      action: handleTestNotificationSound,
+      keepModalOpen: true,
+    },
     // {
     //   icon: BarChart3,
     //   title: "Analytics & Reports",
@@ -195,7 +279,7 @@ export default function MoreMenuButton({
                   key={index}
                   onClick={() => {
                     feature.action();
-                    setShowModal(false);
+                    if (!feature.keepModalOpen) setShowModal(false);
                   }}
                   className={`flex items-center gap-3 rounded-lg border p-4 text-left transition-all duration-200 ${
                     feature.isActive
