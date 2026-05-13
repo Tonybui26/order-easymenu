@@ -32,6 +32,7 @@ import OnlineOrderControlButton from "./OnlineOrderControlButton";
 import PrepTimeControlButton from "./PrepTimeControlButton";
 import ViewModeTab from "./ViewModeTab";
 import MoreMenuButton from "./MoreMenuButton";
+import PanelProductAvailability from "./PanelProductAvailability";
 import { useMenuContext } from "../context/MenuContext";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
@@ -75,7 +76,7 @@ import { getJWTTokenAction } from "@/lib/actions/orderActions";
 export default function LiveOrderTerminal() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState("new"); // "new", "scheduled", "preparing", "ready", "unpaid", "all", or "completed"
+  const [viewMode, setViewMode] = useState("new"); // "new", "scheduled", "preparing", "ready", "unpaid", "all", "completed", or "productAvailability"
   const viewModeRef = useRef(viewMode);
   const [completedOrders, setCompletedOrders] = useState([]);
   const [completedOrdersLoading, setCompletedOrdersLoading] = useState(false);
@@ -1947,6 +1948,8 @@ export default function LiveOrderTerminal() {
       return orders.filter((order) => order.status === "ready");
     } else if (viewMode === "completed") {
       return orders.filter((order) => order.status === "delivered");
+    } else if (viewMode === "productAvailability") {
+      return [];
     }
     return orders;
   };
@@ -2680,6 +2683,8 @@ export default function LiveOrderTerminal() {
               </div>
             )}
           </div>
+        ) : viewMode === "productAvailability" ? (
+          <PanelProductAvailability />
         ) : filteredOrders.length === 0 ? (
           <div className="rounded-lg bg-transparent p-12 text-center">
             <Bell size={48} className="mx-auto mb-4 text-brand_accent" />

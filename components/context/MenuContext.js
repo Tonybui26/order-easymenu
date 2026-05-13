@@ -1,8 +1,19 @@
 "use client";
 
-import { updateMenuConfig, fetchGetMenuByOwnerEmail } from "@/lib/api/fetchApi";
+import {
+  updateMenuConfig,
+  fetchGetMenuByOwnerEmail,
+  updateMenuItemSoldOut,
+} from "@/lib/api/fetchApi";
 import { useSkipInitialEffect } from "@/lib/hooks/useSkipInitialEffect";
-import { useEffect, useState, createContext, useContext, useRef } from "react";
+import {
+  useEffect,
+  useState,
+  createContext,
+  useContext,
+  useRef,
+  useCallback,
+} from "react";
 import toast from "react-hot-toast";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 
@@ -174,6 +185,24 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
     }
   };
 
+  const patchItemSoldOut = useCallback(async (menuItemId, soldOut) => {
+    try {
+      await updateMenuItemSoldOut(menuItemId, soldOut);
+      setMenuContent((prev) =>
+        (prev || []).map((section) => ({
+          ...section,
+          items: (section.items || []).map((item) =>
+            item.id === menuItemId ? { ...item, soldOut } : item,
+          ),
+        })),
+      );
+      return { success: true };
+    } catch (error) {
+      console.error("patchItemSoldOut:", error);
+      return { success: false, error };
+    }
+  }, []);
+
   // Create the saveMenuUpdate function
   const saveMenuConfig = async () => {
     try {
@@ -211,6 +240,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         refreshMenuDataWithToast, // Add refresh function with toast
         menuContent,
         setMenuContent,
+        patchItemSoldOut,
         // Item groups (Food / Drink / Misc) — read-only in this app, used for
         // per-printer routing in handlePrintingOrder.
         itemGroups,

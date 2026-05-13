@@ -14,6 +14,7 @@ import {
   Volume2,
   CalendarClock,
   RefreshCw,
+  Package2,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { isNativeApp, getPlatform } from "../../lib/helper/platformDetection";
@@ -231,6 +232,16 @@ export default function MoreMenuButton({
       },
     },
     {
+      icon: Package2,
+      title: "Product availability",
+      // description: "Mark items sold out while keeping them on the menu",
+      action: () => {
+        setViewMode("productAvailability");
+        setShowModal(false);
+      },
+      isActive: viewMode === "productAvailability",
+    },
+    {
       icon: Printer,
       title: "Printer Management",
       // description: "Set up and manage your receipt printers",
@@ -239,9 +250,7 @@ export default function MoreMenuButton({
     {
       icon: Volume2,
       title: "Test Notification Sound",
-      description: isTestingSound
-        ? "Playing..."
-        : "Tap to play the order notification sound",
+      description: isTestingSound ? "Playing..." : "",
       action: handleTestNotificationSound,
       keepModalOpen: true,
     },
