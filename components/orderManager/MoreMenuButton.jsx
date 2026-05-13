@@ -13,6 +13,7 @@ import {
   Radio,
   Volume2,
   CalendarClock,
+  RefreshCw,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { isNativeApp, getPlatform } from "../../lib/helper/platformDetection";
@@ -243,6 +244,12 @@ export default function MoreMenuButton({
         : "Tap to play the order notification sound",
       action: handleTestNotificationSound,
       keepModalOpen: true,
+    },
+    {
+      icon: RefreshCw,
+      title: "Reload App",
+      description: "Reload to apply latest changes",
+      action: () => window.location.reload(),
     },
     // {
     //   icon: BarChart3,

@@ -18,6 +18,7 @@ import { useMenuContext } from "@/components/context/MenuContext";
 import { useSession } from "next-auth/react";
 import { toast } from "react-hot-toast";
 import { printTest, resetTcpPlugin } from "@/lib/helper/printerUtils";
+import { DEFAULT_ITEM_GROUPS } from "@/lib/constants/itemGroups";
 import {
   printTestNew,
   aggressiveTestNew,
@@ -227,6 +228,30 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
                   <span className="text-gray-400">No order types assigned</span>
                 )}
               </div>
+
+              {/* Item Group Indicators — only shown when the printer has a
+                  group filter set. Empty groupIds means "prints everything" so
+                  we hide the row entirely to avoid noise. */}
+              {Array.isArray(printer.groupIds) &&
+                printer.groupIds.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                    <span className="text-gray-400">Prints:</span>
+                    {printer.groupIds.map((gid) => {
+                      const meta = DEFAULT_ITEM_GROUPS.find(
+                        (g) => g.id === gid,
+                      );
+                      const label = meta?.name || gid;
+                      return (
+                        <span
+                          key={gid}
+                          className="rounded-full bg-orange-100 px-2 py-1 text-orange-700"
+                        >
+                          {label}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
             </div>
           </div>
 

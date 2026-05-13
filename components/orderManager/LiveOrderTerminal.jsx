@@ -43,6 +43,7 @@ import {
   getPrintQueueStatus,
   printOrderQueued,
 } from "@/lib/helper/printerUtilsNew";
+import { planPrintJobsByGroup } from "@/lib/helper/printerGroupRouting";
 import { useSkipInitialEffect } from "@/lib/hooks/useSkipInitialEffect";
 import { App } from "@capacitor/app";
 import { createTokenFromSession } from "@/lib/auth/tokenUtils";
@@ -110,8 +111,15 @@ export default function LiveOrderTerminal() {
   const hasShownConnectedToastRef = useRef(false); // Track if we've shown the connected toast
   const isPollingInProgressRef = useRef(false); // Prevent concurrent polling instances
 
-  const { storeProfile, menuId, menuConfig, refreshMenuDataWithToast } =
-    useMenuContext();
+  const {
+    storeProfile,
+    menuId,
+    menuConfig,
+    refreshMenuDataWithToast,
+    // itemGroups powers per-printer routing in handlePrintingOrder. Read-only
+    // here — edits live in the admin app at /admin/menu/groups.
+    itemGroups,
+  } = useMenuContext();
   const { data: session } = useSession();
   const { userData } = useGlobalAppContext();
 
@@ -1242,20 +1250,97 @@ export default function LiveOrderTerminal() {
       }
 
       if (printersToUse && printersToUse.length > 0) {
-        // Create print data object for the order
-        const printData = {
-          order: order,
-          orderId: order._id.slice(-6).toUpperCase(),
-          printers: printersToUse,
-          menuLink: storeProfile?.menuLink || null,
+        // ─────────────────────────────────────────────────────────────────
+        //  Per-printer split (Option A — split before queuing).
+        //
+        //  Each printer may have a `groupIds` filter (e.g. ["food"], ["drink"]).
+        //  planPrintJobsByGroup walks order.items once, classifies each item
+        //  using menu.itemGroups, and returns one entry per printer that
+        //  actually has items to print. Printers with a filter that matches
+        //  nothing in this order are skipped entirely (no empty dockets).
+        //
+        //  Printers with an empty groupIds array fall back to "print every
+        //  item" — that's the default and keeps existing printers behaving
+        //  exactly the same after this change.
+        // ─────────────────────────────────────────────────────────────────
+        const printPlan = planPrintJobsByGroup(
+          order,
+          printersToUse,
+          itemGroups,
+        );
+        const orderId = order._id.slice(-6).toUpperCase();
+        const menuLink = storeProfile?.menuLink || null;
+
+        console.log("printPlan", printPlan);
+
+        if (printPlan.length === 0) {
+          // None of the configured printers want any item from this order.
+          // Treat the same as "no printers available" — caller decides UX.
+          return {
+            success: false,
+            message:
+              "No printers want any item from this order (group filters)",
+          };
+        }
+
+        // Run one queued job per printer. The in-process PrintQueueManager
+        // already serializes connect/send/disconnect across all jobs so we
+        // don't need to add extra delays between iterations here.
+        const perPrinterResults = [];
+        for (const { printer, items } of printPlan) {
+          const printData = {
+            order: { ...order, items },
+            orderId,
+            printers: [printer],
+            menuLink,
+          };
+          // Inherits the same delayAfterDisconnect we used for the unified call.
+          const result = await printOrderQueued(printData, {
+            delayAfterDisconnect: 300,
+          });
+          perPrinterResults.push({ printer, result });
+        }
+
+        // Aggregate into the same shape printOrderNew used to return so the
+        // existing toast / retry / logging code below keeps working unchanged.
+        const successfulPrinterNames = [];
+        const failedPrinterNames = [];
+        const failedPrinterErrors = [];
+        for (const { printer, result } of perPrinterResults) {
+          if (result.success && (result.failedPrints || 0) === 0) {
+            successfulPrinterNames.push(printer.name);
+          } else {
+            failedPrinterNames.push(printer.name);
+            const errMsg =
+              result.message ||
+              (Array.isArray(result.failedPrinterErrors) &&
+                result.failedPrinterErrors[0]?.error) ||
+              "Unknown error";
+            failedPrinterErrors.push({
+              printerName: printer.name,
+              error: errMsg,
+            });
+          }
+        }
+
+        const totalPrinters = perPrinterResults.length;
+        const successfulPrints = successfulPrinterNames.length;
+        const failedPrints = totalPrinters - successfulPrints;
+        const printResult = {
+          success: successfulPrints > 0,
+          successfulPrints,
+          failedPrints,
+          totalPrinters,
+          successfulPrinterNames: successfulPrinterNames.join(", "),
+          failedPrinterNames: failedPrinterNames.join(", "),
+          failedPrinterErrors,
+          message:
+            successfulPrints === totalPrinters
+              ? `Order printed successfully to ${successfulPrints}/${totalPrinters} printer(s)!`
+              : successfulPrints > 0
+                ? `Order printed to ${successfulPrints}/${totalPrinters} printer(s) — ${failedPrinterNames.join(", ")} failed`
+                : `Print failed — Could not print to any of the printers`,
         };
-
-        console.log("printData", printData);
-
-        // Use queued printing instead of direct printing
-        const printResult = await printOrderQueued(printData, {
-          delayAfterDisconnect: 300, // Longer delay for production
-        });
 
         // Check if we need to retry:
         // 1. All printers failed (!printResult.success)
@@ -1283,9 +1368,12 @@ export default function LiveOrderTerminal() {
               .forEach((name) => failedPrinterNamesSet.add(name));
           }
 
-          // Filter printers to only include failed ones
-          const failedPrinters = printersAvailability.printers.filter(
-            (printer) => failedPrinterNamesSet.has(printer.name),
+          // Filter printers to only include failed ones. NOTE: use
+          // `printersToUse` (always defined here) instead of the previously
+          // referenced `printersAvailability.printers`, which only existed in
+          // one branch of the lookup above.
+          const failedPrinters = printersToUse.filter((printer) =>
+            failedPrinterNamesSet.has(printer.name),
           );
 
           if (failedPrinters.length > 0) {
@@ -1295,24 +1383,62 @@ export default function LiveOrderTerminal() {
 
             await new Promise((resolve) => setTimeout(resolve, 1000));
 
-            // Retry only failed printers
-            const retryPrintData = {
-              order: order,
-              orderId: order._id.slice(-6).toUpperCase(),
-              printers: failedPrinters, // Only failed printers
-              menuLink: storeProfile?.menuLink || null,
-            };
+            // Re-run the per-printer split for the failed printers so each
+            // retry uses the same group filtering as the original attempt.
+            const retryPlan = planPrintJobsByGroup(
+              order,
+              failedPrinters,
+              itemGroups,
+            );
 
-            const retryResult = await printOrderQueued(retryPrintData, {
-              delayAfterDisconnect: 300,
-            });
+            const retryPerPrinterResults = [];
+            for (const { printer, items } of retryPlan) {
+              const retryPrintData = {
+                order: { ...order, items },
+                orderId,
+                printers: [printer],
+                menuLink,
+              };
+              const r = await printOrderQueued(retryPrintData, {
+                delayAfterDisconnect: 300,
+              });
+              retryPerPrinterResults.push({ printer, result: r });
+            }
+
+            // Aggregate retry results into the same shape we use elsewhere.
+            const retrySuccessNamesArr = [];
+            const retryFailedNamesArr = [];
+            const retryFailedErrors = [];
+            for (const { printer, result: r } of retryPerPrinterResults) {
+              if (r.success && (r.failedPrints || 0) === 0) {
+                retrySuccessNamesArr.push(printer.name);
+              } else {
+                retryFailedNamesArr.push(printer.name);
+                retryFailedErrors.push({
+                  printerName: printer.name,
+                  error:
+                    r.message ||
+                    (Array.isArray(r.failedPrinterErrors) &&
+                      r.failedPrinterErrors[0]?.error) ||
+                    "Unknown error",
+                });
+              }
+            }
+            const retryResult = {
+              success: retrySuccessNamesArr.length > 0,
+              successfulPrints: retrySuccessNamesArr.length,
+              failedPrints: retryFailedNamesArr.length,
+              totalPrinters: retryPerPrinterResults.length,
+              successfulPrinterNames: retrySuccessNamesArr.join(", "),
+              failedPrinterNames: retryFailedNamesArr.join(", "),
+              failedPrinterErrors: retryFailedErrors,
+            };
 
             // Merge results: combine successful from first attempt with retry results
             const firstAttemptSuccessful = printResult.successfulPrints || 0;
             const retrySuccessful = retryResult.successfulPrints || 0;
             const totalSuccessful = firstAttemptSuccessful + retrySuccessful;
-            const totalPrinters =
-              printResult.totalPrinters || printData.printers.length;
+            const totalPrinters = printResult.totalPrinters || printPlan.length;
             const totalFailed = totalPrinters - totalSuccessful;
 
             // Combine successful printer names

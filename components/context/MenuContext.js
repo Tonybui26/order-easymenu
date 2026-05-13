@@ -22,6 +22,11 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   const [menuContent, setMenuContent] = useState(
     (menuData && menuData.menuContent) || [],
   );
+  // Read-only here — the order-manager app only consumes itemGroups for
+  // per-printer routing. Edits happen in the admin app (/admin/menu/groups).
+  const [itemGroups, setItemGroups] = useState(
+    (menuData && menuData.itemGroups) || [],
+  );
   const [storeProfile, setStoreProfile] = useState({
     storeName: (menuData && menuData.storeName) || "",
     storeLogo: (menuData && menuData.storeProfileImage) || "",
@@ -51,6 +56,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         if (data) {
           setMenuConfig(data.config || {});
           setMenuContent(data.menuContent || []);
+          setItemGroups(data.itemGroups || []);
           setStoreProfile({
             storeName: data.storeName || "",
             storeLogo: data.storeProfileImage || "",
@@ -122,6 +128,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         // Update all menu-related state with fresh data
         setMenuConfig(data.config || {});
         setMenuContent(data.menuContent || []);
+        setItemGroups(data.itemGroups || []);
         setStoreProfile({
           storeName: data.storeName || "",
           storeLogo: data.storeProfileImage || "",
@@ -204,6 +211,9 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         refreshMenuDataWithToast, // Add refresh function with toast
         menuContent,
         setMenuContent,
+        // Item groups (Food / Drink / Misc) — read-only in this app, used for
+        // per-printer routing in handlePrintingOrder.
+        itemGroups,
         menuId,
         storeProfile,
         setStoreProfile,

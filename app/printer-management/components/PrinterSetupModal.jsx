@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { toast } from "react-hot-toast";
 import PrinterScanner from "./PrinterScanner";
 import { isNativeApp } from "../../../lib/helper/platformDetection";
+import { DEFAULT_ITEM_GROUPS } from "@/lib/constants/itemGroups";
 
 export default function PrinterSetupModal({
   isOpen,
@@ -19,6 +20,11 @@ export default function PrinterSetupModal({
     port: "9100",
     forTakeaway: false,
     forDineIn: false,
+    // Item group routing. Empty array = no group filter → printer prints
+    // every item it receives (default + backwards compatible). When any box
+    // is ticked we only print items that belong to one of the selected groups;
+    // items without a group (or in a different group) are dropped at print time.
+    groupIds: [],
   });
 
   const [errors, setErrors] = useState({});
@@ -34,6 +40,8 @@ export default function PrinterSetupModal({
         port: printer.port || "9100",
         forTakeaway: printer.forTakeaway || false,
         forDineIn: printer.forDineIn || false,
+        // Existing printers may not have groupIds yet; default to "no filter".
+        groupIds: Array.isArray(printer.groupIds) ? printer.groupIds : [],
       });
       setShowManualForm(true); // Show form directly for editing
     } else {
@@ -133,10 +141,23 @@ export default function PrinterSetupModal({
       port: "9100",
       forTakeaway: false,
       forDineIn: false,
+      groupIds: [],
     });
     setErrors({});
     setIsSaving(false);
     onClose();
+  };
+
+  // Toggle a group id in formData.groupIds. We keep the list normalized to the
+  // set of known DEFAULT_ITEM_GROUPS so old data with stale ids gets cleaned up
+  // on save.
+  const handleToggleGroup = (groupId) => {
+    setFormData((prev) => {
+      const current = new Set(prev.groupIds || []);
+      if (current.has(groupId)) current.delete(groupId);
+      else current.add(groupId);
+      return { ...prev, groupIds: Array.from(current) };
+    });
   };
 
   if (!isOpen) return null;
@@ -282,6 +303,38 @@ export default function PrinterSetupModal({
               {errors.orderTypes && (
                 <div className="text-sm text-error">{errors.orderTypes}</div>
               )}
+            </div>
+
+            {/* Item Group Routing */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium text-base-content">
+                Item groups
+              </h3>
+              <p className="text-xs text-gray-500">
+                Tick the groups this printer should print. Leave everything
+                unticked to print every item (default). When any group is
+                ticked, only items in those groups are sent here — items in
+                other groups, or items not assigned to any group, are skipped.
+              </p>
+
+              <div className="space-y-2">
+                {DEFAULT_ITEM_GROUPS.map((group) => {
+                  const checked = (formData.groupIds || []).includes(group.id);
+                  return (
+                    <div key={group.id} className="form-control">
+                      <label className="label cursor-pointer justify-between">
+                        <span className="label-text">{group.name}</span>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => handleToggleGroup(group.id)}
+                          className="toggle toggle-primary"
+                        />
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Footer */}
