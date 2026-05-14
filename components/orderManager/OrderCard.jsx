@@ -19,7 +19,11 @@ import {
   EyeOff,
   Users,
   Printer,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
+import toast from "react-hot-toast";
+import { sendOrderReceiptEmail } from "@/lib/api/fetchApi";
 
 export default function OrderCard({
   order,
@@ -38,6 +42,12 @@ export default function OrderCard({
 }) {
   const [showCustomerInfo, setShowCustomerInfo] = useState(false);
 
+  // Pay-at-counter: expandable "Customer receipt" row + modal to email the same receipt template as Stripe (staff JWT → main app API).
+  const [receiptAccordionOpen, setReceiptAccordionOpen] = useState(false);
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+  const [receiptEmailInput, setReceiptEmailInput] = useState("");
+  const [receiptSending, setReceiptSending] = useState(false);
+
   // Format the time since order was created
   const timeAgo = formatDistanceToNow(new Date(order.createdAt), {
     addSuffix: true,
@@ -48,7 +58,6 @@ export default function OrderCard({
    * Fallback to legacy inference from `table` for older records.
    */
   const canonicalOrderType = String(order?.orderType ?? "").trim();
-  console.log("order", order);
 
   const isDineIn =
     canonicalOrderType === "dine-in" ||
@@ -849,6 +858,127 @@ export default function OrderCard({
           )}
         </div>
       </div>
+
+      {/* Counter / pay-at-counter orders: staff can email the HTML receipt without touching automatic Stripe email idempotency. */}
+      {isCounterOrder && order.status !== "cancelled" && (
+        <div className="border-t border-gray-100 bg-gray-200 px-4 py-2 xl:px-6">
+          <button
+            type="button"
+            onClick={() => setReceiptAccordionOpen((open) => !open)}
+            className="flex w-full items-center justify-between py-2.5 text-left text-sm font-medium text-gray-600 transition-colors hover:text-gray-800"
+            aria-expanded={receiptAccordionOpen}
+          >
+            <span>More actions</span>
+            {receiptAccordionOpen ? (
+              <ChevronUp
+                className="h-4 w-4 shrink-0 text-gray-500"
+                aria-hidden
+              />
+            ) : (
+              <ChevronDown
+                className="h-4 w-4 shrink-0 text-gray-500"
+                aria-hidden
+              />
+            )}
+          </button>
+          {receiptAccordionOpen && (
+            <div className="border-t border-[#d9d9d9] py-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setReceiptEmailInput(
+                    String(order.customerEmail || "").trim(),
+                  );
+                  setReceiptModalOpen(true);
+                }}
+                className="btn-primary btn btn-sm"
+              >
+                Email receipt
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* DaisyUI modal (same pattern as MoreMenuButton): dialog + modal-open + modal-box + modal-backdrop. */}
+      <dialog
+        className={`modal ${receiptModalOpen ? "modal-open" : ""}`}
+        aria-labelledby="receipt-email-title"
+      >
+        <div className="modal-box max-w-md">
+          <div className="mb-4 flex items-center justify-between">
+            <h3
+              id="receipt-email-title"
+              className="text-lg font-bold text-gray-900"
+            >
+              Email receipt
+            </h3>
+            <button
+              type="button"
+              onClick={() => !receiptSending && setReceiptModalOpen(false)}
+              disabled={receiptSending}
+              className="btn btn-circle btn-ghost btn-sm disabled:pointer-events-none"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <p className="text-sm text-gray-600">
+            Sends the same order receipt email the customer gets after online
+            payment. You can use a different address than on the order.
+          </p>
+
+          <label className="mt-4 block text-sm font-medium text-gray-700">
+            Email
+            <input
+              type="email"
+              value={receiptEmailInput}
+              onChange={(e) => setReceiptEmailInput(e.target.value)}
+              className="input input-md mt-2 w-full rounded-lg border-2 bg-gray-200 text-base placeholder:text-neutral-500 focus:border-brand_accent/70 focus:outline-none"
+              placeholder="customer@example.com"
+              autoComplete="email"
+              disabled={receiptSending}
+            />
+          </label>
+
+          <div className="modal-action">
+            <button
+              type="button"
+              disabled={receiptSending}
+              onClick={async () => {
+                const email = receiptEmailInput.trim();
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                  toast.error("Enter a valid email address.");
+                  return;
+                }
+                setReceiptSending(true);
+                try {
+                  await sendOrderReceiptEmail(order._id, email);
+                  toast.success("Receipt sent.");
+                  setReceiptModalOpen(false);
+                  setReceiptAccordionOpen(false);
+                } catch (err) {
+                  toast.error(
+                    err?.message || "Could not send receipt. Try again.",
+                  );
+                } finally {
+                  setReceiptSending(false);
+                }
+              }}
+              className="btn-primary btn btn-sm h-auto w-auto px-5 py-3"
+            >
+              {receiptSending ? "Sending…" : "Send"}
+            </button>
+          </div>
+        </div>
+        <form
+          method="dialog"
+          className="modal-backdrop"
+          onClick={() => !receiptSending && setReceiptModalOpen(false)}
+        >
+          <button type="submit">close</button>
+        </form>
+      </dialog>
     </div>
   );
 }
