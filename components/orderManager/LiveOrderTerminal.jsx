@@ -28,6 +28,7 @@ import {
   CalendarClock,
 } from "lucide-react";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
+import { ModifierChoicesGrouped } from "@/lib/utils/modifierDisplay";
 import OnlineOrderControlButton from "./OnlineOrderControlButton";
 import PrepTimeControlButton from "./PrepTimeControlButton";
 import ViewModeTab from "./ViewModeTab";
@@ -2507,18 +2508,10 @@ export default function LiveOrderTerminal() {
                                             .join(" - ")}
                                         </p>
                                       )}
-                                    {item.selectedModifiers &&
-                                      item.selectedModifiers.length > 0 && (
-                                        <p className="text-sm text-blue-600">
-                                          +{" "}
-                                          {item.selectedModifiers
-                                            .map(
-                                              (modifier) =>
-                                                `${modifier.groupName} (${modifier.optionName})`,
-                                            )
-                                            .join(", ")}
-                                        </p>
-                                      )}
+                                    <ModifierChoicesGrouped
+                                      modifiers={item.selectedModifiers}
+                                      className="text-sm text-gray-700"
+                                    />
                                   </div>
                                 </div>
                                 <p className="ml-4 text-sm font-semibold text-gray-900 xl:text-base">

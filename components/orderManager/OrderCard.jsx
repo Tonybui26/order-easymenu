@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { sendOrderReceiptEmail } from "@/lib/api/fetchApi";
+import { ModifierChoicesGrouped } from "@/lib/utils/modifierDisplay";
 
 export default function OrderCard({
   order,
@@ -401,13 +402,8 @@ export default function OrderCard({
             </div>
           )}
           <div className="flex items-start justify-between">
-            {/* Time Ago */}
-            <div className="mb-1 inline-flex items-center justify-end py-1 text-xs text-gray-500">
-              <Clock className="mr-1 h-3 w-3" strokeWidth={1.5} />
-              {timeAgo}
-            </div>
-            {/* Payment Status */}
-            <div className="">
+            {/* Payment Status - temporarily hidden */}
+            <div className="hidden">
               <div
                 className={`inline-flex items-center gap-1.5 rounded-full border ${getPaymentStatusStyle(order.paymentStatus).border} px-2 py-1 text-xs font-semibold ${getPaymentStatusStyle(order.paymentStatus).background}`}
               >
@@ -450,7 +446,7 @@ export default function OrderCard({
                 )}
               </div>
               <div>
-                <h3 className="text-lg font-semibold leading-tight text-gray-900 xl:text-xl">
+                <h3 className="text-xl font-semibold leading-tight text-gray-900">
                   {isTableOrder
                     ? `Table ${order.table}`
                     : isDelivery
@@ -462,7 +458,7 @@ export default function OrderCard({
                     </span>
                   ) : null}
                 </h3>
-                <p className="text-xs font-medium text-gray-500 xl:text-sm">
+                <p className="hidden text-xs font-medium text-gray-500 xl:text-sm">
                   #{order._id.slice(-6).toUpperCase()}
                 </p>
                 {/* Pickup info */}
@@ -473,12 +469,31 @@ export default function OrderCard({
                         Pre-order
                       </span>
                     ) : null}
-                    <div>
-                      {isDelivery ? "Deliver at: " : "Pickup at: "}
+                    <div className="flex items-center gap-1">
+                      {/* {isDelivery ? "Deliver at: " : "Pickup at: "} */}
+                      <Clock className="size-4" strokeWidth={2} />
                       <span className="text-base font-semibold">
                         {order.pickupTime || "ASAP"}
                       </span>
                     </div>
+                  </div>
+                )}
+                {/* Time Ago */}
+                <div className="mb-1 inline-flex items-center justify-end py-1 text-xs text-gray-500">
+                  Placed {timeAgo}
+                </div>
+                {/* Total + optional surcharge breakdown for pay-at-counter */}
+                {isCounterPayment(order.paymentMethod) && (
+                  <div className="mt-2 rounded-lg bg-gray-100 py-1.5 text-sm text-gray-600">
+                    <p className="text-lg font-medium text-gray-900">
+                      Total: ${Number(order.total ?? 0).toFixed(2)}
+                    </p>
+                    {Number(order.surchargeTotal ?? 0) > 0 && (
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        Incl. surcharge $
+                        {Number(order.surchargeTotal).toFixed(2)}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -503,7 +518,7 @@ export default function OrderCard({
                 <div className="rounded-xl">
                   <div className="flex items-center justify-between">
                     <div className="flex min-w-0 flex-1 flex-col items-end">
-                      <p className="truncate text-lg font-semibold text-gray-900 xl:text-xl">
+                      <p className="truncate text-xl font-semibold text-gray-900">
                         {order.customerName}
                       </p>
 
@@ -693,18 +708,10 @@ export default function OrderCard({
                             .join(" - ")}
                         </p>
                       )}
-                    {item.selectedModifiers &&
-                      item.selectedModifiers.length > 0 && (
-                        <p className="text-sm text-blue-600">
-                          +{" "}
-                          {item.selectedModifiers
-                            .map(
-                              (modifier) =>
-                                `${modifier.groupName} (${modifier.optionName})`,
-                            )
-                            .join(", ")}
-                        </p>
-                      )}
+                    <ModifierChoicesGrouped
+                      modifiers={item.selectedModifiers}
+                      className="text-sm text-gray-700"
+                    />
                     {item.notes && (
                       <div className="mt-2 rounded-lg border border-yellow-100 bg-yellow-50 p-2">
                         <p className="mb-1 text-xs font-medium text-yellow-800">
@@ -715,8 +722,9 @@ export default function OrderCard({
                     )}
                   </div>
                 </div>
+                {/* Line total: visible on all view modes (unpaid tab used separate markup with price always shown). */}
                 <p
-                  className={`ml-4 hidden text-sm xl:text-base ${
+                  className={`ml-4 shrink-0 text-sm font-semibold xl:text-base ${
                     isItemCompleted(index) && order.status === "preparing"
                       ? "text-gray-500 line-through"
                       : "text-gray-900"
@@ -741,164 +749,166 @@ export default function OrderCard({
           )}
         </div>
       </div>
-      {/* Actions */}
-      <div className="p-4 pt-0 xl:p-6">
-        <div className="flex space-x-3">
-          {showConfirmButton && (
-            <button
-              onClick={onPrepare}
-              className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-blue-600 px-4 py-3 font-medium text-white transition-colors duration-200 hover:bg-blue-700"
-            >
-              <ChefHat className="h-4 w-4" strokeWidth={1.5} />
-              <span>Prepare</span>
-            </button>
-          )}
-
-          {showAcceptButton && typeof onAccept === "function" && (
-            <button
-              type="button"
-              onClick={onAccept}
-              disabled={isProcessing}
-              className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-teal-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
-                isProcessing
-                  ? "cursor-not-allowed opacity-50"
-                  : "hover:bg-teal-700"
-              }`}
-            >
-              <span>{isProcessing ? "Processing..." : "Accept"}</span>
-            </button>
-          )}
-
-          {showPrepareButton && (
-            <button
-              onClick={onPrepare}
-              disabled={isProcessing}
-              className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
-                isProcessing
-                  ? "cursor-not-allowed opacity-50"
-                  : "hover:bg-blue-700"
-              }`}
-            >
-              <span>{isProcessing ? "Processing..." : "Prepare"}</span>
-            </button>
-          )}
-
-          {showReadyButton && (
-            <button
-              onClick={onReady}
-              disabled={isProcessing}
-              className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-green-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
-                isProcessing
-                  ? "cursor-not-allowed opacity-50"
-                  : "hover:bg-green-700"
-              }`}
-            >
-              <span>{isProcessing ? "Processing..." : "Ready"}</span>
-            </button>
-          )}
-
-          {showDeliverButton && (
-            <button
-              onClick={onDeliver}
-              disabled={isProcessing}
-              className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-purple-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
-                isProcessing
-                  ? "cursor-not-allowed opacity-50"
-                  : "hover:bg-purple-700"
-              }`}
-            >
-              <span>{isProcessing ? "Processing..." : "Complete"}</span>
-            </button>
-          )}
-
-          {showMarkAsPaidButton && (
-            <button
-              onClick={() => onMarkAsPaid(order._id)}
-              disabled={isProcessing}
-              className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-green-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
-                isProcessing
-                  ? "cursor-not-allowed opacity-50"
-                  : "hover:bg-green-700"
-              }`}
-            >
-              <span>{isProcessing ? "Processing..." : "Mark as Paid"}</span>
-            </button>
-          )}
-
-          {/* Print button - only show when order is in preparing status */}
-          {order.status === "preparing" && onPrint && (
-            <button
-              onClick={() => onPrint(order)}
-              disabled={isProcessing}
-              className={`flex items-center justify-center rounded-xl bg-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition-colors duration-200 xl:text-base ${
-                isProcessing
-                  ? "cursor-not-allowed opacity-50"
-                  : "hover:bg-gray-300"
-              }`}
-              title="Print Order"
-            >
-              <Printer className="size-5 text-brand_accent" strokeWidth={2} />
-            </button>
-          )}
-
-          {/* Only show cancel button if order is not already cancelled or delivered */}
-          {!["cancelled", "delivered"].includes(order.status) && (
-            <button
-              onClick={onCancel}
-              disabled={isProcessing}
-              className={`flex items-center justify-center space-x-2 rounded-xl bg-gray-100 px-4 py-3 text-sm font-medium text-gray-700 transition-colors duration-200 xl:text-base ${
-                isProcessing
-                  ? "cursor-not-allowed opacity-50"
-                  : "hover:bg-gray-200"
-              }`}
-            >
-              <X className="h-4 w-4" strokeWidth={1.5} />
-              <span>Cancel</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Counter / pay-at-counter orders: staff can email the HTML receipt without touching automatic Stripe email idempotency. */}
-      {isCounterOrder && order.status !== "cancelled" && (
-        <div className="border-t border-gray-100 bg-gray-200 px-4 py-2 xl:px-6">
-          <button
-            type="button"
-            onClick={() => setReceiptAccordionOpen((open) => !open)}
-            className="flex w-full items-center justify-between py-2.5 text-left text-sm font-medium text-gray-600 transition-colors hover:text-gray-800"
-            aria-expanded={receiptAccordionOpen}
-          >
-            <span>More actions</span>
-            {receiptAccordionOpen ? (
-              <ChevronUp
-                className="h-4 w-4 shrink-0 text-gray-500"
-                aria-hidden
-              />
-            ) : (
-              <ChevronDown
-                className="h-4 w-4 shrink-0 text-gray-500"
-                aria-hidden
-              />
+      <div>
+        {/* Actions */}
+        <div className="p-4 pt-0 xl:p-6">
+          <div className="flex space-x-3">
+            {showConfirmButton && (
+              <button
+                onClick={onPrepare}
+                className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-blue-600 px-4 py-3 font-medium text-white transition-colors duration-200 hover:bg-blue-700"
+              >
+                <ChefHat className="h-4 w-4" strokeWidth={1.5} />
+                <span>Prepare</span>
+              </button>
             )}
-          </button>
-          {receiptAccordionOpen && (
-            <div className="border-t border-[#d9d9d9] py-3">
+
+            {showAcceptButton && typeof onAccept === "function" && (
               <button
                 type="button"
-                onClick={() => {
-                  setReceiptEmailInput(
-                    String(order.customerEmail || "").trim(),
-                  );
-                  setReceiptModalOpen(true);
-                }}
-                className="btn-primary btn btn-sm"
+                onClick={onAccept}
+                disabled={isProcessing}
+                className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-teal-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
+                  isProcessing
+                    ? "cursor-not-allowed opacity-50"
+                    : "hover:bg-teal-700"
+                }`}
               >
-                Email receipt
+                <span>{isProcessing ? "Processing..." : "Accept"}</span>
               </button>
-            </div>
-          )}
+            )}
+
+            {showPrepareButton && (
+              <button
+                onClick={onPrepare}
+                disabled={isProcessing}
+                className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
+                  isProcessing
+                    ? "cursor-not-allowed opacity-50"
+                    : "hover:bg-blue-700"
+                }`}
+              >
+                <span>{isProcessing ? "Processing..." : "Prepare"}</span>
+              </button>
+            )}
+
+            {showReadyButton && (
+              <button
+                onClick={onReady}
+                disabled={isProcessing}
+                className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-green-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
+                  isProcessing
+                    ? "cursor-not-allowed opacity-50"
+                    : "hover:bg-green-700"
+                }`}
+              >
+                <span>{isProcessing ? "Processing..." : "Ready"}</span>
+              </button>
+            )}
+
+            {showDeliverButton && (
+              <button
+                onClick={onDeliver}
+                disabled={isProcessing}
+                className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-purple-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
+                  isProcessing
+                    ? "cursor-not-allowed opacity-50"
+                    : "hover:bg-purple-700"
+                }`}
+              >
+                <span>{isProcessing ? "Processing..." : "Complete"}</span>
+              </button>
+            )}
+
+            {showMarkAsPaidButton && (
+              <button
+                onClick={() => onMarkAsPaid(order._id)}
+                disabled={isProcessing}
+                className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-green-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
+                  isProcessing
+                    ? "cursor-not-allowed opacity-50"
+                    : "hover:bg-green-700"
+                }`}
+              >
+                <span>{isProcessing ? "Processing..." : "Mark as Paid"}</span>
+              </button>
+            )}
+
+            {/* Print button - only show when order is in preparing status */}
+            {order.status === "preparing" && onPrint && (
+              <button
+                onClick={() => onPrint(order)}
+                disabled={isProcessing}
+                className={`flex items-center justify-center rounded-xl bg-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition-colors duration-200 xl:text-base ${
+                  isProcessing
+                    ? "cursor-not-allowed opacity-50"
+                    : "hover:bg-gray-300"
+                }`}
+                title="Print Order"
+              >
+                <Printer className="size-5 text-brand_accent" strokeWidth={2} />
+              </button>
+            )}
+
+            {/* Only show cancel button if order is not already cancelled or delivered */}
+            {!["cancelled", "delivered"].includes(order.status) && (
+              <button
+                onClick={onCancel}
+                disabled={isProcessing}
+                className={`flex items-center justify-center space-x-2 rounded-xl bg-gray-100 px-4 py-3 text-sm font-medium text-gray-700 transition-colors duration-200 xl:text-base ${
+                  isProcessing
+                    ? "cursor-not-allowed opacity-50"
+                    : "hover:bg-gray-200"
+                }`}
+              >
+                <X className="h-4 w-4" strokeWidth={1.5} />
+                <span>Cancel</span>
+              </button>
+            )}
+          </div>
         </div>
-      )}
+
+        {/* Counter / pay-at-counter orders: staff can email the HTML receipt without touching automatic Stripe email idempotency. */}
+        {order.status !== "cancelled" && order.paymentStatus == "paid" && (
+          <div className="border-t border-gray-100 bg-gray-200 px-4 py-2 xl:px-6">
+            <button
+              type="button"
+              onClick={() => setReceiptAccordionOpen((open) => !open)}
+              className="flex w-full items-center justify-between py-2.5 text-left text-sm font-medium text-gray-600 transition-colors hover:text-gray-800"
+              aria-expanded={receiptAccordionOpen}
+            >
+              <span>More actions</span>
+              {receiptAccordionOpen ? (
+                <ChevronUp
+                  className="h-4 w-4 shrink-0 text-gray-500"
+                  aria-hidden
+                />
+              ) : (
+                <ChevronDown
+                  className="h-4 w-4 shrink-0 text-gray-500"
+                  aria-hidden
+                />
+              )}
+            </button>
+            {receiptAccordionOpen && (
+              <div className="border-t border-[#d9d9d9] py-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReceiptEmailInput(
+                      String(order.customerEmail || "").trim(),
+                    );
+                    setReceiptModalOpen(true);
+                  }}
+                  className="btn-primary btn btn-sm"
+                >
+                  Email receipt
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* DaisyUI modal (same pattern as MoreMenuButton): dialog + modal-open + modal-box + modal-backdrop. */}
       <dialog
