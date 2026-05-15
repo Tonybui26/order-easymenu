@@ -50,6 +50,7 @@ import { useSkipInitialEffect } from "@/lib/hooks/useSkipInitialEffect";
 import { App } from "@capacitor/app";
 import { createTokenFromSession } from "@/lib/auth/tokenUtils";
 import { getJWTTokenAction } from "@/lib/actions/orderActions";
+import { getNotificationSoundUrl } from "@/lib/utils/notificationSound";
 
 /**
  * LiveOrderTerminal Component - Order Management Interface
@@ -94,7 +95,7 @@ export default function LiveOrderTerminal() {
   const printedOrderIdsRef = useRef(new Set());
   const [audioInitialized, setAudioInitialized] = useState(false);
   const [showAudioPrompt, setShowAudioPrompt] = useState(false);
-  const { soundEnabled } = useGlobalAppContext();
+  const { soundEnabled, notificationSoundId } = useGlobalAppContext();
   // Polling configuration
   const POLLING_INTERVALS = {
     ACTIVE: 10000, // 10 seconds when app is active
@@ -1132,7 +1133,7 @@ export default function LiveOrderTerminal() {
         if (!showNotificationRef.current) return;
 
         // Create a new audio element for each play to allow overlapping
-        const audioClone = new Audio("/sounds/notification.mp3");
+        const audioClone = new Audio(getNotificationSoundUrl(notificationSoundId));
 
         // Track this audio instance
         playingAudioInstances.current.add(audioClone);
@@ -1215,6 +1216,13 @@ export default function LiveOrderTerminal() {
       console.log("Audio auto-initialized for native app");
     }
   }, [isNative, soundEnabled, audioInitialized, loading]);
+
+  // Keep hidden <audio> src in sync when user changes notification sound in More menu
+  useEffect(() => {
+    if (!audioRef.current) return;
+    audioRef.current.src = getNotificationSoundUrl(notificationSoundId);
+    audioRef.current.load();
+  }, [notificationSoundId]);
 
   // Cleanup sound intervals on component unmount
   useEffect(() => {
@@ -2085,7 +2093,10 @@ export default function LiveOrderTerminal() {
     <>
       <div className="min-h-screen bg-[#1a1a1a] p-3">
         {/* Audio element for notifications */}
-        <audio ref={audioRef} src="/sounds/notification.mp3" />
+        <audio
+          ref={audioRef}
+          src={getNotificationSoundUrl(notificationSoundId)}
+        />
 
         {/* Audio Permission Prompt - Web Only */}
         {showAudioPrompt && !isNative && (

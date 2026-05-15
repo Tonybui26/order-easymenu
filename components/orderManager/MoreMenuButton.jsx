@@ -15,10 +15,16 @@ import {
   CalendarClock,
   RefreshCw,
   Package2,
+  Settings,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { isNativeApp, getPlatform } from "../../lib/helper/platformDetection";
 import { useRouter } from "next/navigation";
+import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
+import {
+  NOTIFICATION_SOUND_OPTIONS,
+  getNotificationSoundUrl,
+} from "@/lib/utils/notificationSound";
 
 export default function MoreMenuButton({
   setViewMode,
@@ -33,9 +39,12 @@ export default function MoreMenuButton({
   storeProfile,
 }) {
   const [showModal, setShowModal] = useState(false);
+  const [showSoundSettingsModal, setShowSoundSettingsModal] = useState(false);
+  const [draftSoundId, setDraftSoundId] = useState("sound1");
   const [isSmallScreen, setIsSmallScreen] = useState(false);
   const [isTestingSound, setIsTestingSound] = useState(false);
   const router = useRouter();
+  const { notificationSoundId, setNotificationSoundId } = useGlobalAppContext();
 
   // Track audio instances + scheduled replay so the 2s test can be torn down cleanly
   const testAudioInstancesRef = useRef(new Set());
@@ -69,13 +78,13 @@ export default function MoreMenuButton({
     if (isTestingSound) return;
     setIsTestingSound(true);
 
-    const TEST_DURATION_MS = 2000;
-    const REPLAY_INTERVAL_MS = 900; // matches LiveOrderTerminal notification cycle
+    const TEST_DURATION_MS = 3000;
+    const REPLAY_INTERVAL_MS = 1200; // matches LiveOrderTerminal notification cycle
     const startedAt = Date.now();
 
     const playOnce = async () => {
       try {
-        const audio = new Audio("/sounds/notification.mp3");
+        const audio = new Audio(getNotificationSoundUrl(notificationSoundId));
         audio.volume = 1;
         testAudioInstancesRef.current.add(audio);
 
@@ -248,6 +257,7 @@ export default function MoreMenuButton({
       action: handlePrinterManagement,
     },
     {
+      id: "test-notification-sound",
       icon: Volume2,
       title: "Test Notification Sound",
       description: isTestingSound ? "Playing..." : "",
@@ -304,6 +314,51 @@ export default function MoreMenuButton({
                     key={`divider-${index}`}
                     className="my-2 border-t border-gray-200"
                   />
+                );
+              }
+
+              if (feature.id === "test-notification-sound") {
+                return (
+                  <div
+                    key={index}
+                    className="flex items-stretch gap-2 rounded-lg border border-gray-200 bg-white"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        feature.action();
+                        if (!feature.keepModalOpen) setShowModal(false);
+                      }}
+                      className="flex min-w-0 flex-1 items-center gap-3 p-4 text-left transition-all duration-200 hover:border-brand_accent hover:shadow-md"
+                    >
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100">
+                        <feature.icon className="size-6 text-gray-600" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-medium text-gray-900">
+                          {feature.title}
+                        </h4>
+                        <p className="mt-1 text-sm text-gray-600">
+                          {feature.description ||
+                            NOTIFICATION_SOUND_OPTIONS.find(
+                              (o) => o.id === notificationSoundId,
+                            )?.label}
+                        </p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Notification sound settings"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDraftSoundId(notificationSoundId);
+                        setShowSoundSettingsModal(true);
+                      }}
+                      className="btn btn-ghost btn-sm my-2 mr-2 shrink-0 self-center rounded-lg border border-gray-200"
+                    >
+                      <Settings className="size-5 text-gray-600" />
+                    </button>
+                  </div>
                 );
               }
 
@@ -379,6 +434,69 @@ export default function MoreMenuButton({
           onClick={() => setShowModal(false)}
         >
           <button>close</button>
+        </form>
+      </dialog>
+
+      {/* Notification sound picker (gear on Test Notification Sound row) */}
+      <dialog
+        className={`modal ${showSoundSettingsModal ? "modal-open" : ""}`}
+      >
+        <div className="modal-box max-w-md">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-bold text-gray-900">
+              Notification sound
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowSoundSettingsModal(false)}
+              className="btn btn-circle btn-ghost btn-sm"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <p className="mb-3 text-sm text-gray-600">
+            Choose the alert played for new orders. Saved on this device.
+          </p>
+          <label className="block text-sm font-medium text-gray-700">
+            Sound
+            <select
+              className="select select-bordered mt-2 w-full"
+              value={draftSoundId}
+              onChange={(e) => setDraftSoundId(e.target.value)}
+            >
+              {NOTIFICATION_SOUND_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="modal-action">
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setShowSoundSettingsModal(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary btn btn-sm"
+              onClick={() => {
+                setNotificationSoundId(draftSoundId);
+                setShowSoundSettingsModal(false);
+              }}
+            >
+              Save
+            </button>
+          </div>
+        </div>
+        <form
+          method="dialog"
+          className="modal-backdrop"
+          onClick={() => setShowSoundSettingsModal(false)}
+        >
+          <button type="submit">close</button>
         </form>
       </dialog>
     </>
