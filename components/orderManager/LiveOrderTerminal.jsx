@@ -1133,7 +1133,9 @@ export default function LiveOrderTerminal() {
         if (!showNotificationRef.current) return;
 
         // Create a new audio element for each play to allow overlapping
-        const audioClone = new Audio(getNotificationSoundUrl(notificationSoundId));
+        const audioClone = new Audio(
+          getNotificationSoundUrl(notificationSoundId),
+        );
 
         // Track this audio instance
         playingAudioInstances.current.add(audioClone);
@@ -2288,7 +2290,7 @@ export default function LiveOrderTerminal() {
         {/* header */}
         <div className="mt-8 flex items-start justify-between lg:mt-2">
           {/* quick settings */}
-          <div className="mb-3 flex gap-4 rounded-3xl bg-[#0000003d] p-4">
+          <div className="mb-3 flex gap-4 rounded-3xl bg-[#0000003d] p-3 ring-2 ring-[#222222]">
             {/* logo */}
             <div className="hidden h-auto flex-col items-center justify-center gap-0 rounded-lg bg-gray-100 px-4 py-1 text-left transition-colors hover:bg-gray-200">
               <Image
@@ -2347,7 +2349,7 @@ export default function LiveOrderTerminal() {
 
           {/* View Mode Tabs */}
           <div className="mb-6 flex flex-wrap gap-3">
-            <div className="hidden flex-wrap gap-1 rounded-3xl bg-[#0000003d] p-4 md:flex lg:gap-3">
+            <div className="hidden flex-wrap gap-1 rounded-3xl bg-[#0000003d] p-3 ring-2 ring-[#222222] md:flex lg:gap-3">
               <ViewModeTab
                 icon={Bell}
                 label="New"
@@ -2458,7 +2460,7 @@ export default function LiveOrderTerminal() {
                   return (
                     <div
                       key={table}
-                      className="flex flex-col justify-between overflow-hidden rounded-xl border border-gray-100 bg-neutral-100 shadow-md transition-all duration-200 hover:border-gray-200"
+                      className="flex flex-col justify-between overflow-hidden rounded-lg border border-gray-100 bg-neutral-100 shadow-md transition-all duration-200 hover:border-gray-200"
                     >
                       <div>
                         {/* Header */}
@@ -2466,7 +2468,7 @@ export default function LiveOrderTerminal() {
                           <div className="flex items-start justify-between">
                             <div className="flex items-center">
                               <div>
-                                <h3 className="text-lg font-semibold leading-tight text-gray-900 xl:text-xl">
+                                <h3 className="text-2xl font-extrabold leading-tight text-gray-800 xl:text-xl">
                                   Table {table}
                                 </h3>
                                 <p className="text-xs font-medium text-gray-500 xl:text-sm">
@@ -2492,20 +2494,18 @@ export default function LiveOrderTerminal() {
 
                         {/* Order Items */}
                         <div className="p-4 pb-6 pt-2 xl:p-6">
-                          <div className="space-y-2.5 xl:space-y-3">
+                          <div className="space-y-0.5 xl:space-y-2">
                             {combinedItemsArray.map((item, index) => (
                               <div
                                 key={index}
                                 className="flex items-start justify-between py-1 transition-all duration-200 xl:py-2"
                               >
                                 <div className="flex flex-1 items-start space-x-3">
-                                  <div className="mt-0.5 flex size-5 flex-shrink-0 items-center justify-center rounded-full bg-gray-900 xl:size-6">
-                                    <span className="text-xs font-semibold text-white">
-                                      {item.quantity}
-                                    </span>
-                                  </div>
+                                  <span className="text-base font-bold text-gray-800">
+                                    {item.quantity}
+                                  </span>
                                   <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-medium text-gray-900 xl:text-base">
+                                    <p className="text-base font-bold text-gray-800 xl:text-base">
                                       {item.name}
                                     </p>
                                     {item.selectedVariants &&
@@ -2525,7 +2525,7 @@ export default function LiveOrderTerminal() {
                                     />
                                   </div>
                                 </div>
-                                <p className="ml-4 text-sm font-semibold text-gray-900 xl:text-base">
+                                <p className="ml-4 text-base font-bold text-gray-800 xl:text-base">
                                   ${(item.price * item.quantity).toFixed(2)}
                                 </p>
                               </div>

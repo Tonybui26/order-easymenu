@@ -373,7 +373,7 @@ export default function OrderCard({
   };
 
   return (
-    <div className="flex flex-col justify-between overflow-hidden rounded-xl border border-gray-100 bg-neutral-100 shadow-md transition-all duration-200 hover:border-gray-200">
+    <div className="flex flex-col justify-between overflow-hidden rounded-lg border border-gray-100 bg-neutral-100 shadow-md transition-all duration-200 hover:border-gray-200">
       <div>
         {/* Header */}
         <div className="p-4 pb-4 xl:p-6">
@@ -446,7 +446,7 @@ export default function OrderCard({
                 )}
               </div>
               <div>
-                <h3 className="text-xl font-semibold leading-tight text-gray-900">
+                <h3 className="text-2xl font-extrabold leading-tight text-gray-800">
                   {isTableOrder
                     ? `Table ${order.table}`
                     : isDelivery
@@ -484,8 +484,8 @@ export default function OrderCard({
                 </div>
                 {/* Total + optional surcharge breakdown for pay-at-counter */}
                 {isCounterPayment(order.paymentMethod) && (
-                  <div className="mt-2 rounded-lg bg-gray-100 py-1.5 text-sm text-gray-600">
-                    <p className="text-lg font-medium text-gray-900">
+                  <div className="rounded-lg bg-gray-100 text-sm text-gray-600">
+                    <p className="text-lg font-medium text-gray-800">
                       Total: ${Number(order.total ?? 0).toFixed(2)}
                     </p>
                     {Number(order.surchargeTotal ?? 0) > 0 && (
@@ -518,7 +518,7 @@ export default function OrderCard({
                 <div className="rounded-xl">
                   <div className="flex items-center justify-between">
                     <div className="flex min-w-0 flex-1 flex-col items-end">
-                      <p className="truncate text-xl font-semibold text-gray-900">
+                      <p className="truncate text-2xl font-extrabold text-gray-800">
                         {order.customerName}
                       </p>
 
@@ -633,7 +633,7 @@ export default function OrderCard({
           ) : (
             <div className="mb-4 hidden items-center justify-between">
               <div className="flex items-center space-x-2">
-                <h4 className="font-medium text-gray-900">Items</h4>
+                <h4 className="font-medium text-gray-800">Items</h4>
                 <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
                   {order.items.length}
                 </span>
@@ -641,7 +641,7 @@ export default function OrderCard({
             </div>
           )}
 
-          <div className="space-y-2.5 xl:space-y-3">
+          <div className="space-y-0 xl:space-y-1">
             {order.items.map((item, index) => (
               <div
                 key={index}
@@ -651,7 +651,9 @@ export default function OrderCard({
                     : ""
                 }`}
               >
-                <div className="flex flex-1 items-start space-x-3">
+                <div
+                  className={`flex flex-1 items-start ${order.status !== "preparing" ? "space-x-5" : "space-x-2"}`}
+                >
                   {/* Completion checkbox - only show when order is preparing */}
                   {order.status === "preparing" && (
                     <button
@@ -669,43 +671,35 @@ export default function OrderCard({
                   )}
 
                   {/* Quantity badge - always show, gray out if completed */}
-                  <div
-                    className={`mt-0.5 flex size-5 flex-shrink-0 items-center justify-center rounded-full xl:size-6 ${
+                  <span
+                    className={`text-base font-bold ${
                       isItemCompleted(index) && order.status === "preparing"
-                        ? "bg-gray-300"
-                        : "bg-gray-900"
+                        ? "text-gray-400"
+                        : "text-gray-800"
                     }`}
                   >
-                    <span
-                      className={`text-xs font-semibold ${
-                        isItemCompleted(index) && order.status === "preparing"
-                          ? "text-gray-600"
-                          : "text-white"
-                      }`}
-                    >
-                      {item.quantity}
-                    </span>
-                  </div>
+                    {item.quantity}
+                  </span>
 
                   <div className="min-w-0 flex-1">
                     <p
-                      className={`text-sm font-medium xl:text-base ${
+                      className={`text-base font-bold xl:text-base ${
                         isItemCompleted(index) && order.status === "preparing"
                           ? "text-gray-500 line-through"
-                          : "text-gray-900"
+                          : "text-gray-800"
                       }`}
                     >
                       {item.name}
                     </p>
                     {item.selectedVariants &&
                       item.selectedVariants.length > 0 && (
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm font-medium text-gray-700">
                           {item.selectedVariants
                             .map(
                               (variant) =>
-                                `${variant.groupName} (${variant.optionName})`,
+                                `${variant.groupName}: ${variant.optionName}`,
                             )
-                            .join(" - ")}
+                            .join(", ")}
                         </p>
                       )}
                     <ModifierChoicesGrouped
@@ -727,7 +721,7 @@ export default function OrderCard({
                   className={`ml-4 shrink-0 text-sm font-semibold xl:text-base ${
                     isItemCompleted(index) && order.status === "preparing"
                       ? "text-gray-500 line-through"
-                      : "text-gray-900"
+                      : "text-gray-800"
                   }`}
                 >
                   ${(item.price * item.quantity).toFixed(2)}
@@ -919,7 +913,7 @@ export default function OrderCard({
           <div className="mb-4 flex items-center justify-between">
             <h3
               id="receipt-email-title"
-              className="text-lg font-bold text-gray-900"
+              className="text-lg font-bold text-gray-800"
             >
               Email receipt
             </h3>
@@ -932,11 +926,6 @@ export default function OrderCard({
               <X className="h-5 w-5" />
             </button>
           </div>
-
-          <p className="text-sm text-gray-600">
-            Sends the same order receipt email the customer gets after online
-            payment. You can use a different address than on the order.
-          </p>
 
           <label className="mt-4 block text-sm font-medium text-gray-700">
             Email
