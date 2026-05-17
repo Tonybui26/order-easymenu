@@ -60,7 +60,14 @@ import { useSkipInitialEffect } from "@/lib/hooks/useSkipInitialEffect";
 import { App } from "@capacitor/app";
 import { createTokenFromSession } from "@/lib/auth/tokenUtils";
 import { getJWTTokenAction } from "@/lib/actions/orderActions";
-import { getNotificationSoundUrl } from "@/lib/utils/notificationSound";
+import {
+  getNotificationSoundUrl,
+  NOTIFICATION_SOUND_REPLAY_INTERVAL_MS,
+} from "@/lib/utils/notificationSound";
+import {
+  getNewOrderAlertsMuted,
+  NEW_ORDER_ALERTS_MUTED_CHANGED_EVENT,
+} from "@/lib/utils/newOrderAlerts";
 
 /**
  * LiveOrderTerminal Component - Order Management Interface
@@ -102,10 +109,25 @@ export default function LiveOrderTerminal() {
   const [notificationOrderCount, setNotificationOrderCount] = useState(0);
   const [lastDismissedIds, setLastDismissedIds] = useState(new Set());
   const lastDismissedIdsRef = useRef(new Set());
+  const ordersRef = useRef(orders);
   const printedOrderIdsRef = useRef(new Set());
+
+  const replaceDismissedOrderIds = useCallback((orderIds) => {
+    const dismissedIds = orderIds instanceof Set ? orderIds : new Set(orderIds);
+    lastDismissedIdsRef.current = dismissedIds;
+    setLastDismissedIds(dismissedIds);
+  }, []);
+
+  const addDismissedOrderIds = useCallback((orderIds) => {
+    const next = new Set(lastDismissedIdsRef.current);
+    for (const id of orderIds) next.add(id);
+    lastDismissedIdsRef.current = next;
+    setLastDismissedIds(next);
+  }, []);
   const [audioInitialized, setAudioInitialized] = useState(false);
   const [showAudioPrompt, setShowAudioPrompt] = useState(false);
-  const { soundEnabled, notificationSoundId } = useGlobalAppContext();
+  const { soundEnabled, notificationSoundId, newOrderAlertsMuted } =
+    useGlobalAppContext();
   // Polling configuration
   const POLLING_INTERVALS = {
     ACTIVE: 10000, // 10 seconds when app is active
@@ -229,9 +251,12 @@ export default function LiveOrderTerminal() {
         },
       );
 
-      // Update count to reflect notification-worthy orders since last dismissal
       if (notificationWorthyOrders.length > 0) {
-        setNotificationOrderCount(notificationWorthyOrders.length);
+        const isMuted = getNewOrderAlertsMuted();
+
+        if (!isMuted) {
+          setNotificationOrderCount(notificationWorthyOrders.length);
+        }
         // Auto-print orders if auto-printing is enabled
         const autoPrintingEnabled = menuConfig?.autoPrinting?.enabled;
         if (autoPrintingEnabled && storeProfile && userData?.ownerEmail) {
@@ -290,30 +315,14 @@ export default function LiveOrderTerminal() {
           }
         }
 
-        // Only trigger notification if it's not already showing AND view mode is not "preparing"
-        if (
-          !showNotificationRef.current &&
-          viewModeRef.current !== "preparing"
-        ) {
-          console.log("Showing notification");
-          console.log("viewMode in notification", viewModeRef.current);
+        if (isMuted) {
+          addDismissedOrderIds(
+            notificationWorthyOrders.map((order) => order._id),
+          );
+        } else if (!showNotificationRef.current) {
           setShowNotification(true);
-          showNotificationRef.current = true; // Update ref immediately
+          showNotificationRef.current = true;
           playSoundCycle();
-        } else if (viewModeRef.current === "preparing") {
-          // Update dismissed IDs immediately with current activeOrders
-          const newDismissedIds = new Set(
-            activeOrders.map((order) => order._id),
-          );
-          setLastDismissedIds(newDismissedIds);
-          lastDismissedIdsRef.current = newDismissedIds;
-          console.log(
-            "Auto-dismissed orders in preparing mode:",
-            newDismissedIds,
-          );
-          console.log(
-            "Skipping notification - currently in preparing view mode",
-          );
         }
       }
 
@@ -892,12 +901,7 @@ export default function LiveOrderTerminal() {
         const activeOrders = filterOrdersForActiveList(data, menuConfig);
         setOrders(activeOrders);
         console.log("activeOrders initial", activeOrders);
-        // Update both state and ref immediately to prevent notifications for existing orders
-        const initialDismissedIds = new Set(
-          activeOrders.map((order) => order._id),
-        );
-        setLastDismissedIds(initialDismissedIds);
-        lastDismissedIdsRef.current = initialDismissedIds; // Sync ref immediately
+        replaceDismissedOrderIds(activeOrders.map((order) => order._id));
         setLoading(false);
       } catch (error) {
         setLoading(false);
@@ -931,8 +935,7 @@ export default function LiveOrderTerminal() {
     setShowNotification(false);
     showNotificationRef.current = false; // Update ref immediately
     setNotificationOrderCount(0);
-    // Update lastDismissedIds to current order IDs so future counts are calculated correctly
-    setLastDismissedIds(new Set(orders.map((order) => order._id)));
+    replaceDismissedOrderIds(orders.map((order) => order._id));
     // Clear printed orders tracking when notification is dismissed
     printedOrderIdsRef.current.clear();
     stopSoundCycle();
@@ -1059,11 +1062,11 @@ export default function LiveOrderTerminal() {
 
   // Update refs when state changes
   useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
+  useEffect(() => {
     showNotificationRef.current = showNotification;
   }, [showNotification]);
-  useEffect(() => {
-    lastDismissedIdsRef.current = lastDismissedIds;
-  }, [lastDismissedIds]);
   useEffect(() => {
     viewModeRef.current = viewMode;
   }, [viewMode]);
@@ -1126,7 +1129,7 @@ export default function LiveOrderTerminal() {
 
   // Function to play sound continuously with intervals
   const playSoundCycle = () => {
-    if (!soundEnabled || !audioRef.current) return;
+    if (!soundEnabled || newOrderAlertsMuted || !audioRef.current) return;
 
     const playSound = async () => {
       try {
@@ -1161,8 +1164,10 @@ export default function LiveOrderTerminal() {
 
         // Double-check before scheduling next play (prevent race condition)
         if (showNotificationRef.current) {
-          // Schedule next play after a very short delay (e.g., 900ms)
-          soundIntervalRef.current = setTimeout(playSound, 900);
+          soundIntervalRef.current = setTimeout(
+            playSound,
+            NOTIFICATION_SOUND_REPLAY_INTERVAL_MS,
+          );
         }
       } catch (error) {
         console.error("Error playing sound:", error);
@@ -1201,24 +1206,64 @@ export default function LiveOrderTerminal() {
     playingAudioInstances.current.clear();
   };
 
+  // Mute on: stop alert and mark current queue as seen (no backlog on unmute)
+  useEffect(() => {
+    function handleNewOrderAlertsMutedChanged(event) {
+      const muted =
+        typeof event?.detail?.muted === "boolean"
+          ? event.detail.muted
+          : getNewOrderAlertsMuted();
+      if (!muted) return;
+
+      setShowNotification(false);
+      showNotificationRef.current = false;
+      setNotificationOrderCount(0);
+      stopSoundCycle();
+      replaceDismissedOrderIds(ordersRef.current.map((order) => order._id));
+    }
+
+    window.addEventListener(
+      NEW_ORDER_ALERTS_MUTED_CHANGED_EVENT,
+      handleNewOrderAlertsMutedChanged,
+    );
+    return () => {
+      window.removeEventListener(
+        NEW_ORDER_ALERTS_MUTED_CHANGED_EVENT,
+        handleNewOrderAlertsMutedChanged,
+      );
+    };
+  }, [replaceDismissedOrderIds]);
+
   // Show audio prompt on first visit if sound is enabled (web only)
   useEffect(() => {
-    if (soundEnabled && !audioInitialized && !loading && !isNative) {
+    if (
+      soundEnabled &&
+      !newOrderAlertsMuted &&
+      !audioInitialized &&
+      !loading &&
+      !isNative
+    ) {
       // Small delay to let the page load first
       setTimeout(() => {
         setShowAudioPrompt(true);
       }, 1000);
     }
-  }, [soundEnabled, audioInitialized, loading, isNative]);
+  }, [soundEnabled, newOrderAlertsMuted, audioInitialized, loading, isNative]);
 
   // Auto-initialize audio for native apps
   useEffect(() => {
-    if (isNative && soundEnabled && !audioInitialized && !loading) {
+    if (
+      isNative &&
+      soundEnabled &&
+      !newOrderAlertsMuted &&
+      !audioInitialized &&
+      !loading
+    ) {
       // For native apps, we can initialize audio automatically
       setAudioInitialized(true);
       console.log("Audio auto-initialized for native app");
     }
-  }, [isNative, soundEnabled, audioInitialized, loading]);
+  }, [isNative, soundEnabled, newOrderAlertsMuted, audioInitialized, loading]);
 
   // Keep hidden <audio> src in sync when user changes notification sound in More menu
   useEffect(() => {
@@ -2208,7 +2253,7 @@ export default function LiveOrderTerminal() {
         )}
 
         {/* Notification Overlay */}
-        {showNotification && (
+        {showNotification && !newOrderAlertsMuted && (
           <div
             className="fixed inset-0 z-50 flex cursor-pointer items-center justify-center bg-brand_accent"
             onClick={handleNotificationDismiss}

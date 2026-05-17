@@ -12,6 +12,8 @@ import {
   Banknote,
   Radio,
   Volume2,
+  BellOff,
+  BellRing,
   CalendarClock,
   RefreshCw,
   Package2,
@@ -23,6 +25,7 @@ import { useRouter } from "next/navigation";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import {
   NOTIFICATION_SOUND_OPTIONS,
+  NOTIFICATION_SOUND_REPLAY_INTERVAL_MS,
   getNotificationSoundUrl,
 } from "@/lib/utils/notificationSound";
 
@@ -44,7 +47,12 @@ export default function MoreMenuButton({
   const [isSmallScreen, setIsSmallScreen] = useState(false);
   const [isTestingSound, setIsTestingSound] = useState(false);
   const router = useRouter();
-  const { notificationSoundId, setNotificationSoundId } = useGlobalAppContext();
+  const {
+    notificationSoundId,
+    setNotificationSoundId,
+    newOrderAlertsMuted,
+    setNewOrderAlertsMuted,
+  } = useGlobalAppContext();
 
   // Track audio instances + scheduled replay so the 2s test can be torn down cleanly
   const testAudioInstancesRef = useRef(new Set());
@@ -78,8 +86,7 @@ export default function MoreMenuButton({
     if (isTestingSound) return;
     setIsTestingSound(true);
 
-    const TEST_DURATION_MS = 3000;
-    const REPLAY_INTERVAL_MS = 1200; // matches LiveOrderTerminal notification cycle
+    const TEST_DURATION_MS = 4000;
     const startedAt = Date.now();
 
     const playOnce = async () => {
@@ -94,10 +101,13 @@ export default function MoreMenuButton({
 
         await audio.play();
 
-        if (Date.now() - startedAt + REPLAY_INTERVAL_MS < TEST_DURATION_MS) {
+        if (
+          Date.now() - startedAt + NOTIFICATION_SOUND_REPLAY_INTERVAL_MS <
+          TEST_DURATION_MS
+        ) {
           testReplayTimeoutRef.current = setTimeout(
             playOnce,
-            REPLAY_INTERVAL_MS,
+            NOTIFICATION_SOUND_REPLAY_INTERVAL_MS,
           );
         }
       } catch (error) {
@@ -255,6 +265,17 @@ export default function MoreMenuButton({
       title: "Printer Management",
       // description: "Set up and manage your receipt printers",
       action: handlePrinterManagement,
+    },
+    {
+      id: "mute-new-order-alerts",
+      icon: newOrderAlertsMuted ? BellOff : BellRing,
+      title: "New order alerts",
+      description: newOrderAlertsMuted
+        ? "Muted on this device — tap to turn on"
+        : "Banner and sound on — tap to mute",
+      action: () => setNewOrderAlertsMuted(!newOrderAlertsMuted),
+      keepModalOpen: true,
+      isActive: newOrderAlertsMuted,
     },
     {
       id: "test-notification-sound",
@@ -438,9 +459,7 @@ export default function MoreMenuButton({
       </dialog>
 
       {/* Notification sound picker (gear on Test Notification Sound row) */}
-      <dialog
-        className={`modal ${showSoundSettingsModal ? "modal-open" : ""}`}
-      >
+      <dialog className={`modal ${showSoundSettingsModal ? "modal-open" : ""}`}>
         <div className="modal-box max-w-md">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-bold text-gray-900">
