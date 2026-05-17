@@ -15,7 +15,6 @@ import {
   isCounterPayment,
   isDineInOrder,
   isPayLaterAtCounterEnabled,
-  isPayLaterEligible,
   isPayLaterOrderInNewTab,
   shouldKeepDeliveredInActive,
   filterOrdersForActiveList,
@@ -38,7 +37,6 @@ import {
   ShoppingCart,
   Users,
   X,
-  Printer,
   CalendarClock,
 } from "lucide-react";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
@@ -47,6 +45,12 @@ import OnlineOrderControlButton from "./OnlineOrderControlButton";
 import PrepTimeControlButton from "./PrepTimeControlButton";
 import ViewModeTab from "./ViewModeTab";
 import MoreMenuButton from "./MoreMenuButton";
+import PaymentMethodModal, {
+  PAYMENT_METHOD_MODAL_CLOSED,
+} from "./PaymentMethodModal";
+import PrinterSelectionModal, {
+  PRINTER_SELECTION_MODAL_CLOSED,
+} from "./PrinterSelectionModal";
 import PanelProductAvailability from "./PanelProductAvailability";
 import { useMenuContext } from "../context/MenuContext";
 import { useSession } from "next-auth/react";
@@ -460,16 +464,12 @@ export default function LiveOrderTerminal() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const datePickerRef = useRef(null);
-  const [showPaymentMethodModal, setShowPaymentMethodModal] = useState({
-    orderId: null,
-    tableOrders: null,
-    isBulk: false,
-    show: false,
-  });
-  const [showPrinterSelectionModal, setShowPrinterSelectionModal] = useState({
-    order: null,
-    show: false,
-  });
+  const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(
+    PAYMENT_METHOD_MODAL_CLOSED,
+  );
+  const [showPrinterSelectionModal, setShowPrinterSelectionModal] = useState(
+    PRINTER_SELECTION_MODAL_CLOSED,
+  );
   const [availablePrinters, setAvailablePrinters] = useState([]);
   const [loadingPrinters, setLoadingPrinters] = useState(false);
 
@@ -542,252 +542,7 @@ export default function LiveOrderTerminal() {
     }
   };
 
-  // UI Components: Payment method selection modal
-  const PaymentMethodModal = () => {
-    const handlePayLaterSelect = () => {
-      if (showPaymentMethodModal.orderId) {
-        handlePayLater(showPaymentMethodModal.orderId);
-      }
-      setShowPaymentMethodModal({
-        orderId: null,
-        tableOrders: null,
-        isBulk: false,
-        show: false,
-      });
-    };
 
-    const handlePaymentMethodSelect = (method) => {
-      const paymentMethod = method === "cash" ? "counter-cash" : "counter-card";
-
-      if (showPaymentMethodModal.isBulk && showPaymentMethodModal.tableOrders) {
-        // Bulk operation: mark all orders as paid
-        showPaymentMethodModal.tableOrders.forEach((order) => {
-          if (
-            order.paymentStatus === "pending" &&
-            isCounterPayment(order.paymentMethod)
-          ) {
-            handleMarkAsPaid(order._id, paymentMethod);
-          }
-        });
-      } else {
-        // Individual operation: mark single order as paid
-        handleMarkAsPaid(showPaymentMethodModal.orderId, paymentMethod);
-      }
-
-      // Close the modal
-      setShowPaymentMethodModal({
-        orderId: null,
-        tableOrders: null,
-        isBulk: false,
-        show: false,
-      });
-    };
-
-    const handleClose = () => {
-      setShowPaymentMethodModal({
-        orderId: null,
-        tableOrders: null,
-        isBulk: false,
-        show: false,
-      });
-    };
-
-    const modalOrder =
-      !showPaymentMethodModal.isBulk && showPaymentMethodModal.orderId
-        ? orders.find((o) => o._id === showPaymentMethodModal.orderId)
-        : null;
-    const showPayLaterOption =
-      modalOrder &&
-      isPayLaterEligible(modalOrder, menuConfig) &&
-      !modalOrder.isPayLater;
-
-    const collectAmountSummary = showPaymentMethodModal.isBulk
-      ? getCollectAmountSummary(
-          showPaymentMethodModal.tableOrders ?? [],
-          isPendingCounterOrderForCollection,
-        )
-      : modalOrder
-        ? getCollectAmountSummary([modalOrder])
-        : { total: 0, surchargeTotal: 0, orderCount: 0 };
-
-    return (
-      <div
-        className={`modal ${showPaymentMethodModal.show ? "modal-open" : ""}`}
-      >
-        <div className="modal-box w-[400px] max-w-md">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-semibold">
-              {showPaymentMethodModal.isBulk
-                ? "Bulk Payment Method"
-                : "Select Payment Method"}
-            </h3>
-            <button
-              onClick={handleClose}
-              className="btn btn-circle btn-ghost btn-sm"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          <p className="mb-6 text-sm text-gray-600">
-            {showPaymentMethodModal.isBulk
-              ? `How did the customer pay for all orders at Table ${showPaymentMethodModal.tableOrders?.[0]?.table}?`
-              : "How did the customer pay at the counter?"}
-          </p>
-
-          {/* Total Amount Display */}
-          <div className="mb-6 rounded-lg bg-gray-200 p-4 text-center">
-            <p className="mb-1 text-sm font-medium text-gray-600">
-              {showPaymentMethodModal.isBulk
-                ? "Total Amount to Collect:"
-                : "Amount to Collect:"}
-            </p>
-            <div className="text-4xl font-bold text-gray-900">
-              ${collectAmountSummary.total.toFixed(2)}
-            </div>
-            {collectAmountSummary.surchargeTotal > 0 && (
-              <p className="mt-1 text-base text-gray-500">
-                Includes surcharges $
-                {collectAmountSummary.surchargeTotal.toFixed(2)}
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-3">
-            <button
-              onClick={() => handlePaymentMethodSelect("cash")}
-              className="btn btn-outline h-auto w-full justify-start gap-3 p-4"
-            >
-              <div className="text-2xl">💵</div>
-              <div className="text-left">
-                <div className="font-medium">Cash</div>
-                <div className="text-sm text-gray-500">
-                  Physical cash payment
-                </div>
-              </div>
-            </button>
-
-            {menuConfig?.allowCardPaymentAtCounter && (
-              <button
-                onClick={() => handlePaymentMethodSelect("card")}
-                className="btn btn-outline h-auto w-full justify-start gap-3 p-4"
-              >
-                <div className="text-2xl">💳</div>
-                <div className="text-left">
-                  <div className="font-medium">Card</div>
-                  <div className="text-sm text-gray-500">
-                    Credit/debit card payment
-                  </div>
-                </div>
-              </button>
-            )}
-
-            {showPayLaterOption && (
-              <button
-                onClick={handlePayLaterSelect}
-                className="btn btn-outline h-auto w-full justify-start gap-3 p-4"
-              >
-                <div className="text-2xl">🕐</div>
-                <div className="text-left">
-                  <div className="font-medium">Pay Later</div>
-                  <div className="text-sm text-gray-500">
-                    Prepare food now; collect payment after
-                  </div>
-                </div>
-              </button>
-            )}
-          </div>
-        </div>
-        <div className="modal-backdrop" onClick={handleClose}></div>
-      </div>
-    );
-  };
-
-  // UI Components: Printer selection modal
-  const PrinterSelectionModal = () => {
-    const handleClose = () => {
-      setShowPrinterSelectionModal({
-        order: null,
-        show: false,
-      });
-      setAvailablePrinters([]);
-    };
-
-    if (!showPrinterSelectionModal.show || !showPrinterSelectionModal.order) {
-      return null;
-    }
-
-    const order = showPrinterSelectionModal.order;
-    // Printer routing uses two buckets: dine-in vs off-premise.
-    // Delivery prints with takeaway/pick-up by default unless you add a dedicated delivery printer group.
-    const canonical = String(order?.orderType ?? "").trim();
-    const isDineIn =
-      canonical === "dine-in" || (order.table && order.table !== "takeaway");
-    const orderType = isDineIn ? "dinein" : "takeaway";
-
-    return (
-      <div
-        className={`modal ${showPrinterSelectionModal.show ? "modal-open" : ""}`}
-      >
-        <div className="modal-box w-96 max-w-md">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900">
-              Select Printer
-            </h3>
-            <button
-              onClick={handleClose}
-              className="btn btn-circle btn-ghost btn-sm"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          <p className="mb-4 text-sm text-gray-600">
-            Choose which printer to print order #
-            {order._id.slice(-6).toUpperCase()} to
-          </p>
-
-          {loadingPrinters ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="text-sm text-gray-500">Loading printers...</div>
-            </div>
-          ) : availablePrinters.length === 0 ? (
-            <div className="rounded-lg bg-yellow-50 p-4 text-center">
-              <p className="text-sm text-yellow-800">
-                No printers available for {orderType} orders
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {availablePrinters.map((printer) => (
-                <button
-                  key={printer._id}
-                  onClick={() => handlePrinterSelectAndPrint(printer)}
-                  className="btn btn-outline h-auto w-full justify-start gap-3 p-4 text-left"
-                >
-                  <Printer className="h-5 w-5 flex-shrink-0 text-gray-600" />
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-900">
-                      {printer.name}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {printer.localIp}:{printer.port}
-                      {printer.isActive ? (
-                        <span className="ml-2 text-green-600">● Active</span>
-                      ) : (
-                        <span className="ml-2 text-gray-400">● Inactive</span>
-                      )}
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="modal-backdrop" onClick={handleClose}></div>
-      </div>
-    );
-  };
 
   // Date picker modal
   // UI Components: Date picker modal
@@ -1655,11 +1410,7 @@ export default function LiveOrderTerminal() {
 
     const order = showPrinterSelectionModal.order;
 
-    // Close modal first
-    setShowPrinterSelectionModal({
-      order: null,
-      show: false,
-    });
+    closePrinterSelectionModal();
 
     // Print to selected printer
     const printResult = await handlePrintingOrder(order, [selectedPrinter]);
@@ -1909,7 +1660,7 @@ export default function LiveOrderTerminal() {
       }
 
       console.log(`Marked order ${orderId} as paid with ${paymentMethod}`);
-      setShowPaymentMethodModal({ orderId: null, show: false });
+      setShowPaymentMethodModal(PAYMENT_METHOD_MODAL_CLOSED);
     } catch (error) {
       console.error(`Failed to mark order ${orderId} as paid:`, error);
     } finally {
@@ -1973,12 +1724,7 @@ export default function LiveOrderTerminal() {
         );
       }
 
-      setShowPaymentMethodModal({
-        orderId: null,
-        tableOrders: null,
-        isBulk: false,
-        show: false,
-      });
+      setShowPaymentMethodModal(PAYMENT_METHOD_MODAL_CLOSED);
     } catch (error) {
       console.error(`Failed to mark order ${orderId} as pay later:`, error);
     } finally {
@@ -1988,6 +1734,38 @@ export default function LiveOrderTerminal() {
         return newSet;
       });
     }
+  };
+
+  const closePaymentMethodModal = () => {
+    setShowPaymentMethodModal(PAYMENT_METHOD_MODAL_CLOSED);
+  };
+
+  const handlePaymentMethodModalSelect = (method) => {
+    const paymentMethod = method === "cash" ? "counter-cash" : "counter-card";
+
+    if (showPaymentMethodModal.isBulk && showPaymentMethodModal.tableOrders) {
+      showPaymentMethodModal.tableOrders.forEach((order) => {
+        if (isPendingCounterOrderForCollection(order)) {
+          handleMarkAsPaid(order._id, paymentMethod);
+        }
+      });
+    } else if (showPaymentMethodModal.orderId) {
+      handleMarkAsPaid(showPaymentMethodModal.orderId, paymentMethod);
+    }
+
+    setShowPaymentMethodModal(PAYMENT_METHOD_MODAL_CLOSED);
+  };
+
+  const handlePaymentMethodModalPayLater = () => {
+    if (showPaymentMethodModal.orderId) {
+      handlePayLater(showPaymentMethodModal.orderId);
+    }
+    setShowPaymentMethodModal(PAYMENT_METHOD_MODAL_CLOSED);
+  };
+
+  const closePrinterSelectionModal = () => {
+    setShowPrinterSelectionModal(PRINTER_SELECTION_MODAL_CLOSED);
+    setAvailablePrinters([]);
   };
 
   function preorderScheduleSortKey(order) {
@@ -2920,9 +2698,29 @@ export default function LiveOrderTerminal() {
             ))}
           </div>
         )}
-        <PaymentMethodModal />
+        <PaymentMethodModal
+          isOpen={showPaymentMethodModal.show}
+          isBulk={showPaymentMethodModal.isBulk}
+          orderId={showPaymentMethodModal.orderId}
+          tableOrders={showPaymentMethodModal.tableOrders}
+          orders={orders}
+          menuConfig={menuConfig}
+          onClose={closePaymentMethodModal}
+          onSelectPaymentMethod={handlePaymentMethodModalSelect}
+          onPayLater={handlePaymentMethodModalPayLater}
+        />
         <DatePickerModal />
-        <PrinterSelectionModal />
+        <PrinterSelectionModal
+          isOpen={
+            showPrinterSelectionModal.show &&
+            Boolean(showPrinterSelectionModal.order)
+          }
+          order={showPrinterSelectionModal.order}
+          availablePrinters={availablePrinters}
+          isLoadingPrinters={loadingPrinters}
+          onClose={closePrinterSelectionModal}
+          onSelectPrinter={handlePrinterSelectAndPrint}
+        />
       </div>
       {/* Custom Toast Component */}
       {customToast.show && (

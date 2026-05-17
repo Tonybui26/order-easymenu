@@ -326,7 +326,7 @@ export default function MoreMenuButton({
           </div>
 
           {/* Features Grid */}
-          <div className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-1 gap-2">
             {moreFeatures.map((feature, index) => {
               // Handle divider
               if (feature.type === "divider") {
@@ -350,9 +350,9 @@ export default function MoreMenuButton({
                         feature.action();
                         if (!feature.keepModalOpen) setShowModal(false);
                       }}
-                      className="flex min-w-0 flex-1 items-center gap-3 p-4 text-left transition-all duration-200 hover:border-brand_accent hover:shadow-md"
+                      className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left transition-all duration-200 hover:border-brand_accent hover:shadow-md"
                     >
-                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100">
+                      <div className="flex size-8 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100">
                         <feature.icon className="size-6 text-gray-600" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -390,14 +390,14 @@ export default function MoreMenuButton({
                     feature.action();
                     if (!feature.keepModalOpen) setShowModal(false);
                   }}
-                  className={`flex items-center gap-3 rounded-lg border p-4 text-left transition-all duration-200 ${
+                  className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-all duration-200 ${
                     feature.isActive
                       ? "border-brand_accent bg-brand_accent/5 text-brand_accent shadow-md"
                       : "border-gray-200 bg-white hover:border-brand_accent hover:shadow-md"
                   }`}
                 >
                   <div
-                    className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${
+                    className={`flex size-8 flex-shrink-0 items-center justify-center rounded-lg ${
                       feature.isActive ? "bg-brand_accent/10" : "bg-gray-100"
                     }`}
                   >
