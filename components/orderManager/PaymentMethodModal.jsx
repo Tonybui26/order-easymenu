@@ -6,6 +6,10 @@ import {
   getCollectAmountSummary,
   isPendingCounterOrderForCollection,
 } from "@/lib/helper/orderCollectAmount";
+import {
+  formatUnpaidTablesLabel,
+  getDistinctTablesFromOrders,
+} from "@/lib/helper/unpaidTableOrders";
 
 export const PAYMENT_METHOD_MODAL_CLOSED = {
   orderId: null,
@@ -38,12 +42,22 @@ export default function PaymentMethodModal({
       ? getCollectAmountSummary([modalOrder])
       : { total: 0, surchargeTotal: 0, orderCount: 0 };
 
+  const bulkTableNames =
+    isBulk && tableOrders?.length
+      ? getDistinctTablesFromOrders(tableOrders)
+      : [];
+  const bulkTablesLabel = formatUnpaidTablesLabel(bulkTableNames);
+
   return (
     <dialog className={`modal ${isOpen ? "modal-open" : ""}`}>
       <div className="modal-box w-[400px] max-w-md">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-semibold">
-            {isBulk ? "Bulk Payment Method" : "Select Payment Method"}
+            {isBulk
+              ? bulkTableNames.length > 1
+                ? `Bulk payment — ${bulkTablesLabel}`
+                : "Bulk Payment Method"
+              : "Select Payment Method"}
           </h3>
           <button
             type="button"
@@ -56,7 +70,9 @@ export default function PaymentMethodModal({
 
         <p className="mb-6 text-sm text-gray-600">
           {isBulk
-            ? `How did the customer pay for all orders at Table ${tableOrders?.[0]?.table}?`
+            ? bulkTableNames.length > 1
+              ? `How did the customer pay for all orders at ${bulkTablesLabel}?`
+              : `How did the customer pay for all orders at Table ${tableOrders?.[0]?.table}?`
             : "How did the customer pay at the counter?"}
         </p>
 

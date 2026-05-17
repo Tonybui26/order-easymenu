@@ -19,15 +19,15 @@ import {
   shouldKeepDeliveredInActive,
   filterOrdersForActiveList,
 } from "@/lib/helper/payLater";
+import { isPendingCounterOrderForCollection } from "@/lib/helper/orderCollectAmount";
 import {
-  getCollectAmountSummary,
-  isPendingCounterOrderForCollection,
-} from "@/lib/helper/orderCollectAmount";
+  getUnpaidOrdersByTable,
+  isUnpaidCounterDineInOrder,
+} from "@/lib/helper/unpaidTableOrders";
 import {
   Banknote,
   Bell,
   CreditCard,
-  DollarSign,
   ChefHat,
   Check,
   Radio,
@@ -40,7 +40,6 @@ import {
   CalendarClock,
 } from "lucide-react";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
-import { ModifierChoicesGrouped } from "@/lib/utils/modifierDisplay";
 import OnlineOrderControlButton from "./OnlineOrderControlButton";
 import PrepTimeControlButton from "./PrepTimeControlButton";
 import ViewModeTab from "./ViewModeTab";
@@ -48,6 +47,10 @@ import MoreMenuButton from "./MoreMenuButton";
 import PaymentMethodModal, {
   PAYMENT_METHOD_MODAL_CLOSED,
 } from "./PaymentMethodModal";
+import PayMultipleTablesModal, {
+  PAY_MULTIPLE_TABLES_MODAL_CLOSED,
+} from "./PayMultipleTablesModal";
+import UnpaidTablesView from "./UnpaidTablesView";
 import PrinterSelectionModal, {
   PRINTER_SELECTION_MODAL_CLOSED,
 } from "./PrinterSelectionModal";
@@ -466,6 +469,9 @@ export default function LiveOrderTerminal() {
   const datePickerRef = useRef(null);
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(
     PAYMENT_METHOD_MODAL_CLOSED,
+  );
+  const [payMultipleTablesModal, setPayMultipleTablesModal] = useState(
+    PAY_MULTIPLE_TABLES_MODAL_CLOSED,
   );
   const [showPrinterSelectionModal, setShowPrinterSelectionModal] = useState(
     PRINTER_SELECTION_MODAL_CLOSED,
@@ -1738,6 +1744,20 @@ export default function LiveOrderTerminal() {
     setShowPaymentMethodModal(PAYMENT_METHOD_MODAL_CLOSED);
   };
 
+  const closePayMultipleTablesModal = () => {
+    setPayMultipleTablesModal(PAY_MULTIPLE_TABLES_MODAL_CLOSED);
+  };
+
+  const handlePayMultipleTablesCollect = (tableOrders) => {
+    closePayMultipleTablesModal();
+    setShowPaymentMethodModal({
+      orderId: null,
+      tableOrders,
+      isBulk: true,
+      show: true,
+    });
+  };
+
   const handlePaymentMethodModalSelect = (method) => {
     const paymentMethod = method === "cash" ? "counter-cash" : "counter-card";
 
@@ -1795,21 +1815,7 @@ export default function LiveOrderTerminal() {
         );
       });
     } else if (viewMode === "unpaid") {
-      // Show all unpaid counter orders (including delivered orders that still need payment)
-      return orders.filter(
-        (order) =>
-          order.paymentStatus === "pending" &&
-          isCounterPayment(order.paymentMethod) &&
-          order.table !== "takeaway" &&
-          [
-            "pending",
-            "confirmed",
-            "accepted",
-            "preparing",
-            "ready",
-            "delivered",
-          ].includes(order.status),
-      );
+      return orders.filter(isUnpaidCounterDineInOrder);
     } else if (viewMode === "scheduled") {
       return orders
         .filter(
@@ -1855,22 +1861,9 @@ export default function LiveOrderTerminal() {
     return orders;
   };
 
-  // Group unpaid orders by table (uses current filtered orders; actual unpaid view uses unpaid filter)
-  const getUnpaidOrdersByTable = () => {
-    const unpaidOrders = getFilteredOrders();
-
-    const grouped = {};
-    unpaidOrders.forEach((order) => {
-      const table = order.table || "Unknown";
-      if (!grouped[table]) grouped[table] = [];
-      grouped[table].push(order);
-    });
-
-    return grouped;
-  };
-
   const filteredOrders = getFilteredOrders();
-  const unpaidOrdersByTable = getUnpaidOrdersByTable();
+  const unpaidOrdersByTable = getUnpaidOrdersByTable(orders);
+  const unpaidTableCount = Object.keys(unpaidOrdersByTable).length;
   const scheduledCount = orders.filter(
     (order) =>
       order.isPreorder &&
@@ -1904,28 +1897,7 @@ export default function LiveOrderTerminal() {
   ).length;
   const readyCount = orders.filter((order) => order.status === "ready").length;
   const completedCount = completedOrders.length;
-  const unpaidTablesBadgeCount = (() => {
-    // Count unique tables with unpaid counter orders (including delivered orders that still need payment)
-    const uniqueTables = new Set(
-      orders
-        .filter(
-          (order) =>
-            order.paymentStatus === "pending" &&
-            isCounterPayment(order.paymentMethod) &&
-            order.table !== "takeaway" &&
-            [
-              "pending",
-              "confirmed",
-              "accepted",
-              "preparing",
-              "ready",
-              "delivered",
-            ].includes(order.status),
-        )
-        .map((order) => order.table || "Unknown"),
-    );
-    return uniqueTables.size;
-  })();
+  const unpaidTablesBadgeCount = unpaidTableCount;
 
   const [customToast, setCustomToast] = useState({
     show: false,
@@ -2312,182 +2284,30 @@ export default function LiveOrderTerminal() {
             </div>
           </div>
         ) : viewMode === "unpaid" ? (
-          // Unpaid Counter Orders View
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:gap-6">
-            {Object.keys(unpaidOrdersByTable).length === 0 ? (
-              <div className="col-span-full rounded-lg bg-transparent p-12 text-center">
-                <DollarSign
-                  size={48}
-                  className="mx-auto mb-4 text-brand_accent"
-                />
-                <h3 className="mb-2 text-xl font-semibold text-white">
-                  No Unpaid Tables
-                </h3>
-                <p className="text-gray-400">All tables have been paid</p>
-              </div>
-            ) : (
-              Object.entries(unpaidOrdersByTable).map(
-                ([table, tableOrders]) => {
-                  const tableCollectSummary =
-                    getCollectAmountSummary(tableOrders);
-
-                  // Combine all items from all orders for this table
-                  const combinedItems = {};
-                  tableOrders.forEach((order) => {
-                    order.items.forEach((item) => {
-                      const key = `${item.menuItemId}-${item.name}-${JSON.stringify(item.selectedVariants)}-${JSON.stringify(item.selectedModifiers)}`;
-                      if (combinedItems[key]) {
-                        combinedItems[key].quantity += item.quantity;
-                      } else {
-                        combinedItems[key] = { ...item };
-                      }
-                    });
-                  });
-
-                  const combinedItemsArray = Object.values(combinedItems);
-
-                  return (
-                    <div
-                      key={table}
-                      className="flex flex-col justify-between overflow-hidden rounded-lg border border-gray-100 bg-neutral-100 shadow-md transition-all duration-200 hover:border-gray-200"
-                    >
-                      <div>
-                        {/* Header */}
-                        <div className="p-4 pb-4 xl:p-6">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-center">
-                              <div>
-                                <h3 className="text-2xl font-extrabold leading-tight text-gray-800 xl:text-xl">
-                                  Table {table}
-                                </h3>
-                                <p className="text-xs font-medium text-gray-500 xl:text-sm">
-                                  {tableOrders.length} order
-                                  {tableOrders.length > 1 ? "s" : ""}
-                                </p>
-                                <p className="text-xs text-gray-600">
-                                  {tableOrders
-                                    .map(
-                                      (order) =>
-                                        `${order.customerName || "Anonymous"} ($${order.total.toFixed(2)})`,
-                                    )
-                                    .join(", ")}
-                                </p>
-                                <p className="text-xs text-gray-600">
-                                  Total: ${tableCollectSummary.total.toFixed(2)}
-                                  {/* Temporarily hidden */}
-                                  {/* {tableCollectSummary.surchargeTotal > 0 &&
-                                    ` (incl. surcharges $${tableCollectSummary.surchargeTotal.toFixed(2)})`} */}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Divider */}
-                        <div className="h-px bg-gray-300"></div>
-
-                        {/* Order Items */}
-                        <div className="p-4 pb-6 pt-2 xl:p-6">
-                          <div className="space-y-0.5 xl:space-y-2">
-                            {combinedItemsArray.map((item, index) => (
-                              <div
-                                key={index}
-                                className="flex items-start justify-between py-1 transition-all duration-200 xl:py-2"
-                              >
-                                <div className="flex flex-1 items-start space-x-3">
-                                  <span className="text-base font-bold text-gray-800">
-                                    {item.quantity}
-                                  </span>
-                                  <div className="min-w-0 flex-1">
-                                    <p className="text-base font-bold text-gray-800 xl:text-base">
-                                      {item.name}
-                                    </p>
-                                    {item.selectedVariants &&
-                                      item.selectedVariants.length > 0 && (
-                                        <p className="text-sm text-gray-600">
-                                          {item.selectedVariants
-                                            .map(
-                                              (variant) =>
-                                                `${variant.groupName} (${variant.optionName})`,
-                                            )
-                                            .join(" - ")}
-                                        </p>
-                                      )}
-                                    <ModifierChoicesGrouped
-                                      modifiers={item.selectedModifiers}
-                                      className="text-sm text-gray-700"
-                                    />
-                                  </div>
-                                </div>
-                                <p className="ml-4 text-base font-bold text-gray-800 xl:text-base">
-                                  ${(item.price * item.quantity).toFixed(2)}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                      {/* Actions */}
-                      <div className="p-4 pt-0 xl:p-6">
-                        <div className="mb-3 space-y-2">
-                          {tableOrders
-                            .filter(
-                              (order) =>
-                                order.paymentStatus === "pending" &&
-                                isCounterPayment(order.paymentMethod),
-                            )
-                            .map((order) => (
-                              <div
-                                key={order._id}
-                                className="flex items-center justify-between gap-2"
-                              >
-                                <span className="text-sm text-gray-600">
-                                  {order.customerName || "Guest"} · $
-                                  {order.total.toFixed(2)}
-                                  {payLaterAtCounterEnabled && order.isPayLater
-                                    ? " · Pay later"
-                                    : ""}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setShowPaymentMethodModal({
-                                      orderId: order._id,
-                                      tableOrders: null,
-                                      isBulk: false,
-                                      show: true,
-                                    });
-                                  }}
-                                  className="shrink-0 rounded-lg border border-green-600 px-3 py-1.5 text-sm font-medium text-green-700 transition-colors hover:bg-green-50"
-                                >
-                                  Mark as Paid
-                                </button>
-                              </div>
-                            ))}
-                        </div>
-                        <div className="flex space-x-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowPaymentMethodModal({
-                                orderId: null,
-                                tableOrders: tableOrders,
-                                isBulk: true,
-                                show: true,
-                              });
-                            }}
-                            className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-green-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 hover:bg-green-700 xl:text-base"
-                          >
-                            <span>Mark All Paid</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                },
-              )
-            )}
-          </div>
+          <UnpaidTablesView
+            unpaidOrdersByTable={unpaidOrdersByTable}
+            showPayMultipleTables={unpaidTableCount > 1}
+            payLaterAtCounterEnabled={payLaterAtCounterEnabled}
+            onPayMultipleTables={(sourceTable) =>
+              setPayMultipleTablesModal({ show: true, sourceTable })
+            }
+            onMarkOrderPaid={(orderId) =>
+              setShowPaymentMethodModal({
+                orderId,
+                tableOrders: null,
+                isBulk: false,
+                show: true,
+              })
+            }
+            onMarkAllPaid={(tableOrders) =>
+              setShowPaymentMethodModal({
+                orderId: null,
+                tableOrders,
+                isBulk: true,
+                show: true,
+              })
+            }
+          />
         ) : viewMode === "completed" ? (
           // Completed Orders View
           <div className="space-y-6">
@@ -2709,6 +2529,13 @@ export default function LiveOrderTerminal() {
           onClose={closePaymentMethodModal}
           onSelectPaymentMethod={handlePaymentMethodModalSelect}
           onPayLater={handlePaymentMethodModalPayLater}
+        />
+        <PayMultipleTablesModal
+          isOpen={payMultipleTablesModal.show}
+          sourceTable={payMultipleTablesModal.sourceTable}
+          unpaidByTable={unpaidOrdersByTable}
+          onClose={closePayMultipleTablesModal}
+          onCollectPayment={handlePayMultipleTablesCollect}
         />
         <DatePickerModal />
         <PrinterSelectionModal
