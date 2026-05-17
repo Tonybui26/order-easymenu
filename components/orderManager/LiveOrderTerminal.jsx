@@ -542,8 +542,6 @@ export default function LiveOrderTerminal() {
     }
   };
 
-
-
   // Date picker modal
   // UI Components: Date picker modal
   const DatePickerModal = () => {
@@ -2364,10 +2362,7 @@ export default function LiveOrderTerminal() {
                                 </h3>
                                 <p className="text-xs font-medium text-gray-500 xl:text-sm">
                                   {tableOrders.length} order
-                                  {tableOrders.length > 1 ? "s" : ""} • Total: $
-                                  {tableCollectSummary.total.toFixed(2)}
-                                  {tableCollectSummary.surchargeTotal > 0 &&
-                                    ` (incl. surcharges $${tableCollectSummary.surchargeTotal.toFixed(2)})`}
+                                  {tableOrders.length > 1 ? "s" : ""}
                                 </p>
                                 <p className="text-xs text-gray-600">
                                   {tableOrders
@@ -2376,6 +2371,12 @@ export default function LiveOrderTerminal() {
                                         `${order.customerName || "Anonymous"} ($${order.total.toFixed(2)})`,
                                     )
                                     .join(", ")}
+                                </p>
+                                <p className="text-xs text-gray-600">
+                                  Total: ${tableCollectSummary.total.toFixed(2)}
+                                  {/* Temporarily hidden */}
+                                  {/* {tableCollectSummary.surchargeTotal > 0 &&
+                                    ` (incl. surcharges $${tableCollectSummary.surchargeTotal.toFixed(2)})`} */}
                                 </p>
                               </div>
                             </div>
