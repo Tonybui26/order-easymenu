@@ -7,9 +7,19 @@ import {
   fetchCompletedOrders,
   updateOrderStatus,
   updateOrderPaymentStatus,
+  markOrderPayLater,
   createPrintJobsForOrder,
   checkPrinterAvailability,
 } from "@/lib/api/fetchApi";
+import {
+  isCounterPayment,
+  isDineInOrder,
+  isPayLaterAtCounterEnabled,
+  isPayLaterEligible,
+  isPayLaterOrderInNewTab,
+  shouldKeepDeliveredInActive,
+  filterOrdersForActiveList,
+} from "@/lib/helper/payLater";
 import {
   Banknote,
   Bell,
@@ -133,6 +143,9 @@ export default function LiveOrderTerminal() {
     Boolean(menuConfig?.preOrderingSettings?.pickUpEnabled) ||
     Boolean(menuConfig?.preOrderingSettings?.deliveryEnabled);
 
+  // Pilot-store flag — all pay-later UI/API paths gate on this (default stores unchanged)
+  const payLaterAtCounterEnabled = isPayLaterAtCounterEnabled(menuConfig);
+
   useEffect(() => {
     if (!hasPreorderEnabled && viewMode === "scheduled") {
       setViewMode("new");
@@ -159,30 +172,7 @@ export default function LiveOrderTerminal() {
 
     try {
       const data = await fetchOrders();
-      const activeOrders = data.filter((order) => {
-        // Include orders that are still in progress
-        if (
-          ["confirmed", "accepted", "preparing", "ready"].includes(order.status)
-        ) {
-          return true;
-        } else {
-          // For the rest of the orders(pending, delivered, cancelled)
-
-          // 1. if the order is cancelled or delivered, then exclude the order
-          if (["cancelled", "delivered"].includes(order.status)) {
-            return false;
-          }
-          // 2. Now only Pending orders are left, so we need to check if the order is cash payment method and still need payment
-          if (
-            order.paymentMethod === "counter-cash" &&
-            order.paymentStatus === "pending"
-          ) {
-            return true;
-          }
-          // 3. If the order is not cash payment method or not pending, then exclude the order
-          return false;
-        }
-      });
+      const activeOrders = filterOrdersForActiveList(data, menuConfig);
       // toast.success("polling orders");
       const currentOrderIdsAsSet = new Set(
         activeOrders.map((order) => order._id),
@@ -541,6 +531,18 @@ export default function LiveOrderTerminal() {
 
   // UI Components: Payment method selection modal
   const PaymentMethodModal = () => {
+    const handlePayLaterSelect = () => {
+      if (showPaymentMethodModal.orderId) {
+        handlePayLater(showPaymentMethodModal.orderId);
+      }
+      setShowPaymentMethodModal({
+        orderId: null,
+        tableOrders: null,
+        isBulk: false,
+        show: false,
+      });
+    };
+
     const handlePaymentMethodSelect = (method) => {
       const paymentMethod = method === "cash" ? "counter-cash" : "counter-card";
 
@@ -577,11 +579,20 @@ export default function LiveOrderTerminal() {
       });
     };
 
+    const modalOrder =
+      !showPaymentMethodModal.isBulk && showPaymentMethodModal.orderId
+        ? orders.find((o) => o._id === showPaymentMethodModal.orderId)
+        : null;
+    const showPayLaterOption =
+      modalOrder &&
+      isPayLaterEligible(modalOrder, menuConfig) &&
+      !modalOrder.isPayLater;
+
     return (
       <div
         className={`modal ${showPaymentMethodModal.show ? "modal-open" : ""}`}
       >
-        <div className="modal-box w-80 max-w-sm">
+        <div className="modal-box w-[400px] max-w-md">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold">
               {showPaymentMethodModal.isBulk
@@ -660,6 +671,21 @@ export default function LiveOrderTerminal() {
                   <div className="font-medium">Card</div>
                   <div className="text-sm text-gray-500">
                     Credit/debit card payment
+                  </div>
+                </div>
+              </button>
+            )}
+
+            {showPayLaterOption && (
+              <button
+                onClick={handlePayLaterSelect}
+                className="btn btn-outline h-auto w-full justify-start gap-3 p-4"
+              >
+                <div className="text-2xl">🕐</div>
+                <div className="text-left">
+                  <div className="font-medium">Pay Later</div>
+                  <div className="text-sm text-gray-500">
+                    Prepare food now; collect payment after
                   </div>
                 </div>
               </button>
@@ -863,32 +889,7 @@ export default function LiveOrderTerminal() {
       setLoading(true);
       try {
         const data = await fetchOrders();
-        const activeOrders = data.filter((order) => {
-          // Include orders that are still in progress
-          if (
-            ["confirmed", "accepted", "preparing", "ready"].includes(
-              order.status,
-            )
-          ) {
-            return true;
-          } else {
-            // For the rest of the orders(pending, delivered, cancelled)
-
-            // 1. if the order is cancelled or delivered, then exclude the order
-            if (["cancelled", "delivered"].includes(order.status)) {
-              return false;
-            }
-            // 2. Now only Pending orders are left, so we need to check if the order is counter payment method and still need payment
-            if (
-              isCounterPayment(order.paymentMethod) &&
-              order.paymentStatus === "pending"
-            ) {
-              return true;
-            }
-            // 3. If the order is not counter payment method or not pending, then exclude the order
-            return false;
-          }
-        });
+        const activeOrders = filterOrdersForActiveList(data, menuConfig);
         setOrders(activeOrders);
         console.log("activeOrders initial", activeOrders);
         // Update both state and ref immediately to prevent notifications for existing orders
@@ -1743,12 +1744,18 @@ export default function LiveOrderTerminal() {
       }
 
       // If order is delivered or cancelled, remove it after a delay
+      // Pay-later dine-in orders stay active until payment is collected
       if (["delivered", "cancelled"].includes(newStatus)) {
-        setTimeout(() => {
-          setOrders((prevOrders) =>
-            prevOrders.filter((order) => order._id !== orderId),
-          );
-        }, 5000);
+        const keepDeliveredPayLater =
+          newStatus === "delivered" &&
+          shouldKeepDeliveredInActive(updatedOrder, menuConfig);
+        if (!keepDeliveredPayLater) {
+          setTimeout(() => {
+            setOrders((prevOrders) =>
+              prevOrders.filter((order) => order._id !== orderId),
+            );
+          }, 5000);
+        }
       }
     } catch (error) {
       console.error(
@@ -1785,7 +1792,12 @@ export default function LiveOrderTerminal() {
   const handleMarkAsPaid = async (orderId, paymentMethod = null) => {
     // If no payment method specified, show selection modal
     if (!paymentMethod) {
-      setShowPaymentMethodModal({ orderId, show: true });
+      setShowPaymentMethodModal({
+        orderId,
+        tableOrders: null,
+        isBulk: false,
+        show: true,
+      });
       return;
     }
 
@@ -1868,13 +1880,72 @@ export default function LiveOrderTerminal() {
     }
   };
 
-  // Helper function to check if payment method is a counter payment
-  const isCounterPayment = (paymentMethod) => {
-    return (
-      paymentMethod === "cash" ||
-      paymentMethod === "counter-cash" ||
-      paymentMethod === "counter-card"
-    );
+  const handlePayLater = async (orderId) => {
+    if (!payLaterAtCounterEnabled) {
+      return;
+    }
+
+    if (processingOrders.has(orderId)) {
+      return;
+    }
+
+    setProcessingOrders((prev) => new Set(prev).add(orderId));
+
+    try {
+      const currentOrder = orders.find((order) => order._id === orderId);
+      const isPending = currentOrder && currentOrder.status === "pending";
+      const isDineIn = currentOrder && isDineInOrder(currentOrder);
+
+      const updatedOrder = await markOrderPayLater(
+        orderId,
+        payLaterAtCounterEnabled,
+      );
+
+      if (isDineIn && isPending) {
+        try {
+          const orderWithUpdatedStatus = await updateOrderStatus(
+            orderId,
+            "confirmed",
+          );
+          setOrders((prevOrders) =>
+            prevOrders.map((order) =>
+              order._id === orderId ? orderWithUpdatedStatus : order,
+            ),
+          );
+        } catch (statusError) {
+          console.error(
+            `Failed to update order status to confirmed:`,
+            statusError,
+          );
+          setOrders((prevOrders) =>
+            prevOrders.map((order) =>
+              order._id === orderId ? updatedOrder : order,
+            ),
+          );
+        }
+      } else {
+        setOrders((prevOrders) =>
+          prevOrders.map((order) =>
+            order._id === orderId ? updatedOrder : order,
+          ),
+        );
+      }
+
+      setShowPaymentMethodModal({
+        orderId: null,
+        tableOrders: null,
+        isBulk: false,
+        show: false,
+      });
+    } catch (error) {
+      console.error(`Failed to mark order ${orderId} as pay later:`, error);
+    } finally {
+      setProcessingOrders((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
+    }
   };
 
   function preorderScheduleSortKey(order) {
@@ -1951,7 +2022,8 @@ export default function LiveOrderTerminal() {
             isCounterPayment(order.paymentMethod)) ||
           (order.status === "confirmed" &&
             order.paymentStatus === "paid" &&
-            isCounterPayment(order.paymentMethod)),
+            isCounterPayment(order.paymentMethod)) ||
+          isPayLaterOrderInNewTab(order, menuConfig),
       );
     } else if (viewMode === "preparing") {
       return orders.filter((order) => order.status === "preparing");
@@ -1997,7 +2069,8 @@ export default function LiveOrderTerminal() {
         isCounterPayment(order.paymentMethod)) ||
       (order.status === "confirmed" &&
         order.paymentStatus === "paid" &&
-        isCounterPayment(order.paymentMethod)),
+        isCounterPayment(order.paymentMethod)) ||
+      isPayLaterOrderInNewTab(order, menuConfig),
   ).length;
   const allActiveCount = orders.filter((order) => {
     if (order.status === "pending")
@@ -2535,10 +2608,46 @@ export default function LiveOrderTerminal() {
                       </div>
                       {/* Actions */}
                       <div className="p-4 pt-0 xl:p-6">
+                        <div className="mb-3 space-y-2">
+                          {tableOrders
+                            .filter(
+                              (order) =>
+                                order.paymentStatus === "pending" &&
+                                isCounterPayment(order.paymentMethod),
+                            )
+                            .map((order) => (
+                              <div
+                                key={order._id}
+                                className="flex items-center justify-between gap-2"
+                              >
+                                <span className="text-sm text-gray-600">
+                                  {order.customerName || "Guest"} · $
+                                  {order.total.toFixed(2)}
+                                  {payLaterAtCounterEnabled && order.isPayLater
+                                    ? " · Pay later"
+                                    : ""}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowPaymentMethodModal({
+                                      orderId: order._id,
+                                      tableOrders: null,
+                                      isBulk: false,
+                                      show: true,
+                                    });
+                                  }}
+                                  className="shrink-0 rounded-lg border border-green-600 px-3 py-1.5 text-sm font-medium text-green-700 transition-colors hover:bg-green-50"
+                                >
+                                  Mark as Paid
+                                </button>
+                              </div>
+                            ))}
+                        </div>
                         <div className="flex space-x-3">
                           <button
+                            type="button"
                             onClick={() => {
-                              // Show unified payment method modal for bulk operations
                               setShowPaymentMethodModal({
                                 orderId: null,
                                 tableOrders: tableOrders,
@@ -2763,6 +2872,7 @@ export default function LiveOrderTerminal() {
                 onMarkAsPaid={(orderId) => handleMarkAsPaid(orderId)}
                 onPrint={handleOpenPrinterSelection}
                 showMarkAsPaid={true}
+                payLaterEnabled={payLaterAtCounterEnabled}
                 isProcessing={processingOrders.has(order._id)}
               />
             ))}

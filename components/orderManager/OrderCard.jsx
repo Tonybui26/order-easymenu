@@ -35,6 +35,7 @@ export default function OrderCard({
   onCancel,
   onMarkAsPaid,
   showMarkAsPaid = false,
+  payLaterEnabled = false,
   viewMode,
   completedItems = [],
   onToggleItemCompletion,
@@ -149,8 +150,13 @@ export default function OrderCard({
 
     // For counter orders (dine-in)
     if (isCounterOrder) {
-      // Must be paid AND in a state where preparation can start
-      if (order.paymentStatus !== "paid") return false;
+      // Must be paid (or pay-later when store allows) AND in a state where preparation can start
+      if (
+        order.paymentStatus !== "paid" &&
+        !(payLaterEnabled && order.isPayLater)
+      ) {
+        return false;
+      }
       if (isPreorder) return order.status === "accepted";
       return ["pending", "confirmed"].includes(order.status);
     }
@@ -212,8 +218,23 @@ export default function OrderCard({
     // Must be unpaid
     if (order.paymentStatus !== "pending") return false;
 
+    // Pay-later: collect payment only from the Unpaid tab
+    if (payLaterEnabled && order.isPayLater && viewMode !== "unpaid") {
+      return false;
+    }
+
     // Can be any status (pending, confirmed, preparing, ready) but not delivered/cancelled
-    if (["delivered", "cancelled"].includes(order.status)) return false;
+    if (["delivered", "cancelled"].includes(order.status)) {
+      if (
+        payLaterEnabled &&
+        order.isPayLater &&
+        viewMode === "unpaid" &&
+        order.status === "delivered"
+      ) {
+        return true;
+      }
+      return false;
+    }
 
     return true;
   })();
@@ -350,6 +371,7 @@ export default function OrderCard({
         if (order.paymentMethod === "cash") return "Cash Paid"; // Legacy support
         return "Paid";
       case "pending":
+        if (payLaterEnabled && order.isPayLater) return "Pay Later";
         if (isCounterPayment(order.paymentMethod)) return "Not Paid";
         return "Payment Pending";
       case "failed":
