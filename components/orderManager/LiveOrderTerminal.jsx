@@ -21,6 +21,10 @@ import {
   filterOrdersForActiveList,
 } from "@/lib/helper/payLater";
 import {
+  getCollectAmountSummary,
+  isPendingCounterOrderForCollection,
+} from "@/lib/helper/orderCollectAmount";
+import {
   Banknote,
   Bell,
   CreditCard,
@@ -597,6 +601,15 @@ export default function LiveOrderTerminal() {
       isPayLaterEligible(modalOrder, menuConfig) &&
       !modalOrder.isPayLater;
 
+    const collectAmountSummary = showPaymentMethodModal.isBulk
+      ? getCollectAmountSummary(
+          showPaymentMethodModal.tableOrders ?? [],
+          isPendingCounterOrderForCollection,
+        )
+      : modalOrder
+        ? getCollectAmountSummary([modalOrder])
+        : { total: 0, surchargeTotal: 0, orderCount: 0 };
+
     return (
       <div
         className={`modal ${showPaymentMethodModal.show ? "modal-open" : ""}`}
@@ -623,37 +636,21 @@ export default function LiveOrderTerminal() {
           </p>
 
           {/* Total Amount Display */}
-          <div className="mb-6 rounded-lg bg-gray-50 p-4 text-center">
+          <div className="mb-6 rounded-lg bg-gray-200 p-4 text-center">
             <p className="mb-1 text-sm font-medium text-gray-600">
               {showPaymentMethodModal.isBulk
                 ? "Total Amount to Collect:"
                 : "Amount to Collect:"}
             </p>
-            <div className="text-3xl font-bold text-gray-900">
-              $
-              {(() => {
-                if (
-                  showPaymentMethodModal.isBulk &&
-                  showPaymentMethodModal.tableOrders
-                ) {
-                  // Calculate total for bulk orders
-                  return showPaymentMethodModal.tableOrders
-                    .filter(
-                      (order) =>
-                        order.paymentStatus === "pending" &&
-                        isCounterPayment(order.paymentMethod),
-                    )
-                    .reduce((sum, order) => sum + order.total, 0)
-                    .toFixed(2);
-                } else {
-                  // Get amount for individual order
-                  const order = orders.find(
-                    (o) => o._id === showPaymentMethodModal.orderId,
-                  );
-                  return order ? order.total.toFixed(2) : "0.00";
-                }
-              })()}
+            <div className="text-4xl font-bold text-gray-900">
+              ${collectAmountSummary.total.toFixed(2)}
             </div>
+            {collectAmountSummary.surchargeTotal > 0 && (
+              <p className="mt-1 text-base text-gray-500">
+                Includes surcharges $
+                {collectAmountSummary.surchargeTotal.toFixed(2)}
+              </p>
+            )}
           </div>
 
           <div className="space-y-3">
@@ -2555,10 +2552,8 @@ export default function LiveOrderTerminal() {
             ) : (
               Object.entries(unpaidOrdersByTable).map(
                 ([table, tableOrders]) => {
-                  const totalAmount = tableOrders.reduce(
-                    (sum, order) => sum + order.total,
-                    0,
-                  );
+                  const tableCollectSummary =
+                    getCollectAmountSummary(tableOrders);
 
                   // Combine all items from all orders for this table
                   const combinedItems = {};
@@ -2592,7 +2587,9 @@ export default function LiveOrderTerminal() {
                                 <p className="text-xs font-medium text-gray-500 xl:text-sm">
                                   {tableOrders.length} order
                                   {tableOrders.length > 1 ? "s" : ""} • Total: $
-                                  {totalAmount.toFixed(2)}
+                                  {tableCollectSummary.total.toFixed(2)}
+                                  {tableCollectSummary.surchargeTotal > 0 &&
+                                    ` (incl. surcharges $${tableCollectSummary.surchargeTotal.toFixed(2)})`}
                                 </p>
                                 <p className="text-xs text-gray-600">
                                   {tableOrders

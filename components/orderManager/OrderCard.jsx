@@ -504,9 +504,9 @@ export default function OrderCard({
                 <div className="mb-1 inline-flex items-center justify-end py-1 text-xs text-gray-500">
                   Placed {timeAgo}
                 </div>
-                {/* Total + optional surcharge breakdown for pay-at-counter */}
+                {/* Total + optional surcharge breakdown for pay-at-counter hidden temporarily */}
                 {isCounterPayment(order.paymentMethod) && (
-                  <div className="rounded-lg bg-gray-100 text-sm text-gray-600">
+                  <div className="hidden rounded-lg bg-gray-100 text-sm text-gray-600">
                     <p className="text-lg font-medium text-gray-800">
                       Total: ${Number(order.total ?? 0).toFixed(2)}
                     </p>
