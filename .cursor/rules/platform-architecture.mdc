@@ -1,0 +1,33 @@
+---
+description: Order Manager depends on easymenu API — do not duplicate backend
+alwaysApply: true
+---
+
+# Order Manager (order-easymenu)
+
+Companion **Capacitor** app for in-service staff. **No MongoDB** — all data and business rules live in **easymenu**.
+
+## This repo
+
+- **UI:** `components/orderManager/` (e.g. `LiveOrderTerminal`, `OrderCard`).
+- **API client:** `lib/actions/orderActions.js`, `lib/api/fetchApi.js` (thin wrappers).
+- **Helpers:** `lib/helper/` (e.g. pay-later gating tied to `menuConfig.allowPayLaterAtCounter`).
+- **Context:** `components/context/MenuContext.js` — `menuConfig`, `storeProfile` from easymenu.
+- **Production:** `order.goeasy.menu`; dev API base: `NEXT_PUBLIC_MAIN_APP_URL` → `http://localhost:3000`.
+
+## easymenu (primary app) — separate repo
+
+- **Role:** Source of truth — `models/`, `app/api/`.
+- **When adding fields or order logic:** change easymenu first, then consume here via existing actions.
+- **Do not** add Mongoose models or duplicate order APIs in this repo.
+
+## easymenu Pocket
+
+- Not this repo. Pocket is `/admin/pocket` inside **easymenu** (owner backoffice on mobile). Order Manager is for **live order operations** during service.
+
+## Rules for the AI
+
+1. Backend/schema/API → edit **easymenu**.
+2. Staff terminal UX, polling, modals → edit **order-easymenu**.
+3. Auth: NextAuth session → JWT → easymenu `app/api/*`.
+4. Feature flags on `menu.config.*` must be enforced in easymenu API and gated in UI with `menuConfig`.
