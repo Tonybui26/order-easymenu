@@ -6,6 +6,10 @@ import { toast } from "react-hot-toast";
 import PrinterScanner from "./PrinterScanner";
 import { isNativeApp } from "../../../lib/helper/platformDetection";
 import { DEFAULT_ITEM_GROUPS } from "@/lib/constants/itemGroups";
+import {
+  PRINTER_COMMAND_LANGUAGES,
+  DEFAULT_PRINTER_COMMAND_LANGUAGE,
+} from "@/lib/constants/printerLanguages";
 
 export default function PrinterSetupModal({
   isOpen,
@@ -25,6 +29,7 @@ export default function PrinterSetupModal({
     // is ticked we only print items that belong to one of the selected groups;
     // items without a group (or in a different group) are dropped at print time.
     groupIds: [],
+    commandLanguage: DEFAULT_PRINTER_COMMAND_LANGUAGE,
   });
 
   const [errors, setErrors] = useState({});
@@ -42,6 +47,8 @@ export default function PrinterSetupModal({
         forDineIn: printer.forDineIn || false,
         // Existing printers may not have groupIds yet; default to "no filter".
         groupIds: Array.isArray(printer.groupIds) ? printer.groupIds : [],
+        commandLanguage:
+          printer.commandLanguage || DEFAULT_PRINTER_COMMAND_LANGUAGE,
       });
       setShowManualForm(true); // Show form directly for editing
     } else {
@@ -142,6 +149,7 @@ export default function PrinterSetupModal({
       forTakeaway: false,
       forDineIn: false,
       groupIds: [],
+      commandLanguage: DEFAULT_PRINTER_COMMAND_LANGUAGE,
     });
     setErrors({});
     setIsSaving(false);
@@ -262,6 +270,36 @@ export default function PrinterSetupModal({
                   </label>
                 )}
               </div>
+            </div>
+
+            {/* Printer command language */}
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text">Printer type</span>
+              </label>
+              <select
+                value={formData.commandLanguage}
+                onChange={(e) =>
+                  handleInputChange("commandLanguage", e.target.value)
+                }
+                className="select select-bordered w-full"
+              >
+                <option value={PRINTER_COMMAND_LANGUAGES.ESCPOS}>
+                  Receipt (ESC/POS)
+                </option>
+                <option value={PRINTER_COMMAND_LANGUAGES.TSPL}>
+                  Label (TSPL — test only)
+                </option>
+              </select>
+              {formData.commandLanguage === PRINTER_COMMAND_LANGUAGES.TSPL && (
+                <label className="label">
+                  <span className="label-text-alt text-gray-500">
+                    Label printers only support Print Test for now. Leave
+                    takeaway and dine-in off so live orders do not use this
+                    printer yet.
+                  </span>
+                </label>
+              )}
             </div>
 
             {/* Order Type Settings */}

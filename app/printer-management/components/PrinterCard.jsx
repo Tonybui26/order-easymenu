@@ -28,6 +28,8 @@ import {
   setQueueLogCallback,
   aggressiveTestQueuedParallel, // ✅ Import the new function
 } from "@/lib/helper/printerUtilsNew";
+import { isTsplPrinter } from "@/lib/constants/printerLanguages";
+import { printTsplTestLabel } from "@/lib/printers/printTsplTestLabel";
 
 export default function PrinterCard({ printer, onDelete, onUpdate }) {
   const [showEditModal, setShowEditModal] = useState(false);
@@ -78,26 +80,36 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
   const handleTestPrinter = async () => {
     try {
       setTestingPrinter(true);
-      setCurrentTestType("Connection Test");
+      const isTspl = isTsplPrinter(printer);
+      setCurrentTestType(isTspl ? "TSPL Label Test" : "Connection Test");
       clearLogs();
       setShowLogsModal(true);
 
-      // ✅ Set up queue logging
-      setupQueueLogging();
+      // ✅ Set up queue logging (ESC/POS path only; TSPL uses direct logs below)
+      if (!isTspl) {
+        setupQueueLogging();
+      }
 
       addLog(
-        `Starting connection test for ${printer.name} (${printer.localIp}:${printer.port})`,
+        `Starting ${isTspl ? "TSPL label" : "receipt"} test for ${printer.name} (${printer.localIp}:${printer.port})`,
         "info",
       );
 
-      const printData = {
-        printers: [printer],
-      };
-      const result = await printOrderQueued(printData, {
-        delayAfterDisconnect: 300,
-        testing: true,
-        onlyConnectionTest: false, // change to true for connection only test, false for print order test
-      });
+      let result;
+      if (isTspl) {
+        result = await printTsplTestLabel(printer, {
+          delayAfterDisconnect: 300,
+        });
+      } else {
+        const printData = {
+          printers: [printer],
+        };
+        result = await printOrderQueued(printData, {
+          delayAfterDisconnect: 300,
+          testing: true,
+          onlyConnectionTest: false,
+        });
+      }
 
       if (result.success) {
         addLog(`✅ Connection successful!`, "success");
@@ -199,8 +211,17 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
             </div>
 
             <div className="flex-1">
-              <div className="mb-1">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
                 <h4 className="font-medium text-gray-900">{printer.name}</h4>
+                {isTsplPrinter(printer) ? (
+                  <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                    Label Printer (TSPL)
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                    Docket Printer (ESC/POS)
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center gap-4 text-sm text-gray-600">
