@@ -288,15 +288,15 @@ export default function PrinterSetupModal({
                   Receipt (ESC/POS)
                 </option>
                 <option value={PRINTER_COMMAND_LANGUAGES.TSPL}>
-                  Label (TSPL — test only)
+                  Label (TSPL)
                 </option>
               </select>
               {formData.commandLanguage === PRINTER_COMMAND_LANGUAGES.TSPL && (
                 <label className="label">
                   <span className="label-text-alt text-gray-500">
-                    Label printers only support Print Test for now. Leave
-                    takeaway and dine-in off so live orders do not use this
-                    printer yet.
+                    Prints one label per item (e.g. one per cup). Assign order
+                    types and item groups (e.g. Drink) so only the right items
+                    go to this printer.
                   </span>
                 </label>
               )}
