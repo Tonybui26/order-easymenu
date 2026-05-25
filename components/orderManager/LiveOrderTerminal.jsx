@@ -66,7 +66,12 @@ import {
   getPrintQueueStatus,
   printOrderQueued,
 } from "@/lib/helper/printerUtilsNew";
-import { planPrintJobsByGroup } from "@/lib/helper/printerGroupRouting";
+import {
+  planPrintJobsByGroup,
+  planPrintJobsWithRouting,
+  buildUnroutedPrintMessage,
+  buildBackupPrintMessage,
+} from "@/lib/helper/printerGroupRouting";
 import { useSkipInitialEffect } from "@/lib/hooks/useSkipInitialEffect";
 import { App } from "@capacitor/app";
 import { createTokenFromSession } from "@/lib/auth/tokenUtils";
@@ -1077,15 +1082,29 @@ export default function LiveOrderTerminal() {
         //  item" — that's the default and keeps existing printers behaving
         //  exactly the same after this change.
         // ─────────────────────────────────────────────────────────────────
-        const printPlan = planPrintJobsByGroup(
-          order,
-          printersToUse,
-          itemGroups,
-        );
+        const {
+          plan: printPlan,
+          unroutedItems,
+          backupPrintedItems,
+          routingActive,
+          itemToGroups,
+        } = planPrintJobsWithRouting(order, printersToUse, itemGroups);
         const orderId = order._id.slice(-6).toUpperCase();
         const menuLink = storeProfile?.menuLink || null;
 
         console.log("printPlan", printPlan);
+        if (routingActive && backupPrintedItems.length > 0) {
+          console.warn(
+            "[printerGroupRouting] Backup-printed items:",
+            backupPrintedItems.map((item) => item?.name),
+          );
+        }
+        if (routingActive && unroutedItems.length > 0) {
+          console.warn(
+            "[printerGroupRouting] Unrouted items:",
+            unroutedItems.map((item) => item?.name),
+          );
+        }
 
         if (printPlan.length === 0) {
           // None of the configured printers want any item from this order.
@@ -1148,6 +1167,12 @@ export default function LiveOrderTerminal() {
           successfulPrinterNames: successfulPrinterNames.join(", "),
           failedPrinterNames: failedPrinterNames.join(", "),
           failedPrinterErrors,
+          routingPartialFailure:
+            routingActive && unroutedItems.length > 0,
+          unroutedItems: routingActive ? unroutedItems : [],
+          backupPartialFailure:
+            routingActive && backupPrintedItems.length > 0,
+          backupPrintedItems: routingActive ? backupPrintedItems : [],
           message:
             successfulPrints === totalPrinters
               ? `Order printed successfully to ${successfulPrints}/${totalPrinters} printer(s)!`
@@ -1275,6 +1300,10 @@ export default function LiveOrderTerminal() {
               failedPrinterNames: retryResult.failedPrinterNames || "",
               failedPrinterErrors: retryResult.failedPrinterErrors || [],
               successfulPrinterNames: allSuccessNames.join(", "),
+              routingPartialFailure: printResult.routingPartialFailure,
+              unroutedItems: printResult.unroutedItems,
+              backupPartialFailure: printResult.backupPartialFailure,
+              backupPrintedItems: printResult.backupPrintedItems,
               message:
                 totalSuccessful > 0
                   ? `Order printed successfully to ${totalSuccessful}/${totalPrinters} printer(s)${retrySuccessful > 0 ? " after retry" : ""}!`
@@ -1310,6 +1339,28 @@ export default function LiveOrderTerminal() {
                 errorMessage += ` - ${errorDetails}`;
               }
               showCustomToast(errorMessage, "error");
+            }
+
+            if (routingActive && backupPrintedItems.length > 0) {
+              showCustomToast(
+                buildBackupPrintMessage(
+                  backupPrintedItems,
+                  itemToGroups,
+                  itemGroups,
+                ),
+                "error",
+              );
+            }
+
+            if (routingActive && unroutedItems.length > 0) {
+              showCustomToast(
+                buildUnroutedPrintMessage(
+                  unroutedItems,
+                  itemToGroups,
+                  itemGroups,
+                ),
+                "error",
+              );
             }
 
             return mergedResult;
@@ -1350,6 +1401,28 @@ export default function LiveOrderTerminal() {
             errorMessage += ` - ${printResult.error}`;
           }
           showCustomToast(errorMessage, "error");
+        }
+
+        if (routingActive && backupPrintedItems.length > 0) {
+          showCustomToast(
+            buildBackupPrintMessage(
+              backupPrintedItems,
+              itemToGroups,
+              itemGroups,
+            ),
+            "error",
+          );
+        }
+
+        if (routingActive && unroutedItems.length > 0) {
+          showCustomToast(
+            buildUnroutedPrintMessage(
+              unroutedItems,
+              itemToGroups,
+              itemGroups,
+            ),
+            "error",
+          );
         }
 
         return printResult;

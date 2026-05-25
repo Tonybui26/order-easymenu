@@ -18,7 +18,7 @@ import { useMenuContext } from "@/components/context/MenuContext";
 import { useSession } from "next-auth/react";
 import { toast } from "react-hot-toast";
 import { printTest, resetTcpPlugin } from "@/lib/helper/printerUtils";
-import { DEFAULT_ITEM_GROUPS } from "@/lib/constants/itemGroups";
+import { PRINTER_ROUTING_GROUPS } from "@/lib/constants/itemGroups";
 import {
   printTestNew,
   aggressiveTestNew,
@@ -258,14 +258,19 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
                     <span className="text-gray-400">Prints:</span>
                     {printer.groupIds.map((gid) => {
-                      const meta = DEFAULT_ITEM_GROUPS.find(
+                      const meta = PRINTER_ROUTING_GROUPS.find(
                         (g) => g.id === gid,
                       );
                       const label = meta?.name || gid;
+                      const isBackup = gid === "backup";
                       return (
                         <span
                           key={gid}
-                          className="rounded-full bg-orange-100 px-2 py-1 text-orange-700"
+                          className={`rounded-full px-2 py-1 ${
+                            isBackup
+                              ? "bg-amber-100 text-amber-800"
+                              : "bg-orange-100 text-orange-700"
+                          }`}
                         >
                           {label}
                         </span>

@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import { toast } from "react-hot-toast";
 import PrinterScanner from "./PrinterScanner";
 import { isNativeApp } from "../../../lib/helper/platformDetection";
-import { DEFAULT_ITEM_GROUPS } from "@/lib/constants/itemGroups";
+import { PRINTER_ROUTING_GROUPS } from "@/lib/constants/itemGroups";
 import {
   PRINTER_COMMAND_LANGUAGES,
   DEFAULT_PRINTER_COMMAND_LANGUAGE,
@@ -157,7 +157,7 @@ export default function PrinterSetupModal({
   };
 
   // Toggle a group id in formData.groupIds. We keep the list normalized to the
-  // set of known DEFAULT_ITEM_GROUPS so old data with stale ids gets cleaned up
+  // set of known PRINTER_ROUTING_GROUP_IDS so old data with stale ids gets cleaned up
   // on save.
   const handleToggleGroup = (groupId) => {
     setFormData((prev) => {
@@ -350,14 +350,15 @@ export default function PrinterSetupModal({
               </h3>
               <p className="text-xs text-gray-500">
                 Tick the groups this printer should print. Leave everything
-                unticked to print every item (default). When any group is
-                ticked, only items in those groups are sent here — items in
-                other groups, or items not assigned to any group, are skipped.
+                unticked to print every item (default catch-all). Food / Drink /
+                Misc route matching menu items. Backup prints leftover items
+                only (no menu group, or no printer for that group).
               </p>
 
               <div className="space-y-2">
-                {DEFAULT_ITEM_GROUPS.map((group) => {
+                {PRINTER_ROUTING_GROUPS.map((group) => {
                   const checked = (formData.groupIds || []).includes(group.id);
+                  const isBackup = group.id === "backup";
                   return (
                     <div key={group.id} className="form-control">
                       <label className="label cursor-pointer justify-between">
@@ -369,6 +370,13 @@ export default function PrinterSetupModal({
                           className="toggle toggle-primary"
                         />
                       </label>
+                      {isBackup && checked && (
+                        <p className="px-1 text-xs text-gray-500">
+                          Prints items with no menu group or no matching
+                          Food/Drink/Misc printer. You will get an alert when
+                          this happens.
+                        </p>
+                      )}
                     </div>
                   );
                 })}
