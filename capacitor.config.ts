@@ -3,7 +3,8 @@ import type { CapacitorConfig } from "@capacitor/cli";
 const config: CapacitorConfig = {
   appId: "order.goeasy.menu",
   appName: "Order Manager by GoEasyMenu",
-  webDir: ".next",
+  // Small bundled shell; live app loads from server.url when online.
+  webDir: "capacitor-shell",
   server: {
     url: "https://order.goeasy.menu",
     cleartext: false,
