@@ -481,20 +481,20 @@ export default function OrderCard({
                       ? "Delivery"
                       : "Pick-up"}
                   {isPreorder ? (
-                    <span className="ml-2 align-middle text-sm font-medium text-teal-700">
-                      · Pre-order
+                    <span className="mb-1 ml-2 inline-block rounded-full bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-800">
+                      Pre-order
                     </span>
                   ) : null}
                 </h3>
                 <p className="hidden text-xs font-medium text-gray-500 xl:text-sm">
                   #{order._id.slice(-6).toUpperCase()}
                 </p>
-                <div className="mt-1 flex items-center gap-1">
+                <div className="mt-1 flex items-end gap-1">
                   {/* Pickup info */}
                   {!isTableOrder && (
                     <div className="text-xs text-gray-600">
                       {isPreorder ? (
-                        <span className="mb-1 inline-block rounded-full bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-800">
+                        <span className="mb-1 hidden rounded-full bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-800">
                           Pre-order
                         </span>
                       ) : null}
@@ -508,7 +508,7 @@ export default function OrderCard({
                     </div>
                   )}
                   {/* Time Ago */}
-                  <div className="inline-flex items-center justify-end py-1 text-xs text-gray-500">
+                  <div className="inline-flex items-center justify-end text-xs text-gray-500">
                     Placed {timeAgo}
                   </div>
                 </div>
