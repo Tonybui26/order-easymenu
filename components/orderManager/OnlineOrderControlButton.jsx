@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useMenuContext } from "@/components/context/MenuContext";
 import ButtonTakeawayToggle from "./ButtonTakeawayToggle";
+import ButtonDineInToggle from "./ButtonDineInToggle";
 
 // Client-side only time component to avoid hydration issues
 function TimeDisplay() {
@@ -30,7 +31,11 @@ function TimeDisplay() {
 export default function OnlineOrderControlButton() {
   const [showModal, setShowModal] = useState(false);
   const { menuConfig } = useMenuContext();
-  const isOnline = menuConfig?.takeawayOnlineOrderEnabled ?? false;
+  const isDineInOffered =
+    menuConfig?.orderTypesSettings?.dineIn?.enabled === true;
+  const isOnline =
+    (menuConfig?.takeawayOnlineOrderEnabled ?? false) &&
+    (!isDineInOffered || (menuConfig?.dineInOnlineOrderEnabled ?? true));
 
   return (
     <>
@@ -58,8 +63,9 @@ export default function OnlineOrderControlButton() {
       <dialog className={`modal ${showModal ? "modal-open" : ""}`}>
         <div className="modal-box">
           <h3 className="text-lg font-bold">Online Order Control</h3>
-          <div className="py-4">
+          <div className="flex flex-col gap-3 py-4">
             <ButtonTakeawayToggle />
+            {isDineInOffered ? <ButtonDineInToggle /> : null}
           </div>
           <div className="modal-action">
             <button className="btn" onClick={() => setShowModal(false)}>
