@@ -26,13 +26,13 @@ export default function ButtonTakeawayToggle() {
     <div className="flex items-center justify-between gap-2 rounded-xl bg-gray-100 px-4 py-3">
       <div className="flex items-center gap-3">
         <div>
-          <h3 className="text-lg font-medium">Online Orders</h3>
+          <h3 className="text-lg font-medium">Pickup/Delivery</h3>
           <p
             className={`text-sm ${isOnline ? "text-gray-600" : "font-semibold text-red-600"}`}
           >
-            {isOnline
-              ? "Online orders are available based on schedule"
-              : "Online orders are manually paused"}
+            {/* {isOnline
+              ? "Pickup/Delivery orders are available"
+              : "Pickup/Delivery orders are manually paused"} */}
           </p>
         </div>
       </div>

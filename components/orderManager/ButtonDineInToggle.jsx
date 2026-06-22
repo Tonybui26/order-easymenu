@@ -26,13 +26,13 @@ export default function ButtonDineInToggle() {
     <div className="flex items-center justify-between gap-2 rounded-xl bg-gray-100 px-4 py-3">
       <div className="flex items-center gap-3">
         <div>
-          <h3 className="text-lg font-medium">Dine-in Orders</h3>
+          <h3 className="text-lg font-medium">Dine-in</h3>
           <p
             className={`text-sm ${isOnline ? "text-gray-600" : "font-semibold text-red-600"}`}
           >
-            {isOnline
+            {/* {isOnline
               ? "Dine-in orders are available based on schedule"
-              : "Dine-in orders are manually paused"}
+              : "Dine-in orders are manually paused"} */}
           </p>
         </div>
       </div>

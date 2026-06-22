@@ -62,7 +62,7 @@ export default function OnlineOrderControlButton() {
       {/* Modal for Online Order Control */}
       <dialog className={`modal ${showModal ? "modal-open" : ""}`}>
         <div className="modal-box">
-          <h3 className="text-lg font-bold">Online Order Control</h3>
+          <h3 className="text-lg font-bold">Order Control</h3>
           <div className="flex flex-col gap-3 py-4">
             <ButtonTakeawayToggle />
             {isDineInOffered ? <ButtonDineInToggle /> : null}
