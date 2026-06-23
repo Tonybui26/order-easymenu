@@ -3,6 +3,10 @@ import { useState, useEffect } from "react";
 import { useMenuContext } from "@/components/context/MenuContext";
 import ButtonTakeawayToggle from "./ButtonTakeawayToggle";
 import ButtonDineInToggle from "./ButtonDineInToggle";
+import {
+  isDineInOnlineOrderAvailable,
+  isTakeawayOnlineOrderAvailable,
+} from "@/lib/helper/onlineOrderPause";
 
 // Client-side only time component to avoid hydration issues
 function TimeDisplay() {
@@ -30,12 +34,18 @@ function TimeDisplay() {
 
 export default function OnlineOrderControlButton() {
   const [showModal, setShowModal] = useState(false);
+  const [, setPauseTick] = useState(0);
   const { menuConfig } = useMenuContext();
   const isDineInOffered =
     menuConfig?.orderTypesSettings?.dineIn?.enabled === true;
   const isOnline =
-    (menuConfig?.takeawayOnlineOrderEnabled ?? false) &&
-    (!isDineInOffered || (menuConfig?.dineInOnlineOrderEnabled ?? true));
+    isTakeawayOnlineOrderAvailable(menuConfig) &&
+    (!isDineInOffered || isDineInOnlineOrderAvailable(menuConfig));
+
+  useEffect(() => {
+    const id = setInterval(() => setPauseTick((t) => t + 1), 30000);
+    return () => clearInterval(id);
+  }, []);
 
   return (
     <>

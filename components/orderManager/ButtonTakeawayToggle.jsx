@@ -1,24 +1,24 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useMenuContext } from "@/components/context/MenuContext";
+import {
+  buildTakeawayOnlineOrderPauseUpdate,
+  formatPauseResumeTime,
+  isTakeawayOnlineOrderAvailable,
+} from "@/lib/helper/onlineOrderPause";
 
 export default function ButtonTakeawayToggle() {
   const { menuConfig, setMenuConfig } = useMenuContext();
-  const [isOnline, setIsOnline] = useState(
-    menuConfig?.takeawayOnlineOrderEnabled ?? false,
-  );
   const [isUpdating, setIsUpdating] = useState(false);
 
-  useEffect(() => {
-    setIsOnline(menuConfig?.takeawayOnlineOrderEnabled ?? false);
-  }, [menuConfig?.takeawayOnlineOrderEnabled]);
+  const isOnline = isTakeawayOnlineOrderAvailable(menuConfig);
+  const resumeTime = formatPauseResumeTime(
+    menuConfig?.takeawayOnlinePausedUntil,
+  );
 
   const handleToggle = async () => {
     setIsUpdating(true);
-    setMenuConfig({
-      ...menuConfig,
-      takeawayOnlineOrderEnabled: !isOnline,
-    });
+    setMenuConfig(buildTakeawayOnlineOrderPauseUpdate(menuConfig, isOnline));
     setIsUpdating(false);
   };
 
@@ -27,13 +27,13 @@ export default function ButtonTakeawayToggle() {
       <div className="flex items-center gap-3">
         <div>
           <h3 className="text-lg font-medium">Pickup/Delivery</h3>
-          <p
-            className={`text-sm ${isOnline ? "text-gray-600" : "font-semibold text-red-600"}`}
-          >
-            {/* {isOnline
-              ? "Pickup/Delivery orders are available"
-              : "Pickup/Delivery orders are manually paused"} */}
-          </p>
+          {!isOnline ? (
+            <p className="text-sm font-semibold text-red-600">
+              {resumeTime
+                ? `Paused for 30 min (opens ${resumeTime})`
+                : "Paused for 30 minutes"}
+            </p>
+          ) : null}
         </div>
       </div>
 

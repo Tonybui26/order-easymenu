@@ -1,24 +1,22 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useMenuContext } from "@/components/context/MenuContext";
+import {
+  buildDineInOnlineOrderPauseUpdate,
+  formatPauseResumeTime,
+  isDineInOnlineOrderAvailable,
+} from "@/lib/helper/onlineOrderPause";
 
 export default function ButtonDineInToggle() {
   const { menuConfig, setMenuConfig } = useMenuContext();
-  const [isOnline, setIsOnline] = useState(
-    menuConfig?.dineInOnlineOrderEnabled ?? true,
-  );
   const [isUpdating, setIsUpdating] = useState(false);
 
-  useEffect(() => {
-    setIsOnline(menuConfig?.dineInOnlineOrderEnabled ?? true);
-  }, [menuConfig?.dineInOnlineOrderEnabled]);
+  const isOnline = isDineInOnlineOrderAvailable(menuConfig);
+  const resumeTime = formatPauseResumeTime(menuConfig?.dineInOnlinePausedUntil);
 
   const handleToggle = async () => {
     setIsUpdating(true);
-    setMenuConfig({
-      ...menuConfig,
-      dineInOnlineOrderEnabled: !isOnline,
-    });
+    setMenuConfig(buildDineInOnlineOrderPauseUpdate(menuConfig, isOnline));
     setIsUpdating(false);
   };
 
@@ -27,13 +25,13 @@ export default function ButtonDineInToggle() {
       <div className="flex items-center gap-3">
         <div>
           <h3 className="text-lg font-medium">Dine-in</h3>
-          <p
-            className={`text-sm ${isOnline ? "text-gray-600" : "font-semibold text-red-600"}`}
-          >
-            {/* {isOnline
-              ? "Dine-in orders are available based on schedule"
-              : "Dine-in orders are manually paused"} */}
-          </p>
+          {!isOnline ? (
+            <p className="text-sm font-semibold text-red-600">
+              {resumeTime
+                ? `Paused for 30 min (opens ${resumeTime})`
+                : "Paused for 30 minutes"}
+            </p>
+          ) : null}
         </div>
       </div>
 
