@@ -72,6 +72,7 @@ import {
   buildUnroutedPrintMessage,
   buildBackupPrintMessage,
 } from "@/lib/helper/printerGroupRouting";
+import { compareOrdersByFulfillment } from "@/lib/helper/pickupTimeDisplay";
 import { useSkipInitialEffect } from "@/lib/hooks/useSkipInitialEffect";
 import { App } from "@capacitor/app";
 import { createTokenFromSession } from "@/lib/auth/tokenUtils";
@@ -1859,18 +1860,6 @@ export default function LiveOrderTerminal() {
     setAvailablePrinters([]);
   };
 
-  function preorderScheduleSortKey(order) {
-    const fs = order?.fulfillmentSchedule;
-    if (
-      fs?.dateKey &&
-      typeof fs.minutesFromMidnight === "number" &&
-      Number.isFinite(fs.minutesFromMidnight)
-    ) {
-      return `${fs.dateKey}T${String(fs.minutesFromMidnight).padStart(4, "0")}`;
-    }
-    return String(order?.pickupTime || order?.createdAt || "");
-  }
-
   // Filter orders based on view mode
   const getFilteredOrders = () => {
     if (viewMode === "all") {
@@ -1897,13 +1886,7 @@ export default function LiveOrderTerminal() {
             order.status === "accepted" &&
             order.paymentStatus === "paid",
         )
-        .sort((a, b) => {
-          const ak = preorderScheduleSortKey(a);
-          const bk = preorderScheduleSortKey(b);
-          if (ak < bk) return -1;
-          if (ak > bk) return 1;
-          return 0;
-        });
+        .sort((a, b) => compareOrdersByFulfillment(a, b));
     } else if (viewMode === "new") {
       // New incoming orders:
       // - confirmed + paid for non-counter (card) orders
