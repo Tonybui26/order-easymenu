@@ -22,7 +22,12 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { sendOrderReceiptEmail } from "@/lib/api/fetchApi";
-import { formatPickupTimeShort, formatScheduledExpectedLabel } from "@/lib/helper/pickupTimeDisplay";
+import {
+  formatPickupTimeShort,
+  formatScheduledExpectedLabel,
+  isScheduledFulfillmentInGrace,
+  isScheduledFulfillmentOverdue,
+} from "@/lib/helper/pickupTimeDisplay";
 import { ModifierChoicesGrouped } from "@/lib/utils/modifierDisplay";
 import OrderCardAccordion from "./OrderCardAccordion";
 import OrderCardMoreInfo from "./OrderCardMoreInfo";
@@ -51,14 +56,16 @@ export default function OrderCard({
   const [receiptEmailInput, setReceiptEmailInput] = useState("");
   const [receiptSending, setReceiptSending] = useState(false);
 
-  const isScheduledView = viewMode === "scheduled";
-  const [scheduleNow, setScheduleNow] = useState(() => Date.now());
+  const isFulfillmentTimelineView = ["scheduled", "preparing", "ready"].includes(
+    viewMode,
+  );
+  const [fulfillmentNow, setFulfillmentNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (!isScheduledView) return undefined;
-    const id = setInterval(() => setScheduleNow(Date.now()), 60000);
+    if (!isFulfillmentTimelineView) return undefined;
+    const id = setInterval(() => setFulfillmentNow(Date.now()), 60000);
     return () => clearInterval(id);
-  }, [isScheduledView]);
+  }, [isFulfillmentTimelineView]);
 
   // Format the time since order was created
   const timeAgo = formatDistanceToNow(new Date(order.createdAt), {
@@ -132,13 +139,26 @@ export default function OrderCard({
 
   const isPreorder = Boolean(order.isPreorder);
 
-  const scheduledExpectedLabel =
-    isScheduledView && !isTableOrder
+  const showFulfillmentExpectedLabel =
+    !isTableOrder &&
+    ["scheduled", "preparing", "ready"].includes(viewMode);
+
+  const fulfillmentNowDate = new Date(fulfillmentNow);
+
+  const scheduledExpectedLabel = showFulfillmentExpectedLabel
       ? formatScheduledExpectedLabel(order, {
           isDelivery,
-          now: new Date(scheduleNow),
+          now: fulfillmentNowDate,
         })
       : null;
+
+  const isScheduledOverdue =
+    Boolean(scheduledExpectedLabel) &&
+    isScheduledFulfillmentOverdue(order, { now: fulfillmentNowDate });
+
+  const isScheduledInGrace =
+    Boolean(scheduledExpectedLabel) &&
+    isScheduledFulfillmentInGrace(order, { now: fulfillmentNowDate });
 
   // ===== COMPREHENSIVE BUTTON LOGIC =====
 
@@ -507,7 +527,7 @@ export default function OrderCard({
                 <p className="hidden text-xs font-medium text-gray-500 xl:text-sm">
                   #{order._id.slice(-6).toUpperCase()}
                 </p>
-                <div className="mt-1 flex items-end gap-1">
+                <div className="mt-1 flex flex-col items-start gap-1">
                   {/* Pickup / delivery expected time */}
                   {!isTableOrder && (
                     <div className="text-xs text-gray-600">
@@ -516,16 +536,24 @@ export default function OrderCard({
                           Pre-order
                         </span>
                       ) : null}
-                      <div className="flex items-center gap-1">
+                      <div
+                        className={`flex items-center gap-1 rounded-md px-2 py-1 ${
+                          isScheduledOverdue
+                            ? "bg-red-100 text-red-800"
+                            : isScheduledInGrace
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-gray-100 text-gray-600"
+                        }`}
+                      >
                         <Clock className="size-4" strokeWidth={2} />
                         <span className="text-xs font-semibold">
                           {scheduledExpectedLabel ??
-                            `${formatPickupTimeShort(order.pickupTime)} -`}
+                            `${formatPickupTimeShort(order.pickupTime)}`}
                         </span>
                       </div>
                     </div>
                   )}
-                  {/* Time Ago — hidden on scheduled tab */}
+                  {/* Time Ago — hidden when showing fulfilment expected time */}
                   {!scheduledExpectedLabel && (
                     <div className="inline-flex items-center justify-end text-xs text-gray-500">
                       Placed {timeAgo}
