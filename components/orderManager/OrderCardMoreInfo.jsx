@@ -3,6 +3,7 @@
 import { format } from "date-fns";
 import { CreditCard } from "lucide-react";
 import { isCounterPayment } from "@/lib/helper/payLater";
+import { formatPickupTimeShort } from "@/lib/helper/pickupTimeDisplay";
 
 function InfoRow({ label, value, valueClassName = "", href }) {
   if (value == null || value === "") return null;
@@ -110,7 +111,7 @@ export default function OrderCardMoreInfo({
   payLaterEnabled = false,
 }) {
   const placedAt = formatPlacedAt(order.createdAt);
-  const fulfillmentTime = order.pickupTime || "ASAP";
+  const fulfillmentTime = formatPickupTimeShort(order.pickupTime);
   const deliveryAddress = isDelivery ? formatDeliveryAddress(order) : null;
   const subtotal = Number(order.subtotal ?? order.total ?? 0);
   const surchargeTotal = Number(order.surchargeTotal ?? 0);
