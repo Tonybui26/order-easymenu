@@ -86,6 +86,16 @@ import {
   NEW_ORDER_ALERTS_MUTED_CHANGED_EVENT,
 } from "@/lib/utils/newOrderAlerts";
 
+function getPrinterJobErrorMessage(result) {
+  const specificError = Array.isArray(result?.failedPrinterErrors)
+    ? result.failedPrinterErrors[0]?.error
+    : null;
+
+  if (specificError) return specificError;
+
+  return result?.message || "Unknown error";
+}
+
 /**
  * LiveOrderTerminal Component - Order Management Interface
  *
@@ -1145,14 +1155,9 @@ export default function LiveOrderTerminal() {
             successfulPrinterNames.push(printer.name);
           } else {
             failedPrinterNames.push(printer.name);
-            const errMsg =
-              result.message ||
-              (Array.isArray(result.failedPrinterErrors) &&
-                result.failedPrinterErrors[0]?.error) ||
-              "Unknown error";
             failedPrinterErrors.push({
               printerName: printer.name,
-              error: errMsg,
+              error: getPrinterJobErrorMessage(result),
             });
           }
         }
@@ -1256,11 +1261,7 @@ export default function LiveOrderTerminal() {
                 retryFailedNamesArr.push(printer.name);
                 retryFailedErrors.push({
                   printerName: printer.name,
-                  error:
-                    r.message ||
-                    (Array.isArray(r.failedPrinterErrors) &&
-                      r.failedPrinterErrors[0]?.error) ||
-                    "Unknown error",
+                  error: getPrinterJobErrorMessage(r),
                 });
               }
             }
