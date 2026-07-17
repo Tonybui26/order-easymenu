@@ -840,7 +840,7 @@ export default function OrderCard({
                           {item.selectedVariants
                             .map(
                               (variant) =>
-                                `${variant.groupName}: ${getCustomerDisplayName(variant.optionName)}`,
+                                `${getCustomerDisplayName(variant.groupName)}: ${getCustomerDisplayName(variant.optionName)}`,
                             )
                             .join(", ")}
                         </p>

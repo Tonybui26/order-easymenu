@@ -31,7 +31,7 @@ export function ModifierChoicesGrouped({ modifiers, className }) {
     <div className={className ?? "text-sm text-gray-600"}>
       {groups.map(([groupName, options]) => (
         <div key={groupName} className="mt-1 first:mt-0">
-          <p className="font-medium">{groupName}:</p>
+          <p className="font-medium">{getCustomerDisplayName(groupName)}:</p>
           <ul className="ml-0 list-none space-y-0.5 pl-0">
             {options.map((mod, i) => (
               <li key={`${String(mod.optionId)}-${i}`}>
