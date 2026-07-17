@@ -5,6 +5,7 @@ import { isCounterPayment } from "@/lib/helper/payLater";
 import { getCollectAmountSummary } from "@/lib/helper/orderCollectAmount";
 import { combineOrderItemsForTable } from "@/lib/helper/unpaidTableOrders";
 import { ModifierChoicesGrouped } from "@/lib/utils/modifierDisplay";
+import { getCustomerDisplayName } from "@/lib/helper/printNameAlias";
 
 export default function UnpaidTableCard({
   table,
@@ -78,14 +79,14 @@ export default function UnpaidTableCard({
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-base font-bold text-gray-800 xl:text-base">
-                      {item.name}
+                      {getCustomerDisplayName(item.name)}
                     </p>
                     {item.selectedVariants?.length > 0 && (
                       <p className="text-sm text-gray-600">
                         {item.selectedVariants
                           .map(
                             (variant) =>
-                              `${variant.groupName} (${variant.optionName})`,
+                              `${variant.groupName} (${getCustomerDisplayName(variant.optionName)})`,
                           )
                           .join(" - ")}
                       </p>

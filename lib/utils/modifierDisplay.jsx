@@ -2,6 +2,8 @@
  * Shared order-line modifier display: group by `groupName`, list options with optional extra price.
  */
 
+import { getCustomerDisplayName } from "@/lib/helper/printNameAlias";
+
 export function formatModifierPriceSuffix(modifier) {
   const raw =
     modifier?.priceModifier ?? modifier?.price ?? modifier?.extraPrice ?? 0;
@@ -33,7 +35,7 @@ export function ModifierChoicesGrouped({ modifiers, className }) {
           <ul className="ml-0 list-none space-y-0.5 pl-0">
             {options.map((mod, i) => (
               <li key={`${String(mod.optionId)}-${i}`}>
-                - {mod.optionName}
+                - {getCustomerDisplayName(mod.optionName)}
                 {formatModifierPriceSuffix(mod)}
               </li>
             ))}

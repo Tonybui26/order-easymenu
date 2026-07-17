@@ -29,6 +29,7 @@ import {
   isScheduledFulfillmentOverdue,
 } from "@/lib/helper/pickupTimeDisplay";
 import { ModifierChoicesGrouped } from "@/lib/utils/modifierDisplay";
+import { getCustomerDisplayName } from "@/lib/helper/printNameAlias";
 import OrderCardAccordion from "./OrderCardAccordion";
 import OrderCardMoreInfo from "./OrderCardMoreInfo";
 
@@ -831,7 +832,7 @@ export default function OrderCard({
                           : "text-gray-800"
                       }`}
                     >
-                      {item.name}
+                      {getCustomerDisplayName(item.name)}
                     </p>
                     {item.selectedVariants &&
                       item.selectedVariants.length > 0 && (
@@ -839,7 +840,7 @@ export default function OrderCard({
                           {item.selectedVariants
                             .map(
                               (variant) =>
-                                `${variant.groupName}: ${variant.optionName}`,
+                                `${variant.groupName}: ${getCustomerDisplayName(variant.optionName)}`,
                             )
                             .join(", ")}
                         </p>
