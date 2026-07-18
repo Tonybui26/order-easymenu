@@ -1051,7 +1051,8 @@ export default function LiveOrderTerminal() {
     };
   }, []);
 
-  // Add this function inside the LiveOrderTerminal component
+  const PRINT_RETRY_DELAY_MS = 3000;
+
   const handlePrintingOrder = async (
     order,
     selectedPrinters = null,
@@ -1196,7 +1197,7 @@ export default function LiveOrderTerminal() {
         // If there are any failures and we haven't retried yet, retry only failed printers
         if (hasFailures && retryCount === 0) {
           console.log(
-            `Print ${!printResult.success ? "completely" : "partially"} failed, retrying failed printers after 1 second...`,
+            `Print ${!printResult.success ? "completely" : "partially"} failed, retrying failed printers after ${PRINT_RETRY_DELAY_MS / 1000}s...`,
           );
 
           // Extract failed printer names from the result
@@ -1226,7 +1227,9 @@ export default function LiveOrderTerminal() {
               `Retrying ${failedPrinters.length} failed printer(s): ${failedPrinters.map((p) => p.name).join(", ")}`,
             );
 
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+            await new Promise((resolve) =>
+              setTimeout(resolve, PRINT_RETRY_DELAY_MS),
+            );
 
             // Re-run the per-printer split for the failed printers so each
             // retry uses the same group filtering as the original attempt.
@@ -1435,10 +1438,14 @@ export default function LiveOrderTerminal() {
     } catch (error) {
       console.error("Error printing order:", error);
 
-      // If error occurred and we haven't retried yet, retry once after 1 second
+      // If error occurred and we haven't retried yet, retry once after a short delay
       if (retryCount === 0) {
-        console.log("Print error occurred, retrying after 1 second...");
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        console.log(
+          `Print error occurred, retrying after ${PRINT_RETRY_DELAY_MS / 1000}s...`,
+        );
+        await new Promise((resolve) =>
+          setTimeout(resolve, PRINT_RETRY_DELAY_MS),
+        );
         return handlePrintingOrder(order, selectedPrinters, 1); // Retry once
       }
 
