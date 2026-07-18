@@ -28,7 +28,7 @@ import {
   setQueueLogCallback,
   aggressiveTestQueuedParallel, // ✅ Import the new function
 } from "@/lib/helper/printerUtilsNew";
-import { isTsplPrinter } from "@/lib/constants/printerLanguages";
+import { isStarPrntPrinter, isTsplPrinter } from "@/lib/constants/printerLanguages";
 import { printTsplTestLabel } from "@/lib/printers/printTsplTestLabel";
 
 export default function PrinterCard({ printer, onDelete, onUpdate }) {
@@ -81,7 +81,14 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
     try {
       setTestingPrinter(true);
       const isTspl = isTsplPrinter(printer);
-      setCurrentTestType(isTspl ? "TSPL Label Test" : "Connection Test");
+      const isStarPrnt = isStarPrntPrinter(printer);
+      setCurrentTestType(
+        isTspl
+          ? "TSPL Label Test"
+          : isStarPrnt
+            ? "StarPRNT Receipt Test"
+            : "Connection Test",
+      );
       clearLogs();
       setShowLogsModal(true);
 
@@ -91,7 +98,7 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
       }
 
       addLog(
-        `Starting ${isTspl ? "TSPL label" : "receipt"} test for ${printer.name} (${printer.localIp}:${printer.port})`,
+        `Starting ${isTspl ? "TSPL label" : isStarPrnt ? "StarPRNT receipt" : "receipt"} test for ${printer.name} (${printer.localIp}:${printer.port})`,
         "info",
       );
 
@@ -216,6 +223,10 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
                 {isTsplPrinter(printer) ? (
                   <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
                     Label Printer (TSPL)
+                  </span>
+                ) : isStarPrntPrinter(printer) ? (
+                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                    Docket Printer (StarPRNT)
                   </span>
                 ) : (
                   <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">

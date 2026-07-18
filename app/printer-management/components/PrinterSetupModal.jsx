@@ -287,10 +287,21 @@ export default function PrinterSetupModal({
                 <option value={PRINTER_COMMAND_LANGUAGES.ESCPOS}>
                   Receipt (ESC/POS)
                 </option>
+                <option value={PRINTER_COMMAND_LANGUAGES.STARPRNT}>
+                  Receipt (StarPRNT)
+                </option>
                 <option value={PRINTER_COMMAND_LANGUAGES.TSPL}>
                   Label (TSPL)
                 </option>
               </select>
+              {formData.commandLanguage === PRINTER_COMMAND_LANGUAGES.STARPRNT && (
+                <label className="label">
+                  <span className="label-text-alt text-gray-500">
+                    For Star mC-Print3 and other StarPRNT receipt printers. Use
+                    ESC/POS for Epson and most generic thermal printers.
+                  </span>
+                </label>
+              )}
               {formData.commandLanguage === PRINTER_COMMAND_LANGUAGES.TSPL && (
                 <label className="label">
                   <span className="label-text-alt text-gray-500">
