@@ -12,6 +12,7 @@ import { Search, X } from "lucide-react";
 import toast from "react-hot-toast";
 
 const MODIFIERS_SECTION_ID = "__modifiers__";
+const SOLD_OUT_SECTION_ID = "__sold_out__";
 
 function sectionHasVisibleItems(section) {
   return (section.items || []).some((item) => item.available !== false);
@@ -48,6 +49,25 @@ export default function PanelProductAvailability() {
   );
 
   const isModifiersSelected = selectedSectionId === MODIFIERS_SECTION_ID;
+  const isSoldOutSelected = selectedSectionId === SOLD_OUT_SECTION_ID;
+
+  const soldOutProducts = useMemo(() => {
+    const rows = [];
+    for (const section of menuContent || []) {
+      for (const item of section.items || []) {
+        if (item.available === false || item.soldOut !== true) continue;
+        rows.push({ section, item });
+      }
+    }
+    return rows;
+  }, [menuContent]);
+
+  const soldOutModifiers = useMemo(
+    () => modifierRows.filter((row) => row.available === false),
+    [modifierRows],
+  );
+
+  const soldOutCount = soldOutProducts.length + soldOutModifiers.length;
 
   const selectedSection = useMemo(
     () => sections.find((s) => s.id === selectedSectionId) || null,
@@ -76,6 +96,22 @@ export default function PanelProductAvailability() {
       modifierRowMatchesQuery(row, trimmedSearch),
     );
   }, [modifierRows, trimmedSearch, isSearchActive]);
+
+  const visibleSoldOutProducts = useMemo(() => {
+    if (!isSoldOutSelected) return soldOutProducts;
+    if (!trimmedSearch) return soldOutProducts;
+    return soldOutProducts.filter(({ item }) =>
+      itemMatchesQuery(item, trimmedSearch),
+    );
+  }, [isSoldOutSelected, soldOutProducts, trimmedSearch]);
+
+  const visibleSoldOutModifiers = useMemo(() => {
+    if (!isSoldOutSelected) return soldOutModifiers;
+    if (!trimmedSearch) return soldOutModifiers;
+    return soldOutModifiers.filter((row) =>
+      modifierRowMatchesQuery(row, trimmedSearch),
+    );
+  }, [isSoldOutSelected, soldOutModifiers, trimmedSearch]);
 
   const visibleItems = useMemo(() => {
     if (!selectedSection) return [];
@@ -145,6 +181,45 @@ export default function PanelProductAvailability() {
     toast.success("Saved");
     closeModal();
   };
+
+  function renderSoldOutContent() {
+    const hasProducts = visibleSoldOutProducts.length > 0;
+    const hasModifiers = visibleSoldOutModifiers.length > 0;
+
+    if (!hasProducts && !hasModifiers) {
+      return (
+        <p className="text-sm text-neutral-500">
+          {soldOutCount === 0
+            ? "Nothing is marked sold out right now."
+            : "No sold out items match your search."}
+        </p>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        {hasProducts ? (
+          <div>
+            <h4 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-400">
+              Products
+            </h4>
+            {renderItemGrid(
+              visibleSoldOutProducts,
+              (entry) => `${entry.section.id}-${entry.item.id}`,
+            )}
+          </div>
+        ) : null}
+        {hasModifiers ? (
+          <div>
+            <h4 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-400">
+              Modifiers
+            </h4>
+            {renderModifierGrid(visibleSoldOutModifiers)}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   function renderItemGrid(items, getKey) {
     if (items.length === 0) return null;
@@ -291,6 +366,25 @@ export default function PanelProductAvailability() {
           <button
             type="button"
             onClick={() => {
+              setSelectedSectionId(SOLD_OUT_SECTION_ID);
+              setSearchQuery("");
+            }}
+            className={`flex items-center justify-between gap-2 rounded-lg px-3 py-4 text-left text-base font-semibold transition-colors sm:text-lg ${
+              isSoldOutSelected && !isSearchActive
+                ? "bg-neutral-800 text-red-400"
+                : "text-red-400 hover:bg-neutral-800"
+            }`}
+          >
+            <span className="truncate">Sold out</span>
+            {soldOutCount > 0 ? (
+              <span className="badge badge-sm shrink-0 border-none bg-red-500 text-white">
+                {soldOutCount}
+              </span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
               setSelectedSectionId(MODIFIERS_SECTION_ID);
               setSearchQuery("");
             }}
@@ -381,9 +475,25 @@ export default function PanelProductAvailability() {
                 Select a category
               </p>
               <p className="mt-2 max-w-sm text-sm text-neutral-500">
-                Choose Modifiers or a category on the left, or use search above
-                to find a product or modifier option.
+                Choose Sold out, Modifiers, or a category on the left, or use
+                search above to find a product or modifier option.
               </p>
+            </div>
+          </div>
+        ) : isSoldOutSelected ? (
+          <div className="flex flex-1 flex-col overflow-hidden p-4 md:p-6">
+            <div className="mb-4 shrink-0">
+              <h3 className="text-base font-semibold text-white md:text-lg">
+                Sold out
+              </h3>
+              <p className="mt-1 text-sm text-neutral-500">
+                {soldOutCount === 0
+                  ? "All products and modifiers are available."
+                  : `${soldOutCount} item${soldOutCount === 1 ? "" : "s"} currently marked sold out.`}
+              </p>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {renderSoldOutContent()}
             </div>
           </div>
         ) : isModifiersSelected ? (
