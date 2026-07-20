@@ -1,6 +1,7 @@
 "use client";
 
 import { useMenuContext } from "@/components/context/MenuContext";
+import { textMatchesAvailabilityQuery } from "@/lib/helper/availabilitySearchHelpers";
 import {
   filterModifierAvailabilityRows,
   flattenModifierAvailabilityRows,
@@ -17,11 +18,7 @@ function sectionHasVisibleItems(section) {
 }
 
 function itemMatchesQuery(item, q) {
-  const needle = q.trim().toLowerCase();
-  if (!needle) return false;
-  const title = (item.title || "").toLowerCase();
-  const description = (item.description || "").toLowerCase();
-  return title.includes(needle) || description.includes(needle);
+  return textMatchesAvailabilityQuery(item.title, q);
 }
 
 export default function PanelProductAvailability() {
