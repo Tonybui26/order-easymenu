@@ -1759,6 +1759,31 @@ export default function LiveOrderTerminal() {
     }
   };
 
+  const handleRefundSuccess = (orderId, result) => {
+    setOrders((prevOrders) =>
+      prevOrders.map((order) =>
+        order._id === orderId
+          ? {
+              ...order,
+              paymentStatus: result.order?.paymentStatus ?? order.paymentStatus,
+              refund: result.refund ?? order.refund,
+            }
+          : order,
+      ),
+    );
+    setCompletedOrders((prevOrders) =>
+      prevOrders.map((order) =>
+        order._id === orderId
+          ? {
+              ...order,
+              paymentStatus: result.order?.paymentStatus ?? order.paymentStatus,
+              refund: result.refund ?? order.refund,
+            }
+          : order,
+      ),
+    );
+  };
+
   const handlePayLater = async (orderId) => {
     if (!payLaterAtCounterEnabled) {
       return;
@@ -2496,6 +2521,7 @@ export default function LiveOrderTerminal() {
                     onReady={() => {}} // No action needed for completed orders
                     onDeliver={() => {}} // No action needed for completed orders
                     onCancel={() => {}} // No action needed for completed orders
+                    onRefundSuccess={handleRefundSuccess}
                   />
                 ))}
               </div>
@@ -2575,6 +2601,7 @@ export default function LiveOrderTerminal() {
                 onDeliver={() => handleStatusUpdate(order._id, "delivered")}
                 onCancel={() => handleCancelOrder(order)}
                 onMarkAsPaid={(orderId) => handleMarkAsPaid(orderId)}
+                onRefundSuccess={handleRefundSuccess}
                 onPrint={handleOpenPrinterSelection}
                 showMarkAsPaid={true}
                 payLaterEnabled={payLaterAtCounterEnabled}

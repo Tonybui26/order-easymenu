@@ -32,6 +32,8 @@ import { ModifierChoicesGrouped } from "@/lib/utils/modifierDisplay";
 import { getCustomerDisplayName } from "@/lib/helper/printNameAlias";
 import OrderCardAccordion from "./OrderCardAccordion";
 import OrderCardMoreInfo from "./OrderCardMoreInfo";
+import RefundModal from "./RefundModal";
+import SendRefundConfirmationModal from "./SendRefundConfirmationModal";
 
 export default function OrderCard({
   order,
@@ -41,6 +43,7 @@ export default function OrderCard({
   onDeliver,
   onCancel,
   onMarkAsPaid,
+  onRefundSuccess,
   showMarkAsPaid = false,
   payLaterEnabled = false,
   viewMode,
@@ -56,6 +59,9 @@ export default function OrderCard({
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const [receiptEmailInput, setReceiptEmailInput] = useState("");
   const [receiptSending, setReceiptSending] = useState(false);
+  const [refundModalOpen, setRefundModalOpen] = useState(false);
+  const [refundConfirmationModalOpen, setRefundConfirmationModalOpen] =
+    useState(false);
 
   const isFulfillmentTimelineView = ["scheduled", "preparing", "ready"].includes(
     viewMode,
@@ -422,8 +428,16 @@ export default function OrderCard({
     }
   };
 
+  const isCompletedView = viewMode === "completed";
   const showEmailReceipt =
     order.status !== "cancelled" && order.paymentStatus === "paid";
+  const showIssueRefund =
+    isCompletedView && order.paymentStatus === "paid";
+  const showSendRefundConfirmation =
+    isCompletedView &&
+    (order.paymentStatus === "refunded" ||
+      order.paymentStatus === "partially_refunded") &&
+    order.refund?.amount != null;
   const showCancelOrder = !["cancelled", "delivered"].includes(order.status);
   const showPrintOrder =
     order.status === "preparing" && typeof onPrint === "function";
@@ -920,6 +934,26 @@ export default function OrderCard({
               Email receipt
             </button>
           )}
+          {showIssueRefund && (
+            <button
+              type="button"
+              onClick={() => setRefundModalOpen(true)}
+              disabled={isProcessing}
+              className="btn btn-outline btn-sm w-full justify-center border-red-300 text-red-700 hover:bg-red-50"
+            >
+              Issue refund
+            </button>
+          )}
+          {showSendRefundConfirmation && (
+            <button
+              type="button"
+              onClick={() => setRefundConfirmationModalOpen(true)}
+              disabled={isProcessing}
+              className="btn btn-outline btn-sm w-full justify-center border-gray-300 text-gray-800 hover:bg-gray-100"
+            >
+              Send refund confirmation
+            </button>
+          )}
           {showPrintOrder && (
             <button
               type="button"
@@ -950,6 +984,27 @@ export default function OrderCard({
       </div>
 
       {/* DaisyUI modal (same pattern as MoreMenuButton): dialog + modal-open + modal-box + modal-backdrop. */}
+      <RefundModal
+        isOpen={refundModalOpen}
+        onClose={() => setRefundModalOpen(false)}
+        order={order}
+        onRefundSuccess={(orderId, result) => {
+          setMoreActionsOpen(false);
+          if (onRefundSuccess) {
+            onRefundSuccess(orderId, result);
+          }
+        }}
+      />
+
+      <SendRefundConfirmationModal
+        isOpen={refundConfirmationModalOpen}
+        onClose={() => {
+          setRefundConfirmationModalOpen(false);
+          setMoreActionsOpen(false);
+        }}
+        order={order}
+      />
+
       <dialog
         className={`modal ${receiptModalOpen ? "modal-open" : ""}`}
         aria-labelledby="receipt-email-title"
