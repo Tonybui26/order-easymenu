@@ -53,9 +53,12 @@ export default function PanelProductAvailability() {
 
   const soldOutProducts = useMemo(() => {
     const rows = [];
+    const seenItemIds = new Set();
     for (const section of menuContent || []) {
       for (const item of section.items || []) {
         if (item.available === false || item.soldOut !== true) continue;
+        if (seenItemIds.has(item.id)) continue;
+        seenItemIds.add(item.id);
         rows.push({ section, item });
       }
     }
@@ -375,7 +378,7 @@ export default function PanelProductAvailability() {
                 : "text-red-400 hover:bg-neutral-800"
             }`}
           >
-            <span className="truncate">Sold out</span>
+            <span className="truncate">Sold Out Items</span>
             {soldOutCount > 0 ? (
               <span className="badge badge-sm shrink-0 border-none bg-red-500 text-white">
                 {soldOutCount}
@@ -475,7 +478,7 @@ export default function PanelProductAvailability() {
                 Select a category
               </p>
               <p className="mt-2 max-w-sm text-sm text-neutral-500">
-                Choose Sold out, Modifiers, or a category on the left, or use
+                Choose Sold Out Items, Modifiers, or a category on the left, or use
                 search above to find a product or modifier option.
               </p>
             </div>
@@ -484,7 +487,7 @@ export default function PanelProductAvailability() {
           <div className="flex flex-1 flex-col overflow-hidden p-4 md:p-6">
             <div className="mb-4 shrink-0">
               <h3 className="text-base font-semibold text-white md:text-lg">
-                Sold out
+                Sold Out Items
               </h3>
               <p className="mt-1 text-sm text-neutral-500">
                 {soldOutCount === 0
