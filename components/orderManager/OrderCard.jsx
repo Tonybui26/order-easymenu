@@ -30,6 +30,7 @@ import {
 } from "@/lib/helper/pickupTimeDisplay";
 import { ModifierChoicesGrouped } from "@/lib/utils/modifierDisplay";
 import { getCustomerDisplayName } from "@/lib/helper/printNameAlias";
+import { isOrderPaidForFulfillment } from "@/lib/helper/orderPaymentStatus";
 import OrderCardAccordion from "./OrderCardAccordion";
 import OrderCardMoreInfo from "./OrderCardMoreInfo";
 import RefundModal from "./RefundModal";
@@ -175,7 +176,7 @@ export default function OrderCard({
   // 2. ACCEPT BUTTON (pre-order flow: confirmed -> accepted -> preparing)
   const showAcceptButton = (() => {
     if (!isPreorder) return false;
-    if (order.paymentStatus !== "paid") return false;
+    if (!isOrderPaidForFulfillment(order.paymentStatus)) return false;
     if (order.status !== "confirmed") return false;
     return true;
   })();
@@ -197,7 +198,7 @@ export default function OrderCard({
     if (isCounterOrder) {
       // Must be paid (or pay-later when store allows) AND in a state where preparation can start
       if (
-        order.paymentStatus !== "paid" &&
+        !isOrderPaidForFulfillment(order.paymentStatus) &&
         !(payLaterEnabled && order.isPayLater)
       ) {
         return false;
@@ -377,6 +378,13 @@ export default function OrderCard({
           border: "border-gray-200",
           dot: "bg-gray-400",
         };
+      case "partially_refunded":
+        return {
+          background: "bg-orange-100",
+          text: "text-orange-800",
+          border: "border-orange-200",
+          dot: "bg-orange-500",
+        };
       default:
         return {
           background: "bg-gray-100",
@@ -423,18 +431,17 @@ export default function OrderCard({
         return "Payment Failed";
       case "refunded":
         return "Refunded";
+      case "partially_refunded":
+        return "Partially refunded";
       default:
         return "Unknown";
     }
   };
 
-  const isCompletedView = viewMode === "completed";
   const showEmailReceipt =
     order.status !== "cancelled" && order.paymentStatus === "paid";
-  const showIssueRefund =
-    isCompletedView && order.paymentStatus === "paid";
+  const showIssueRefund = order.paymentStatus === "paid";
   const showSendRefundConfirmation =
-    isCompletedView &&
     (order.paymentStatus === "refunded" ||
       order.paymentStatus === "partially_refunded") &&
     order.refund?.amount != null;

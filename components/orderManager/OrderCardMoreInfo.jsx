@@ -98,6 +98,8 @@ function getPaymentStatusLabel(order, payLaterEnabled) {
       return "Payment failed";
     case "refunded":
       return "Refunded";
+    case "partially_refunded":
+      return "Partially refunded";
     default:
       return paymentStatus || "—";
   }

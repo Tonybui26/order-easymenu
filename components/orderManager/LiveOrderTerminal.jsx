@@ -20,6 +20,7 @@ import {
   filterOrdersForActiveList,
 } from "@/lib/helper/payLater";
 import { isPendingCounterOrderForCollection } from "@/lib/helper/orderCollectAmount";
+import { isOrderPaidForFulfillment } from "@/lib/helper/orderPaymentStatus";
 import {
   getUnpaidOrdersByTable,
   isUnpaidCounterDineInOrder,
@@ -1917,7 +1918,7 @@ export default function LiveOrderTerminal() {
           (order) =>
             order.isPreorder &&
             order.status === "accepted" &&
-            order.paymentStatus === "paid",
+            isOrderPaidForFulfillment(order.paymentStatus),
         )
         .sort((a, b) => compareOrdersByFulfillment(a, b));
     } else if (viewMode === "new") {
@@ -1928,13 +1929,13 @@ export default function LiveOrderTerminal() {
       return orders.filter(
         (order) =>
           (order.status === "confirmed" &&
-            order.paymentStatus === "paid" &&
+            isOrderPaidForFulfillment(order.paymentStatus) &&
             !isCounterPayment(order.paymentMethod)) ||
           (order.status === "pending" &&
             order.paymentStatus === "pending" &&
             isCounterPayment(order.paymentMethod)) ||
           (order.status === "confirmed" &&
-            order.paymentStatus === "paid" &&
+            isOrderPaidForFulfillment(order.paymentStatus) &&
             isCounterPayment(order.paymentMethod)) ||
           isPayLaterOrderInNewTab(order, menuConfig),
       );
@@ -1957,18 +1958,18 @@ export default function LiveOrderTerminal() {
     (order) =>
       order.isPreorder &&
       order.status === "accepted" &&
-      order.paymentStatus === "paid",
+      isOrderPaidForFulfillment(order.paymentStatus),
   ).length;
   const newOrdersCount = orders.filter(
     (order) =>
       (order.status === "confirmed" &&
-        order.paymentStatus === "paid" &&
+        isOrderPaidForFulfillment(order.paymentStatus) &&
         !isCounterPayment(order.paymentMethod)) ||
       (order.status === "pending" &&
         order.paymentStatus === "pending" &&
         isCounterPayment(order.paymentMethod)) ||
       (order.status === "confirmed" &&
-        order.paymentStatus === "paid" &&
+        isOrderPaidForFulfillment(order.paymentStatus) &&
         isCounterPayment(order.paymentMethod)) ||
       isPayLaterOrderInNewTab(order, menuConfig),
   ).length;
@@ -2521,7 +2522,6 @@ export default function LiveOrderTerminal() {
                     onReady={() => {}} // No action needed for completed orders
                     onDeliver={() => {}} // No action needed for completed orders
                     onCancel={() => {}} // No action needed for completed orders
-                    onRefundSuccess={handleRefundSuccess}
                   />
                 ))}
               </div>
