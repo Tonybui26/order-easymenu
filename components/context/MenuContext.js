@@ -4,6 +4,7 @@ import {
   updateMenuConfig,
   fetchGetMenuByOwnerEmail,
   updateMenuItemSoldOut,
+  updateModifierOptionAvailability,
 } from "@/lib/api/fetchApi";
 import { useSkipInitialEffect } from "@/lib/hooks/useSkipInitialEffect";
 import {
@@ -32,6 +33,12 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
 
   const [menuContent, setMenuContent] = useState(
     (menuData && menuData.menuContent) || [],
+  );
+  const [globalModifiers, setGlobalModifiers] = useState(
+    (menuData && menuData.globalModifiers) || {},
+  );
+  const [globalVariants, setGlobalVariants] = useState(
+    (menuData && menuData.globalVariants) || {},
   );
   // Read-only here — the order-manager app only consumes itemGroups for
   // per-printer routing. Edits happen in the admin app (/admin/menu/groups).
@@ -67,6 +74,8 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         if (data) {
           setMenuConfig(data.config || {});
           setMenuContent(data.menuContent || []);
+          setGlobalModifiers(data.globalModifiers || {});
+          setGlobalVariants(data.globalVariants || {});
           setItemGroups(data.itemGroups || []);
           setStoreProfile({
             storeName: data.storeName || "",
@@ -139,6 +148,8 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         // Update all menu-related state with fresh data
         setMenuConfig(data.config || {});
         setMenuContent(data.menuContent || []);
+        setGlobalModifiers(data.globalModifiers || {});
+        setGlobalVariants(data.globalVariants || {});
         setItemGroups(data.itemGroups || []);
         setStoreProfile({
           storeName: data.storeName || "",
@@ -184,6 +195,59 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
       return { success: false, error };
     }
   };
+
+  const patchModifierOptionAvailable = useCallback(
+    async (sourceType, groupKey, optionId, available) => {
+      try {
+        await updateModifierOptionAvailability(
+          sourceType,
+          groupKey,
+          optionId,
+          available,
+        );
+
+        if (sourceType === "variant") {
+          setGlobalVariants((prev) => {
+            const group = prev?.[groupKey];
+            if (!group) return prev;
+            return {
+              ...(prev || {}),
+              [groupKey]: {
+                ...group,
+                options: (group.options || []).map((option) =>
+                  option.id === optionId
+                    ? { ...option, available: !!available }
+                    : option,
+                ),
+              },
+            };
+          });
+        } else {
+          setGlobalModifiers((prev) => {
+            const group = prev?.[groupKey];
+            if (!group) return prev;
+            return {
+              ...(prev || {}),
+              [groupKey]: {
+                ...group,
+                options: (group.options || []).map((option) =>
+                  option.id === optionId
+                    ? { ...option, available: !!available }
+                    : option,
+                ),
+              },
+            };
+          });
+        }
+
+        return { success: true };
+      } catch (error) {
+        console.error("patchModifierOptionAvailable:", error);
+        return { success: false, error };
+      }
+    },
+    [],
+  );
 
   const patchItemSoldOut = useCallback(async (menuItemId, soldOut) => {
     try {
@@ -240,7 +304,10 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         refreshMenuDataWithToast, // Add refresh function with toast
         menuContent,
         setMenuContent,
+        globalModifiers,
+        globalVariants,
         patchItemSoldOut,
+        patchModifierOptionAvailable,
         // Item groups (Food / Drink / Misc) — read-only in this app, used for
         // per-printer routing in handlePrintingOrder.
         itemGroups,
