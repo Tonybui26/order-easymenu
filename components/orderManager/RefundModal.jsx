@@ -77,6 +77,11 @@ export default function RefundModal({
         originalAmount: order.total,
       });
 
+      if (!result?.success) {
+        toast.error(result?.error || "Refund failed.");
+        return;
+      }
+
       toast.success("Refund processed.");
       if (onRefundSuccess) {
         onRefundSuccess(order._id, result);
