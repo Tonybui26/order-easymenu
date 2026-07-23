@@ -440,7 +440,8 @@ export default function OrderCard({
 
   const showEmailReceipt =
     order.status !== "cancelled" && order.paymentStatus === "paid";
-  const showIssueRefund = order.paymentStatus === "paid";
+  const showIssueRefund =
+    order.paymentStatus === "paid" && viewMode !== "new";
   const showSendRefundConfirmation =
     (order.paymentStatus === "refunded" ||
       order.paymentStatus === "partially_refunded") &&

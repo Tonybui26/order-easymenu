@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import OrderCard from "./OrderCard";
 import Logo from "../../public/images/logo.svg";
 import {
@@ -21,6 +21,7 @@ import {
 } from "@/lib/helper/payLater";
 import { isPendingCounterOrderForCollection } from "@/lib/helper/orderCollectAmount";
 import { isOrderPaidForFulfillment } from "@/lib/helper/orderPaymentStatus";
+import { summarizeCompletedOrderRefunds } from "@/lib/helper/completedOrderRefunds";
 import {
   getUnpaidOrdersByTable,
   isUnpaidCounterDineInOrder,
@@ -1987,6 +1988,10 @@ export default function LiveOrderTerminal() {
   ).length;
   const readyCount = orders.filter((order) => order.status === "ready").length;
   const completedCount = completedOrders.length;
+  const completedRefundSummary = useMemo(
+    () => summarizeCompletedOrderRefunds(completedOrders),
+    [completedOrders],
+  );
   const unpaidTablesBadgeCount = unpaidTableCount;
 
   const [customToast, setCustomToast] = useState({
@@ -2475,14 +2480,16 @@ export default function LiveOrderTerminal() {
                   <div className="text-xs font-medium uppercase text-gray-500">
                     Refunds
                   </div>
-                  <div className="mt-1 text-lg font-bold text-gray-900">0</div>
+                  <div className="mt-1 text-lg font-bold text-gray-900">
+                    {completedRefundSummary.refundCount}
+                  </div>
                 </div>
                 <div>
                   <div className="text-xs font-medium uppercase text-gray-500">
                     Total Refunded
                   </div>
                   <div className="mt-1 text-lg font-bold text-gray-900">
-                    $0.00
+                    ${completedRefundSummary.totalRefunded.toFixed(2)}
                   </div>
                 </div>
               </div>
