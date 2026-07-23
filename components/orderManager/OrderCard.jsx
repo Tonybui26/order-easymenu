@@ -36,6 +36,14 @@ import OrderCardMoreInfo from "./OrderCardMoreInfo";
 import RefundModal from "./RefundModal";
 import SendRefundConfirmationModal from "./SendRefundConfirmationModal";
 
+function getOrderTableNumber(table) {
+  const value = String(table ?? "").trim();
+  if (!value) return null;
+  const normalized = value.toLowerCase();
+  if (normalized === "takeaway" || normalized === "pickup") return null;
+  return value;
+}
+
 export default function OrderCard({
   order,
   onPrepare,
@@ -86,16 +94,26 @@ export default function OrderCard({
    */
   const canonicalOrderType = String(order?.orderType ?? "").trim();
 
+  const isDelivery = canonicalOrderType === "delivery";
   const isDineIn =
     canonicalOrderType === "dine-in" ||
-    (order.table && order.table !== "takeaway");
-  const isDelivery = canonicalOrderType === "delivery";
+    (!canonicalOrderType &&
+      order.table &&
+      order.table !== "takeaway" &&
+      String(order.table).toLowerCase() !== "pickup");
   const isPickUp =
     canonicalOrderType === "pick-up" ||
     (!canonicalOrderType && !isDineIn && !isDelivery);
 
-  // Table (dine-in) vs off-premise (pick-up/delivery)
   const isTableOrder = isDineIn;
+  const pickUpTable = getOrderTableNumber(order.table);
+  const orderTitle = isTableOrder
+    ? `Table ${order.table}`
+    : isDelivery
+      ? "Delivery"
+      : pickUpTable
+        ? `Pick-up (table ${pickUpTable})`
+        : "Pick-up";
 
   // Check payment status
   const isPaid = order.paymentStatus === "paid";
@@ -536,18 +554,14 @@ export default function OrderCard({
               </div>
               <div>
                 <h3 className="text-2xl font-extrabold leading-tight text-gray-800">
-                  {isTableOrder
-                    ? `Table ${order.table}`
-                    : isDelivery
-                      ? "Delivery"
-                      : "Pick-up"}
+                  {orderTitle}
                   {isPreorder ? (
                     <span className="mb-1 ml-2 inline-block rounded-full bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-800">
                       Pre-order
                     </span>
                   ) : null}
                 </h3>
-                <p className="hidden text-xs font-medium text-gray-500 xl:text-sm">
+                <p className="mt-0.5 text-sm font-medium text-gray-500">
                   #{order._id.slice(-6).toUpperCase()}
                 </p>
                 <div className="mt-1 flex flex-col items-start gap-1">

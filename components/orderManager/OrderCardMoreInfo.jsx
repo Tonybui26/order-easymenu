@@ -33,6 +33,12 @@ function InfoSection({ children, className = "" }) {
   return <div className={`space-y-0 ${className}`}>{children}</div>;
 }
 
+function formatOrderNumber(orderId) {
+  const id = String(orderId ?? "").trim();
+  if (!id) return null;
+  return `#${id.slice(-6).toUpperCase()}`;
+}
+
 function formatPlacedAt(createdAt) {
   if (!createdAt) return null;
   try {
@@ -113,6 +119,7 @@ export default function OrderCardMoreInfo({
   payLaterEnabled = false,
 }) {
   const placedAt = formatPlacedAt(order.createdAt);
+  const orderNumber = formatOrderNumber(order._id);
   const fulfillmentTime = formatPickupTimeShort(order.pickupTime);
   const deliveryAddress = isDelivery ? formatDeliveryAddress(order) : null;
   const subtotal = Number(order.subtotal ?? order.total ?? 0);
@@ -125,6 +132,7 @@ export default function OrderCardMoreInfo({
   return (
     <div>
       <InfoSection>
+        <InfoRow label="Order number" value={orderNumber} />
         <InfoRow label="Placed" value={placedAt} />
         {isDineIn && order.table && order.table !== "takeaway" && (
           <InfoRow label="Table" value={order.table} />
