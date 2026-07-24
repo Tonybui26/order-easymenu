@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Delete } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/helper";
 
 const KEYPAD_ROWS = [
@@ -34,8 +35,6 @@ export default function PosTableEntryPopover({
     setDigits(initialNumber ? String(initialNumber) : "");
   }, [isOpen, initialNumber]);
 
-  if (!isOpen) return null;
-
   function appendDigit(digit) {
     setDigits((prev) => {
       const next = `${prev}${digit}`;
@@ -65,85 +64,106 @@ export default function PosTableEntryPopover({
 
   return (
     <>
-      <button
-        type="button"
-        aria-label="Close table entry"
-        className="fixed inset-0 z-40 bg-black/30"
-        onClick={onClose}
-      />
-      <div className="absolute left-1/2 top-full z-50 mt-3 w-[min(100%,22rem)] -translate-x-1/2">
-        {/* Arrow */}
-        <div
-          aria-hidden
-          className="absolute left-1/2 top-0 h-0 w-0 -translate-x-1/2 -translate-y-full border-x-[10px] border-b-[12px] border-x-transparent border-b-[#ec7439]"
-        />
-        <div className="overflow-hidden rounded-2xl bg-[#ec7439] p-4 shadow-2xl">
-          <p className="mb-3 text-center text-base font-semibold text-white">
-            Enter Number
-          </p>
+      <AnimatePresence>
+        {isOpen ? (
+          <motion.button
+            key="pos-table-backdrop"
+            type="button"
+            aria-label="Close table entry"
+            className="fixed inset-0 z-40 bg-black/30"
+            onClick={onClose}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+          />
+        ) : null}
+      </AnimatePresence>
 
-          <div className="mb-3 flex min-h-[3.25rem] items-center justify-center rounded-lg bg-white px-4 text-3xl font-bold tabular-nums text-neutral-900">
-            {digits || <span className="text-neutral-300">&nbsp;</span>}
-          </div>
+      <AnimatePresence>
+        {isOpen ? (
+          <motion.div
+            key="pos-table-popover"
+            className="absolute left-1/2 top-full z-50 mt-3 w-[min(100%,22rem)]"
+            initial={{ opacity: 0, x: "-50%", y: -8, scale: 0.96 }}
+            animate={{ opacity: 1, x: "-50%", y: 0, scale: 1 }}
+            exit={{ opacity: 0, x: "-50%", y: -6, scale: 0.96 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+          >
+            {/* Arrow */}
+            <div
+              aria-hidden
+              className="absolute left-1/2 top-0 h-0 w-0 -translate-x-1/2 -translate-y-full border-x-[10px] border-b-[12px] border-x-transparent border-b-[#ec7439]"
+            />
+            <div className="overflow-hidden rounded-2xl bg-[#ec7439] p-4 shadow-2xl">
+              <p className="mb-3 text-center text-base font-semibold text-white">
+                Enter Number
+              </p>
 
-          <div className="mb-3 grid grid-cols-4 gap-2">
-            {KEYPAD_ROWS.flat().map((key) => {
-              if (key === "backspace") {
-                return (
+              <div className="mb-3 flex min-h-[3.25rem] items-center justify-center rounded-lg bg-white px-4 text-3xl font-bold tabular-nums text-neutral-900">
+                {digits || <span className="text-neutral-300">&nbsp;</span>}
+              </div>
+
+              <div className="mb-3 grid grid-cols-4 gap-2">
+                {KEYPAD_ROWS.flat().map((key) => {
+                  if (key === "backspace") {
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => handleKey(key)}
+                        className="flex aspect-square items-center justify-center rounded-lg bg-white text-neutral-800 shadow-sm transition-transform active:scale-95"
+                        aria-label="Delete"
+                      >
+                        <Delete size={22} strokeWidth={2.25} />
+                      </button>
+                    );
+                  }
+                  if (key === "reset") {
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => handleKey(key)}
+                        className="flex aspect-square items-center justify-center rounded-lg bg-neutral-800 text-xs font-bold tracking-wide text-white shadow-sm transition-transform active:scale-95"
+                      >
+                        RESET
+                      </button>
+                    );
+                  }
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => handleKey(key)}
+                      className="flex aspect-square items-center justify-center rounded-lg bg-white text-2xl font-semibold text-neutral-900 shadow-sm transition-transform active:scale-95"
+                    >
+                      {key}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/40">
+                {ORDER_TYPES.map((type, index) => (
                   <button
-                    key={key}
+                    key={type.id}
                     type="button"
-                    onClick={() => handleKey(key)}
-                    className="flex aspect-square items-center justify-center rounded-lg bg-white text-neutral-800 shadow-sm transition-transform active:scale-95"
-                    aria-label="Delete"
+                    onClick={() => handleSelectOrderType(type.id)}
+                    className={cn(
+                      "min-h-[3.25rem] px-2 text-sm font-bold tracking-wide text-white transition-colors hover:bg-white/10 active:bg-white/20",
+                      index % 2 === 0 && "border-r border-white/40",
+                      index < 2 && "border-b border-white/40",
+                    )}
                   >
-                    <Delete size={22} strokeWidth={2.25} />
+                    {type.label}
                   </button>
-                );
-              }
-              if (key === "reset") {
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => handleKey(key)}
-                    className="flex aspect-square items-center justify-center rounded-lg bg-neutral-800 text-xs font-bold tracking-wide text-white shadow-sm transition-transform active:scale-95"
-                  >
-                    RESET
-                  </button>
-                );
-              }
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => handleKey(key)}
-                  className="flex aspect-square items-center justify-center rounded-lg bg-white text-2xl font-semibold text-neutral-900 shadow-sm transition-transform active:scale-95"
-                >
-                  {key}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/40">
-            {ORDER_TYPES.map((type, index) => (
-              <button
-                key={type.id}
-                type="button"
-                onClick={() => handleSelectOrderType(type.id)}
-                className={cn(
-                  "min-h-[3.25rem] px-2 text-sm font-bold tracking-wide text-white transition-colors hover:bg-white/10 active:bg-white/20",
-                  index % 2 === 0 && "border-r border-white/40",
-                  index < 2 && "border-b border-white/40",
-                )}
-              >
-                {type.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </>
   );
 }
