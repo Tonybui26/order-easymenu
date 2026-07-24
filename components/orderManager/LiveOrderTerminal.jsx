@@ -1067,6 +1067,8 @@ export default function LiveOrderTerminal() {
   }, []);
 
   const PRINT_RETRY_DELAY_MS = 3000;
+  // Up to 2 retries (3s each) for flaky Wi‑Fi / printer TCP — success path stays fast.
+  const PRINT_MAX_RETRIES = 2;
 
   const handlePrintingOrder = async (
     order,
@@ -1201,51 +1203,41 @@ export default function LiveOrderTerminal() {
                 : `Print failed — Could not print to any of the printers`,
         };
 
-        // Check if we need to retry:
-        // 1. All printers failed (!printResult.success)
-        // 2. Some printers failed (printResult.failedPrints > 0) - partial failure
-        const hasFailures =
-          !printResult.success || printResult.failedPrints > 0;
+        // Retry failed printers only (up to PRINT_MAX_RETRIES × 3s) for weak links.
+        // Skip when this call is already a catch-path re-entry (retryCount > 0).
+        let finalResult = printResult;
+        if (retryCount === 0) {
+          for (
+            let retryRound = 1;
+            retryRound <= PRINT_MAX_RETRIES &&
+            (finalResult.failedPrints > 0 || !finalResult.success);
+            retryRound++
+          ) {
+            const failedPrinterNamesSet = new Set();
+            if (finalResult.failedPrinterErrors) {
+              finalResult.failedPrinterErrors.forEach((err) => {
+                failedPrinterNamesSet.add(err.printerName);
+              });
+            } else if (finalResult.failedPrinterNames) {
+              finalResult.failedPrinterNames
+                .split(",")
+                .map((name) => name.trim())
+                .forEach((name) => failedPrinterNamesSet.add(name));
+            }
 
-        // If there are any failures and we haven't retried yet, retry only failed printers
-        if (hasFailures && retryCount === 0) {
-          console.log(
-            `Print ${!printResult.success ? "completely" : "partially"} failed, retrying failed printers after ${PRINT_RETRY_DELAY_MS / 1000}s...`,
-          );
+            const failedPrinters = printersToUse.filter((printer) =>
+              failedPrinterNamesSet.has(printer.name),
+            );
+            if (failedPrinters.length === 0) break;
 
-          // Extract failed printer names from the result
-          const failedPrinterNamesSet = new Set();
-          if (printResult.failedPrinterErrors) {
-            printResult.failedPrinterErrors.forEach((err) => {
-              failedPrinterNamesSet.add(err.printerName);
-            });
-          } else if (printResult.failedPrinterNames) {
-            // Fallback: parse comma-separated names
-            printResult.failedPrinterNames
-              .split(",")
-              .map((name) => name.trim())
-              .forEach((name) => failedPrinterNamesSet.add(name));
-          }
-
-          // Filter printers to only include failed ones. NOTE: use
-          // `printersToUse` (always defined here) instead of the previously
-          // referenced `printersAvailability.printers`, which only existed in
-          // one branch of the lookup above.
-          const failedPrinters = printersToUse.filter((printer) =>
-            failedPrinterNamesSet.has(printer.name),
-          );
-
-          if (failedPrinters.length > 0) {
             console.log(
-              `Retrying ${failedPrinters.length} failed printer(s): ${failedPrinters.map((p) => p.name).join(", ")}`,
+              `Print ${!finalResult.success ? "completely" : "partially"} failed, retry ${retryRound}/${PRINT_MAX_RETRIES} of ${failedPrinters.length} printer(s) after ${PRINT_RETRY_DELAY_MS / 1000}s: ${failedPrinters.map((p) => p.name).join(", ")}`,
             );
 
             await new Promise((resolve) =>
               setTimeout(resolve, PRINT_RETRY_DELAY_MS),
             );
 
-            // Re-run the per-printer split for the failed printers so each
-            // retry uses the same group filtering as the original attempt.
             const retryPlan = planPrintJobsByGroup(
               order,
               failedPrinters,
@@ -1266,7 +1258,6 @@ export default function LiveOrderTerminal() {
               retryPerPrinterResults.push({ printer, result: r });
             }
 
-            // Aggregate retry results into the same shape we use elsewhere.
             const retrySuccessNamesArr = [];
             const retryFailedNamesArr = [];
             const retryFailedErrors = [];
@@ -1281,42 +1272,29 @@ export default function LiveOrderTerminal() {
                 });
               }
             }
-            const retryResult = {
-              success: retrySuccessNamesArr.length > 0,
-              successfulPrints: retrySuccessNamesArr.length,
-              failedPrints: retryFailedNamesArr.length,
-              totalPrinters: retryPerPrinterResults.length,
-              successfulPrinterNames: retrySuccessNamesArr.join(", "),
-              failedPrinterNames: retryFailedNamesArr.join(", "),
-              failedPrinterErrors: retryFailedErrors,
-            };
 
-            // Merge results: combine successful from first attempt with retry results
-            const firstAttemptSuccessful = printResult.successfulPrints || 0;
-            const retrySuccessful = retryResult.successfulPrints || 0;
-            const totalSuccessful = firstAttemptSuccessful + retrySuccessful;
-            const totalPrinters = printResult.totalPrinters || printPlan.length;
-            const totalFailed = totalPrinters - totalSuccessful;
-
-            // Combine successful printer names
-            const firstSuccessNames = printResult.successfulPrinterNames
-              ? printResult.successfulPrinterNames.split(", ")
-              : [];
-            const retrySuccessNames = retryResult.successfulPrinterNames
-              ? retryResult.successfulPrinterNames.split(", ")
+            const priorSuccessNames = finalResult.successfulPrinterNames
+              ? finalResult.successfulPrinterNames
+                  .split(", ")
+                  .filter(Boolean)
               : [];
             const allSuccessNames = [
-              ...firstSuccessNames,
-              ...retrySuccessNames,
+              ...priorSuccessNames,
+              ...retrySuccessNamesArr,
             ];
+            const totalPrintersCount =
+              finalResult.totalPrinters || printPlan.length;
+            const totalSuccessful = allSuccessNames.length;
+            const totalFailed = totalPrintersCount - totalSuccessful;
+            const initialSuccessful = printResult.successfulPrints || 0;
 
-            const mergedResult = {
+            finalResult = {
               success: totalSuccessful > 0,
               successfulPrints: totalSuccessful,
               failedPrints: totalFailed,
-              totalPrinters: totalPrinters,
-              failedPrinterNames: retryResult.failedPrinterNames || "",
-              failedPrinterErrors: retryResult.failedPrinterErrors || [],
+              totalPrinters: totalPrintersCount,
+              failedPrinterNames: retryFailedNamesArr.join(", "),
+              failedPrinterErrors: retryFailedErrors,
               successfulPrinterNames: allSuccessNames.join(", "),
               routingPartialFailure: printResult.routingPartialFailure,
               unroutedItems: printResult.unroutedItems,
@@ -1324,110 +1302,45 @@ export default function LiveOrderTerminal() {
               backupPrintedItems: printResult.backupPrintedItems,
               message:
                 totalSuccessful > 0
-                  ? `Order printed successfully to ${totalSuccessful}/${totalPrinters} printer(s)${retrySuccessful > 0 ? " after retry" : ""}!`
+                  ? `Order printed successfully to ${totalSuccessful}/${totalPrintersCount} printer(s)${totalSuccessful > initialSuccessful ? " after retry" : ""}!`
                   : printResult.message,
             };
-
-            // Show results after retry
-            if (mergedResult.success) {
-              toast.success(mergedResult.message);
-              if (mergedResult.failedPrints > 0) {
-                let errorMessage =
-                  mergedResult.failedPrinterNames + " failed to print";
-                if (
-                  mergedResult.failedPrinterErrors &&
-                  mergedResult.failedPrinterErrors.length > 0
-                ) {
-                  const errorDetails = mergedResult.failedPrinterErrors
-                    .map((err) => `${err.printerName}: ${err.error}`)
-                    .join("; ");
-                  errorMessage += ` - ${errorDetails}`;
-                }
-                showCustomToast(errorMessage, "error");
-              }
-            } else {
-              let errorMessage = mergedResult.message;
-              if (
-                mergedResult.failedPrinterErrors &&
-                mergedResult.failedPrinterErrors.length > 0
-              ) {
-                const errorDetails = mergedResult.failedPrinterErrors
-                  .map((err) => `${err.printerName}: ${err.error}`)
-                  .join("; ");
-                errorMessage += ` - ${errorDetails}`;
-              }
-              showCustomToast(errorMessage, "error");
-            }
-
-            if (
-              !mergedResult.success ||
-              (mergedResult.failedPrints || 0) > 0
-            ) {
-              reportPrintFailure(order, mergedResult, "final");
-            }
-
-            if (routingActive && backupPrintedItems.length > 0) {
-              showCustomToast(
-                buildBackupPrintMessage(
-                  backupPrintedItems,
-                  itemToGroups,
-                  itemGroups,
-                ),
-                "error",
-              );
-            }
-
-            if (routingActive && unroutedItems.length > 0) {
-              showCustomToast(
-                buildUnroutedPrintMessage(
-                  unroutedItems,
-                  itemToGroups,
-                  itemGroups,
-                ),
-                "error",
-              );
-            }
-
-            return mergedResult;
           }
         }
 
-        // After retry (or if no retry needed), show results
-        if (printResult.success) {
-          toast.success(printResult.message);
-          // Show error for any failed printers (even after retry)
-          if (printResult.failedPrints > 0) {
-            // Build error message with details
+        // After retries (or if no retry needed), show results
+        if (finalResult.success) {
+          toast.success(finalResult.message);
+          if (finalResult.failedPrints > 0) {
             let errorMessage =
-              printResult.failedPrinterNames + " failed to print";
+              finalResult.failedPrinterNames + " failed to print";
             if (
-              printResult.failedPrinterErrors &&
-              printResult.failedPrinterErrors.length > 0
+              finalResult.failedPrinterErrors &&
+              finalResult.failedPrinterErrors.length > 0
             ) {
-              const errorDetails = printResult.failedPrinterErrors
+              const errorDetails = finalResult.failedPrinterErrors
                 .map((err) => `${err.printerName}: ${err.error}`)
                 .join("; ");
               errorMessage += ` - ${errorDetails}`;
             }
             showCustomToast(errorMessage, "error");
-            reportPrintFailure(order, printResult, "final");
+            reportPrintFailure(order, finalResult, "final");
           }
         } else {
-          // All printers failed - show error message with details
-          let errorMessage = printResult.message;
+          let errorMessage = finalResult.message;
           if (
-            printResult.failedPrinterErrors &&
-            printResult.failedPrinterErrors.length > 0
+            finalResult.failedPrinterErrors &&
+            finalResult.failedPrinterErrors.length > 0
           ) {
-            const errorDetails = printResult.failedPrinterErrors
+            const errorDetails = finalResult.failedPrinterErrors
               .map((err) => `${err.printerName}: ${err.error}`)
               .join("; ");
             errorMessage += ` - ${errorDetails}`;
-          } else if (printResult.error) {
-            errorMessage += ` - ${printResult.error}`;
+          } else if (finalResult.error) {
+            errorMessage += ` - ${finalResult.error}`;
           }
           showCustomToast(errorMessage, "error");
-          reportPrintFailure(order, printResult, "final");
+          reportPrintFailure(order, finalResult, "final");
         }
 
         if (routingActive && backupPrintedItems.length > 0) {
@@ -1448,7 +1361,7 @@ export default function LiveOrderTerminal() {
           );
         }
 
-        return printResult;
+        return finalResult;
       } else {
         // toast.error(`No printers available for ${orderType} orders`);
         return { success: false, message: "No printers available" };
@@ -1456,15 +1369,15 @@ export default function LiveOrderTerminal() {
     } catch (error) {
       console.error("Error printing order:", error);
 
-      // If error occurred and we haven't retried yet, retry once after a short delay
-      if (retryCount === 0) {
+      // Re-run full print up to PRINT_MAX_RETRIES times after thrown errors
+      if (retryCount < PRINT_MAX_RETRIES) {
         console.log(
-          `Print error occurred, retrying after ${PRINT_RETRY_DELAY_MS / 1000}s...`,
+          `Print error occurred, retry ${retryCount + 1}/${PRINT_MAX_RETRIES} after ${PRINT_RETRY_DELAY_MS / 1000}s...`,
         );
         await new Promise((resolve) =>
           setTimeout(resolve, PRINT_RETRY_DELAY_MS),
         );
-        return handlePrintingOrder(order, selectedPrinters, 1); // Retry once
+        return handlePrintingOrder(order, selectedPrinters, retryCount + 1);
       }
 
       // If retry also failed, show error toast
