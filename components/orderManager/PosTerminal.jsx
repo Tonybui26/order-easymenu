@@ -2,10 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { Check, Headset, Plus, Printer, QrCode } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  Check,
+  DollarSign,
+  Headset,
+  Plus,
+  Printer,
+  QrCode,
+} from "lucide-react";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { cn } from "@/lib/helper";
 import PosTableEntryPopover from "./PosTableEntryPopover";
+import PosOrderPanelFooter from "./PosOrderPanelFooter";
 import Logo from "../../public/images/goeasymenu-logo-icon-white.svg";
 
 const POS_HEADER_ACTIONS = [
@@ -62,6 +71,7 @@ function PosProductCard({ item, onAdd }) {
 }
 
 export default function PosTerminal() {
+  const router = useRouter();
   const { menuContent, posLayouts } = useMenuContext();
   const itemsById = useAllMenuItems(menuContent);
 
@@ -127,6 +137,15 @@ export default function PosTerminal() {
     setOrderType(nextOrderType || null);
   }
 
+  function handleClearOrder() {
+    setCartLines([]);
+  }
+
+  const cartSubtotal = cartLines.reduce(
+    (sum, line) => sum + Number(line.price || 0) * (line.quantity || 1),
+    0,
+  );
+
   return (
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8]">
       <header className="flex shrink-0 items-center justify-between gap-4 border-b-4 border-[#f9b08c] bg-brand_accent px-4 py-2.5">
@@ -143,6 +162,9 @@ export default function PosTerminal() {
               key={id}
               type="button"
               aria-label={label}
+              onClick={() => {
+                if (id === "qr") router.push("/");
+              }}
               className="flex size-10 items-center justify-center rounded-xl bg-black/15 text-white transition-colors active:bg-black/25 sm:size-11"
             >
               <Icon size={28} strokeWidth={2} />
@@ -206,6 +228,11 @@ export default function PosTerminal() {
               </ul>
             )}
           </div>
+
+          <PosOrderPanelFooter
+            subtotal={cartSubtotal}
+            onClear={handleClearOrder}
+          />
         </section>
 
         {/* Right: POS menu layout (tabs + products) */}
@@ -226,7 +253,7 @@ export default function PosTerminal() {
                       type="button"
                       onClick={() => setSelectedTabId(tab.id)}
                       className={cn(
-                        "relative flex min-h-[72px] w-full items-center justify-start px-3 py-7 text-left text-xl font-bold text-neutral-900 transition-opacity",
+                        "relative flex min-h-[72px] w-full items-center justify-start px-3 py-7 text-left text-lg font-semibold text-neutral-900 transition-opacity",
                         isSelected ? "z-20" : "hover:opacity-90",
                       )}
                       style={{
@@ -246,6 +273,17 @@ export default function PosTerminal() {
                 })
               )}
             </div>
+
+            <button
+              type="button"
+              aria-label="Pay"
+              className="flex shrink-0 items-center justify-center gap-0 bg-[#ef3636] px-3 py-6 text-lg font-semibold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24] sm:gap-1 sm:py-6 sm:text-xl"
+            >
+              <span className="relative inline-flex size-7 items-center justify-center sm:size-8">
+                <DollarSign size={28} strokeWidth={2} />
+              </span>
+              Pay
+            </button>
           </aside>
 
           {/* Products for selected tab */}
