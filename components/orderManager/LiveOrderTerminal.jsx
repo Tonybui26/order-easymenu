@@ -10,6 +10,7 @@ import {
   markOrderPayLater,
   createPrintJobsForOrder,
   checkPrinterAvailability,
+  logPrintError,
 } from "@/lib/api/fetchApi";
 import {
   isCounterPayment,
@@ -55,7 +56,7 @@ import PanelProductAvailability from "./PanelProductAvailability";
 import { useMenuContext } from "../context/MenuContext";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
-import { isNativeApp } from "@/lib/helper/platformDetection";
+import { isNativeApp, getPlatform } from "@/lib/helper/platformDetection";
 import toast from "react-hot-toast";
 import { printOrderQueued } from "@/lib/helper/printerUtilsNew";
 import {
@@ -83,6 +84,31 @@ function getPrinterJobErrorMessage(result) {
   if (specificError) return specificError;
 
   return result?.message || "Unknown error";
+}
+
+/** Fire-and-forget remote log for final print failures. Never awaits / never throws to callers. */
+function reportPrintFailure(order, result, attempt = "final") {
+  const orderId = order?._id ? String(order._id) : "";
+  if (!orderId) return;
+
+  const failedPrinters = Array.isArray(result?.failedPrinterErrors)
+    ? result.failedPrinterErrors.map((err) => ({
+        name: err?.printerName || err?.name || "",
+        error: err?.error || "",
+      }))
+    : [];
+
+  logPrintError({
+    orderId,
+    orderShortId: orderId.slice(-6),
+    message: result?.message || result?.error || "Print failed",
+    failedPrinters,
+    successfulPrints: result?.successfulPrints ?? 0,
+    failedPrints: result?.failedPrints ?? failedPrinters.length,
+    totalPrinters: result?.totalPrinters ?? 0,
+    attempt,
+    platform: getPlatform(),
+  }).catch(() => {});
 }
 
 /**
@@ -1333,6 +1359,13 @@ export default function LiveOrderTerminal() {
               showCustomToast(errorMessage, "error");
             }
 
+            if (
+              !mergedResult.success ||
+              (mergedResult.failedPrints || 0) > 0
+            ) {
+              reportPrintFailure(order, mergedResult, "final");
+            }
+
             if (routingActive && backupPrintedItems.length > 0) {
               showCustomToast(
                 buildBackupPrintMessage(
@@ -1377,6 +1410,7 @@ export default function LiveOrderTerminal() {
               errorMessage += ` - ${errorDetails}`;
             }
             showCustomToast(errorMessage, "error");
+            reportPrintFailure(order, printResult, "final");
           }
         } else {
           // All printers failed - show error message with details
@@ -1393,6 +1427,7 @@ export default function LiveOrderTerminal() {
             errorMessage += ` - ${printResult.error}`;
           }
           showCustomToast(errorMessage, "error");
+          reportPrintFailure(order, printResult, "final");
         }
 
         if (routingActive && backupPrintedItems.length > 0) {
@@ -1435,6 +1470,16 @@ export default function LiveOrderTerminal() {
       // If retry also failed, show error toast
       const errorMessage = `Print failed: ${error.message || "Unknown error"}`;
       showCustomToast(errorMessage, "error");
+      const exceptionResult = {
+        success: false,
+        message: errorMessage,
+        error: error.message,
+        failedPrints: 1,
+        successfulPrints: 0,
+        totalPrinters: 0,
+        failedPrinterErrors: [],
+      };
+      reportPrintFailure(order, exceptionResult, "exception");
       return { success: false, error: error.message };
     }
   };
