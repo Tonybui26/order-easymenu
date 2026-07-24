@@ -45,6 +45,10 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   const [itemGroups, setItemGroups] = useState(
     (menuData && menuData.itemGroups) || [],
   );
+  // POS menu layouts — read-only here; edited in easymenu admin Menu layout.
+  const [posLayouts, setPosLayouts] = useState(
+    (menuData && menuData.posLayouts) || [],
+  );
   const [storeProfile, setStoreProfile] = useState({
     storeName: (menuData && menuData.storeName) || "",
     storeLogo: (menuData && menuData.storeProfileImage) || "",
@@ -77,6 +81,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
           setGlobalModifiers(data.globalModifiers || {});
           setGlobalVariants(data.globalVariants || {});
           setItemGroups(data.itemGroups || []);
+          setPosLayouts(data.posLayouts || []);
           setStoreProfile({
             storeName: data.storeName || "",
             storeLogo: data.storeProfileImage || "",
@@ -151,6 +156,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         setGlobalModifiers(data.globalModifiers || {});
         setGlobalVariants(data.globalVariants || {});
         setItemGroups(data.itemGroups || []);
+        setPosLayouts(data.posLayouts || []);
         setStoreProfile({
           storeName: data.storeName || "",
           storeLogo: data.storeProfileImage || "",
@@ -311,6 +317,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         // Item groups (Food / Drink / Misc) — read-only in this app, used for
         // per-printer routing in handlePrintingOrder.
         itemGroups,
+        posLayouts,
         menuId,
         storeProfile,
         setStoreProfile,

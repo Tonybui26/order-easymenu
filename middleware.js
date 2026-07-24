@@ -59,7 +59,8 @@ export async function middleware(req) {
 // Configure which routes use this middleware
 export const config = {
   matcher: [
-    // Protected pages that require authentication only
+    // Protected pages that require authentication
     "/",
+    "/pos",
   ],
 };
