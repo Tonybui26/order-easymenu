@@ -29,15 +29,10 @@ import {
 import {
   Banknote,
   Bell,
-  CreditCard,
   ChefHat,
   Check,
   Radio,
   Clock,
-  Package,
-  RefreshCw,
-  ShoppingCart,
-  Users,
   X,
   CalendarClock,
 } from "lucide-react";
@@ -60,14 +55,9 @@ import PanelProductAvailability from "./PanelProductAvailability";
 import { useMenuContext } from "../context/MenuContext";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
-import { printOrder } from "@/lib/helper/printerUtils";
 import { isNativeApp } from "@/lib/helper/platformDetection";
 import toast from "react-hot-toast";
-import {
-  printOrderNew,
-  getPrintQueueStatus,
-  printOrderQueued,
-} from "@/lib/helper/printerUtilsNew";
+import { printOrderQueued } from "@/lib/helper/printerUtilsNew";
 import {
   planPrintJobsByGroup,
   planPrintJobsWithRouting,
@@ -75,10 +65,7 @@ import {
   buildBackupPrintMessage,
 } from "@/lib/helper/printerGroupRouting";
 import { compareOrdersByFulfillment } from "@/lib/helper/pickupTimeDisplay";
-import { useSkipInitialEffect } from "@/lib/hooks/useSkipInitialEffect";
 import { App } from "@capacitor/app";
-import { createTokenFromSession } from "@/lib/auth/tokenUtils";
-import { getJWTTokenAction } from "@/lib/actions/orderActions";
 import {
   getNotificationSoundUrl,
   NOTIFICATION_SOUND_REPLAY_INTERVAL_MS,
@@ -1176,11 +1163,9 @@ export default function LiveOrderTerminal() {
           successfulPrinterNames: successfulPrinterNames.join(", "),
           failedPrinterNames: failedPrinterNames.join(", "),
           failedPrinterErrors,
-          routingPartialFailure:
-            routingActive && unroutedItems.length > 0,
+          routingPartialFailure: routingActive && unroutedItems.length > 0,
           unroutedItems: routingActive ? unroutedItems : [],
-          backupPartialFailure:
-            routingActive && backupPrintedItems.length > 0,
+          backupPartialFailure: routingActive && backupPrintedItems.length > 0,
           backupPrintedItems: routingActive ? backupPrintedItems : [],
           message:
             successfulPrints === totalPrinters
@@ -1423,11 +1408,7 @@ export default function LiveOrderTerminal() {
 
         if (routingActive && unroutedItems.length > 0) {
           showCustomToast(
-            buildUnroutedPrintMessage(
-              unroutedItems,
-              itemToGroups,
-              itemGroups,
-            ),
+            buildUnroutedPrintMessage(unroutedItems, itemToGroups, itemGroups),
             "error",
           );
         }
