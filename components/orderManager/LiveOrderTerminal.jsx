@@ -1482,6 +1482,15 @@ export default function LiveOrderTerminal() {
     }
   };
 
+  // Same path as auto-print: all applicable printers + group routing warnings
+  const handlePrintToAllPrinters = async () => {
+    if (!showPrinterSelectionModal.order) return;
+
+    const order = showPrinterSelectionModal.order;
+    closePrinterSelectionModal();
+    await handlePrintingOrder(order);
+  };
+
   // Handle order status updates and control printing
   // only printing docket when order status is changed to "preparing" and auto-printing is disabled
   const handleStatusUpdate = async (orderId, newStatus) => {
@@ -2618,6 +2627,7 @@ export default function LiveOrderTerminal() {
           isLoadingPrinters={loadingPrinters}
           onClose={closePrinterSelectionModal}
           onSelectPrinter={handlePrinterSelectAndPrint}
+          onSelectAllPrinters={handlePrintToAllPrinters}
         />
       </div>
       {/* Custom Toast Component */}
