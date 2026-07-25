@@ -77,7 +77,7 @@ function PosProductCard({ item, onAdd }) {
           </div>
         )}
       </div>
-      <div className="px-2 py-2.5 text-center text-lg font-semibold leading-snug text-neutral-900">
+      <div className="px-2 py-2.5 text-center text-base font-semibold leading-snug text-neutral-900 xl:text-lg">
         {item.title || "Untitled"}
       </div>
     </button>
@@ -128,7 +128,12 @@ export default function PosTerminal() {
     return `TABLE: ${tableNumber || "--"}`;
   })();
 
-  function addConfiguredLine(item, variantsPayload, modifiersPayload, unitPrice) {
+  function addConfiguredLine(
+    item,
+    variantsPayload,
+    modifiersPayload,
+    unitPrice,
+  ) {
     const basePrice = computeLineBasePrice(
       variantsPayload,
       Number(item.price || 0),
@@ -451,8 +456,13 @@ export default function PosTerminal() {
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8]">
       <header className="flex shrink-0 items-center justify-between gap-4 border-b-4 border-[#f9b08c] bg-brand_accent px-4 py-2.5">
         <div className="flex items-center gap-1.5">
-          <Image src={Logo} alt="EasyMenu" className="size-9" priority />
-          <span className="text-lg font-bold text-white">
+          <Image
+            src={Logo}
+            alt="EasyMenu"
+            className="size-8 xl:size-9"
+            priority
+          />
+          <span className="text-base font-bold text-white xl:text-lg">
             Easy<span className="text-neutral-900">Menu</span>
           </span>
         </div>
@@ -468,7 +478,7 @@ export default function PosTerminal() {
               }}
               className="flex size-10 items-center justify-center rounded-xl bg-black/15 text-white transition-colors active:bg-black/25 sm:size-11"
             >
-              <Icon size={28} strokeWidth={2} />
+              <Icon size={24} strokeWidth={1.5} />
             </button>
           ))}
         </div>
@@ -527,7 +537,7 @@ export default function PosTerminal() {
         {/* Right: POS menu layout (tabs + products) */}
         <section className="flex min-w-0 flex-1">
           {/* Tabs column — z-30 + overhang so selected indicator sits on top of products */}
-          <aside className="relative z-30 flex w-[120px] shrink-0 flex-col bg-[#e0e0e0] sm:w-[190px]">
+          <aside className="relative z-30 flex w-[120px] shrink-0 flex-col bg-[#e0e0e0] sm:w-[150px]">
             <div className="-mr-3 min-h-0 flex-1 overflow-y-auto pr-3">
               {tabs.length === 0 ? (
                 <div className="p-3 text-center text-xs text-neutral-500">
@@ -542,9 +552,13 @@ export default function PosTerminal() {
                       type="button"
                       onClick={() => handleTabClick(tab.id)}
                       className={cn(
-                        "relative flex min-h-[72px] w-full items-center justify-start px-3 py-7 text-left text-lg font-semibold text-neutral-900 transition-opacity",
-                        isSelected || customizingItem ? "z-20" : "hover:opacity-90",
-                        customizingItem && isSelected && "ring-2 ring-inset ring-black/10",
+                        "relative flex min-h-[72px] w-full items-center justify-start px-3 py-6 text-left text-base font-semibold text-neutral-900 transition-opacity xl:text-lg",
+                        isSelected || customizingItem
+                          ? "z-20"
+                          : "hover:opacity-90",
+                        customizingItem &&
+                          isSelected &&
+                          "ring-2 ring-inset ring-black/10",
                       )}
                       style={{
                         backgroundColor: tab.backgroundColor || "#d9d9d9",
@@ -568,7 +582,7 @@ export default function PosTerminal() {
               <button
                 type="button"
                 aria-label="Open drawer"
-                className="flex w-full items-center justify-center gap-1.5 bg-neutral-300 px-3 py-4 text-sm font-semibold uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-600 hover:text-white active:bg-neutral-700 sm:gap-2 sm:py-5 sm:text-base"
+                className="flex w-full items-center justify-center gap-1.5 bg-neutral-300 px-3 py-4 text-sm font-semibold uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-600 hover:text-white active:bg-neutral-700 sm:gap-2 sm:py-5 xl:text-base"
               >
                 <PanelBottomOpen
                   size={22}
@@ -581,11 +595,9 @@ export default function PosTerminal() {
               <button
                 type="button"
                 aria-label="Pay"
-                className="flex w-full items-center justify-center gap-0 bg-[#ef3636] px-3 py-6 text-lg font-semibold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24] sm:gap-1 sm:py-6 sm:text-xl"
+                className="flex w-full items-center justify-center gap-0 bg-[#ef3636] px-3 py-6 text-base font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24] sm:gap-1 sm:py-6 xl:text-lg"
               >
-                <span className="relative inline-flex size-7 items-center justify-center sm:size-8">
-                  <DollarSign size={28} strokeWidth={2} />
-                </span>
+                <span className="text-xl">$</span>
                 Pay
               </button>
             </div>
@@ -622,7 +634,10 @@ export default function PosTerminal() {
                     if (rowItems.length === 0) return null;
 
                     return (
-                      <div key={row.id} className="grid grid-cols-5 gap-3">
+                      <div
+                        key={row.id}
+                        className="grid grid-cols-4 gap-1 xl:grid-cols-5"
+                      >
                         {rowItems.map((item) => (
                           <PosProductCard
                             key={`${row.id}-${item.id}`}

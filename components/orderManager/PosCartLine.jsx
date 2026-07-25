@@ -51,17 +51,17 @@ export default function PosCartLine({
             event.stopPropagation();
             onQtyClick?.(line.lineId);
           }}
-          className="inline-flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-neutral-300 bg-white px-2 text-sm font-bold text-neutral-800 shadow-sm transition-colors hover:bg-neutral-50 active:bg-neutral-100"
+          className="inline-flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-neutral-200 bg-white px-2 text-sm font-bold text-neutral-800 shadow-sm transition-colors hover:bg-neutral-50 active:bg-neutral-100"
           aria-label={`Edit quantity of ${line.title}`}
         >
           {qty}
         </button>
 
-        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-neutral-800">
+        <p className="min-w-0 flex-1 text-base font-medium text-neutral-800">
           {line.title}
         </p>
 
-        <span className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-neutral-300 bg-white px-2 text-sm font-semibold tabular-nums text-neutral-800">
+        <span className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-neutral-200 bg-white px-2 text-sm font-semibold tabular-nums text-neutral-800">
           {formatMoney(basePrice)}
         </span>
 
@@ -71,7 +71,7 @@ export default function PosCartLine({
             event.stopPropagation();
             onRemoveLine?.(line.lineId);
           }}
-          className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
+          className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
           aria-label={`Remove ${line.title}`}
         >
           <X size={14} strokeWidth={2.5} />
@@ -92,7 +92,7 @@ export default function PosCartLine({
               <button
                 type="button"
                 onClick={() => onRemoveVariant?.(line.lineId, variant.optionId)}
-                className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
+                className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
                 aria-label={`Remove ${variant.optionName}`}
               >
                 <X size={14} strokeWidth={2.5} />
@@ -122,7 +122,7 @@ export default function PosCartLine({
                   onClick={() =>
                     onRemoveModifier?.(line.lineId, modifier.optionId)
                   }
-                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
+                  className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
                   aria-label={`Remove ${modifier.optionName}`}
                 >
                   <X size={14} strokeWidth={2.5} />

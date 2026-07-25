@@ -46,7 +46,7 @@ export default function PosOrderPanelFooter({
       className={cn("shrink-0 border-t border-neutral-300 bg-white", className)}
     >
       <div className="grid grid-cols-[1.15fr_1fr] border-b border-neutral-300">
-        <div className="space-y-1 border-r border-neutral-300 px-3 py-2.5 text-base font-semibold uppercase tracking-wide text-neutral-500">
+        <div className="space-y-1 border-r border-neutral-300 px-3 py-2.5 text-sm font-semibold uppercase tracking-wide text-neutral-500 xl:text-base">
           <div className="flex items-baseline justify-between gap-2">
             <span className="text-neutral-400">Discount</span>
             <span className="tabular-nums text-neutral-600">
@@ -71,7 +71,7 @@ export default function PosOrderPanelFooter({
           <span className="text-base font-bold uppercase tracking-wide text-neutral-900">
             Total
           </span>
-          <span className="text-2xl font-extrabold tabular-nums leading-tight text-[#e72a2a]">
+          <span className="text-2xl font-bold text-[#e72a2a]">
             {formatMoney(total)}
           </span>
         </div>
