@@ -63,13 +63,13 @@ export default function PrinterSelectionModal({
                 <button
                   type="button"
                   onClick={onSelectAllPrinters}
-                  className="btn btn-primary h-auto w-full justify-start gap-3 p-4 text-left"
+                  className="btn-primary btn h-auto w-full justify-start gap-3 p-4 text-left"
                 >
                   <Printer className="h-5 w-5 flex-shrink-0" />
                   <div className="flex-1">
                     <p className="font-medium">All printers</p>
                     <p className="text-xs opacity-80">
-                      Print to every applicable printer (same as auto-print)
+                      Print to every applicable printer
                     </p>
                   </div>
                 </button>
