@@ -453,8 +453,8 @@ export default function PosTerminal() {
   );
 
   return (
-    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8]">
-      <header className="flex shrink-0 items-center justify-between gap-4 border-b-4 border-[#f9b08c] bg-brand_accent px-4 py-2.5">
+    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+      <header className="flex shrink-0 items-center justify-between gap-4 border-b-4 border-[#f9b08c] bg-brand_accent px-4 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))]">
         <div className="flex items-center gap-1.5">
           <Image
             src={Logo}
@@ -486,7 +486,7 @@ export default function PosTerminal() {
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Left: current order */}
-        <section className="flex w-[34%] min-w-[280px] max-w-[440px] shrink-0 flex-col border-r border-neutral-300 bg-white">
+        <section className="flex w-[34%] min-w-[280px] max-w-[440px] shrink-0 flex-col border-r border-neutral-300 bg-white pb-[env(safe-area-inset-bottom)]">
           <div className="flex shrink-0 items-stretch border-b border-neutral-200 bg-[#ececec] p-2">
             <button
               type="button"
@@ -537,7 +537,7 @@ export default function PosTerminal() {
         {/* Right: POS menu layout (tabs + products) */}
         <section className="flex min-w-0 flex-1">
           {/* Tabs column — z-30 + overhang so selected indicator sits on top of products */}
-          <aside className="relative z-30 flex w-[120px] shrink-0 flex-col bg-[#e0e0e0] sm:w-[150px]">
+          <aside className="relative z-30 flex w-[120px] shrink-0 flex-col bg-[#e0e0e0] pb-[env(safe-area-inset-bottom)] sm:w-[150px]">
             <div className="-mr-3 min-h-0 flex-1 overflow-y-auto pr-3">
               {tabs.length === 0 ? (
                 <div className="p-3 text-center text-xs text-neutral-500">

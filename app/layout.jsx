@@ -20,6 +20,13 @@ export const metadata = {
   description: "GoEasyMenu - Order Manager by GoEasyMenu",
 };
 
+/** Required for env(safe-area-inset-*) on notched iPhone / iPad (Capacitor). */
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export default async function RootLayout({ children }) {
   const session = await getServerSession(NextAuthOptions);
   let user = null;

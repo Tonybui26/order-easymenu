@@ -109,7 +109,7 @@ export default function PosTableEntryDrawer({
           role="dialog"
           aria-modal="true"
           aria-label={title}
-          className="fixed inset-y-0 left-0 z-50 flex w-[min(100%,22rem)] flex-col bg-[#ec7439] shadow-2xl"
+          className="fixed inset-y-0 left-0 z-50 flex w-[min(100%,22rem)] flex-col bg-[#ec7439] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)] shadow-2xl"
           initial={{ x: "-100%" }}
           animate={{ x: 0 }}
           exit={{ x: "-100%" }}
