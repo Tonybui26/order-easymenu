@@ -386,7 +386,8 @@ export default function LiveOrderTerminal() {
         (order) => !lastDismissedIdsRef.current.has(order._id),
       );
       const notificationWorthyOrders = newOrdersSinceLastDismissal.filter(
-        isNotificationWorthyOrder,
+        (order) =>
+          isNotificationWorthyOrder(order) && isUnpreparedNewOrder(order),
       );
 
       if (notificationWorthyOrders.length > 0) {
