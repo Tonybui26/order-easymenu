@@ -86,6 +86,34 @@ function getPrinterJobErrorMessage(result) {
   return result?.message || "Unknown error";
 }
 
+/** Same criteria as the live new-order alert (paid online, or pending counter dine-in). */
+function isNotificationWorthyOrder(order) {
+  if (
+    order.paymentStatus === "paid" &&
+    !isCounterPayment(order.paymentMethod)
+  ) {
+    return true;
+  }
+
+  if (
+    order.paymentStatus === "pending" &&
+    isCounterPayment(order.paymentMethod) &&
+    order.table !== "takeaway"
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/** Still waiting for Prepare (kitchen not started). */
+function isUnpreparedNewOrder(order) {
+  return ["pending", "confirmed", "accepted"].includes(order.status);
+}
+
+/** Re-fire the new-order alert if dismissed but still unprepared after this long. */
+const NEW_ORDER_REALERT_AFTER_MS = 3 * 60 * 1000;
+
 function buildPrintErrorMessage(result) {
   let errorMessage = result?.message || "Print failed";
   if (
@@ -203,22 +231,27 @@ export default function LiveOrderTerminal() {
   const [showNotification, setShowNotification] = useState(false);
   const showNotificationRef = useRef(false);
   const [notificationOrderCount, setNotificationOrderCount] = useState(0);
-  const [lastDismissedIds, setLastDismissedIds] = useState(new Set());
-  const lastDismissedIdsRef = useRef(new Set());
+  // orderId -> dismissedAt (ms). Timestamps let us re-alert after 3 minutes.
+  const [lastDismissedIds, setLastDismissedIds] = useState(() => new Set());
+  const lastDismissedIdsRef = useRef(new Map());
   const ordersRef = useRef(orders);
   const printedOrderIdsRef = useRef(new Set());
 
   const replaceDismissedOrderIds = useCallback((orderIds) => {
-    const dismissedIds = orderIds instanceof Set ? orderIds : new Set(orderIds);
-    lastDismissedIdsRef.current = dismissedIds;
-    setLastDismissedIds(dismissedIds);
+    const ids = orderIds instanceof Set ? [...orderIds] : [...orderIds];
+    const dismissedAt = Date.now();
+    const next = new Map();
+    for (const id of ids) next.set(id, dismissedAt);
+    lastDismissedIdsRef.current = next;
+    setLastDismissedIds(new Set(next.keys()));
   }, []);
 
   const addDismissedOrderIds = useCallback((orderIds) => {
-    const next = new Set(lastDismissedIdsRef.current);
-    for (const id of orderIds) next.add(id);
+    const next = new Map(lastDismissedIdsRef.current);
+    const dismissedAt = Date.now();
+    for (const id of orderIds) next.set(id, dismissedAt);
     lastDismissedIdsRef.current = next;
-    setLastDismissedIds(next);
+    setLastDismissedIds(new Set(next.keys()));
   }, []);
   const [audioInitialized, setAudioInitialized] = useState(false);
   const [showAudioPrompt, setShowAudioPrompt] = useState(false);
@@ -317,38 +350,47 @@ export default function LiveOrderTerminal() {
         toast.success("Live orders connected!", { duration: 2000 });
       }
 
-      // Check for new orders since last dismissal (not just last poll)
+      // Check for new orders since last dismissal (not just last poll).
+      // Also release dismissed-but-still-unprepared orders after 3 minutes
+      // so the same full-screen alert can re-fire (mute respected below).
+      const now = Date.now();
+      const isMutedForRealert = getNewOrderAlertsMuted();
+      const activeOrdersById = new Map(
+        activeOrders.map((order) => [order._id, order]),
+      );
+      const dismissedMap = lastDismissedIdsRef.current;
+      for (const [orderId, dismissedAt] of [...dismissedMap.entries()]) {
+        const order = activeOrdersById.get(orderId);
+        if (!order) {
+          dismissedMap.delete(orderId);
+          continue;
+        }
+        if (
+          !isNotificationWorthyOrder(order) ||
+          !isUnpreparedNewOrder(order)
+        ) {
+          dismissedMap.delete(orderId);
+          continue;
+        }
+        if (
+          !isMutedForRealert &&
+          !showNotificationRef.current &&
+          now - dismissedAt >= NEW_ORDER_REALERT_AFTER_MS
+        ) {
+          dismissedMap.delete(orderId);
+        }
+      }
+      setLastDismissedIds(new Set(dismissedMap.keys()));
+
       const newOrdersSinceLastDismissal = activeOrders.filter(
         (order) => !lastDismissedIdsRef.current.has(order._id),
       );
-      // Filter orders that should trigger notifications:
-      // 1. Paid orders (takeaway/dine-in, but not counter paid)
-      // 2. Pending counter orders for dine-in only
       const notificationWorthyOrders = newOrdersSinceLastDismissal.filter(
-        (order) => {
-          // Case 1: Paid orders (but not counter paid - these don't need immediate attention)
-          if (
-            order.paymentStatus === "paid" &&
-            !isCounterPayment(order.paymentMethod)
-          ) {
-            return true;
-          }
-
-          // Case 2: Pending counter orders for dine-in only (these need payment collection)
-          if (
-            order.paymentStatus === "pending" &&
-            isCounterPayment(order.paymentMethod) &&
-            order.table !== "takeaway"
-          ) {
-            return true;
-          }
-
-          return false;
-        },
+        isNotificationWorthyOrder,
       );
 
       if (notificationWorthyOrders.length > 0) {
-        const isMuted = getNewOrderAlertsMuted();
+        const isMuted = isMutedForRealert;
 
         if (!isMuted) {
           setNotificationOrderCount(notificationWorthyOrders.length);
