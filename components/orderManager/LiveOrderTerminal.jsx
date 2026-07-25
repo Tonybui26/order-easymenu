@@ -86,8 +86,35 @@ function getPrinterJobErrorMessage(result) {
   return result?.message || "Unknown error";
 }
 
-/** Fire-and-forget remote log for final print failures. Never awaits / never throws to callers. */
-function reportPrintFailure(order, result, attempt = "final") {
+function buildPrintErrorMessage(result) {
+  let errorMessage = result?.message || "Print failed";
+  if (
+    result?.failedPrinterErrors &&
+    result.failedPrinterErrors.length > 0
+  ) {
+    const errorDetails = result.failedPrinterErrors
+      .map((err) => `${err.printerName}: ${err.error}`)
+      .join("; ");
+    errorMessage += ` - ${errorDetails}`;
+  } else if (result?.error) {
+    errorMessage += ` - ${result.error}`;
+  }
+  return errorMessage;
+}
+
+function buildEarlyPrintFailureResult(message) {
+  return {
+    success: false,
+    message,
+    failedPrints: 1,
+    successfulPrints: 0,
+    totalPrinters: 0,
+    failedPrinterErrors: [],
+  };
+}
+
+/** Fire-and-forget remote log for print events. Never awaits / never throws to callers. */
+function reportPrintEvent(order, result, { type = "print_error", attempt = "final", source = "manual" } = {}) {
   const orderId = order?._id ? String(order._id) : "";
   if (!orderId) return;
 
@@ -99,16 +126,43 @@ function reportPrintFailure(order, result, attempt = "final") {
     : [];
 
   logPrintError({
+    type,
     orderId,
     orderShortId: orderId.slice(-6),
-    message: result?.message || result?.error || "Print failed",
+    message: result?.message || result?.error || (type === "print_success" ? "Print succeeded" : "Print failed"),
     failedPrinters,
     successfulPrints: result?.successfulPrints ?? 0,
     failedPrints: result?.failedPrints ?? failedPrinters.length,
     totalPrinters: result?.totalPrinters ?? 0,
     attempt,
+    source,
     platform: getPlatform(),
   }).catch(() => {});
+}
+
+/** Fire-and-forget remote log for final print failures. Never awaits / never throws to callers. */
+function reportPrintFailure(order, result, attempt = "final", source = "manual") {
+  reportPrintEvent(order, result, { type: "print_error", attempt, source });
+}
+
+/** Fire-and-forget remote log for successful prints (support trail). */
+function reportPrintSuccess(order, result, source = "manual") {
+  reportPrintEvent(order, result, {
+    type: "print_success",
+    attempt: "final",
+    source,
+  });
+}
+
+function applyPrintFailureFeedback(
+  order,
+  result,
+  { showCustomToast, attempt = "final", notify = true, source = "manual" } = {},
+) {
+  if (notify && typeof showCustomToast === "function") {
+    showCustomToast(buildPrintErrorMessage(result), "error");
+  }
+  reportPrintFailure(order, result, attempt, source);
 }
 
 /**
@@ -323,7 +377,9 @@ export default function LiveOrderTerminal() {
           const newlyPrintedIds = [];
           for (const order of unprintedOrders) {
             try {
-              const printResult = await handlePrintingOrder(order);
+              const printResult = await handlePrintingOrder(order, null, 0, {
+                source: "auto_print",
+              });
               if (printResult.success) {
                 console.log(
                   `Auto-printed successfully order ${order._id.slice(-6)}:`,
@@ -334,10 +390,6 @@ export default function LiveOrderTerminal() {
                 console.error(
                   `Error auto-printing order ${order._id}:`,
                   printResult.message,
-                );
-                showCustomToast(
-                  "Failed to auto-print order - Double check the printer settings",
-                  "error",
                 );
               }
             } catch (error) {
@@ -1074,7 +1126,10 @@ export default function LiveOrderTerminal() {
     order,
     selectedPrinters = null,
     retryCount = 0,
+    options = {},
   ) => {
+    const { source = "manual", notify = true } = options;
+
     try {
       // Determine order type
       const canonical = String(order?.orderType ?? "").trim();
@@ -1095,7 +1150,16 @@ export default function LiveOrderTerminal() {
         console.log("printersAvailability", printersAvailability);
 
         if (!printersAvailability.available) {
-          return { success: false, message: "No printers available" };
+          const earlyResult = buildEarlyPrintFailureResult(
+            "No printers available",
+          );
+          applyPrintFailureFeedback(order, earlyResult, {
+            showCustomToast,
+            attempt: "early_return",
+            notify,
+            source,
+          });
+          return earlyResult;
         }
 
         printersToUse = printersAvailability.printers;
@@ -1148,14 +1212,17 @@ export default function LiveOrderTerminal() {
         }
 
         if (printPlan.length === 0) {
-          // None of the configured printers want any item from this order.
-          // Treat the same as "no printers available" — caller decides UX.
-          return {
-            success: false,
-            message: isIntentionalPrinterSelection
-              ? "No items for the selected printer (group filters)"
-              : "No printers want any item from this order (group filters)",
-          };
+          const earlyMessage = isIntentionalPrinterSelection
+            ? "No items for the selected printer (group filters)"
+            : "No printers want any item from this order (group filters)";
+          const earlyResult = buildEarlyPrintFailureResult(earlyMessage);
+          applyPrintFailureFeedback(order, earlyResult, {
+            showCustomToast,
+            attempt: "early_return",
+            notify,
+            source,
+          });
+          return earlyResult;
         }
 
         // Run one queued job per printer. The in-process PrintQueueManager
@@ -1335,7 +1402,9 @@ export default function LiveOrderTerminal() {
 
         // After retries (or if no retry needed), show results
         if (finalResult.success) {
-          toast.success(finalResult.message);
+          if (notify) {
+            toast.success(finalResult.message);
+          }
           if (finalResult.failedPrints > 0) {
             let errorMessage =
               finalResult.failedPrinterNames + " failed to print";
@@ -1348,39 +1417,48 @@ export default function LiveOrderTerminal() {
                 .join("; ");
               errorMessage += ` - ${errorDetails}`;
             }
-            showCustomToast(errorMessage, "error");
-            reportPrintFailure(order, finalResult, "final");
+            if (notify) {
+              showCustomToast(errorMessage, "error");
+            }
+            reportPrintFailure(order, finalResult, "final", source);
+          } else if (finalResult.successfulPrints > 0) {
+            reportPrintSuccess(order, finalResult, source);
           }
         } else {
-          let errorMessage = finalResult.message;
-          if (
-            finalResult.failedPrinterErrors &&
-            finalResult.failedPrinterErrors.length > 0
-          ) {
-            const errorDetails = finalResult.failedPrinterErrors
-              .map((err) => `${err.printerName}: ${err.error}`)
-              .join("; ");
-            errorMessage += ` - ${errorDetails}`;
-          } else if (finalResult.error) {
-            errorMessage += ` - ${finalResult.error}`;
-          }
-          showCustomToast(errorMessage, "error");
-          reportPrintFailure(order, finalResult, "final");
+          applyPrintFailureFeedback(order, finalResult, {
+            showCustomToast,
+            attempt: "final",
+            notify,
+            source,
+          });
         }
 
-        if (
-          !isIntentionalPrinterSelection &&
-          routingActive &&
-          backupPrintedItems.length > 0
-        ) {
-          showCustomToast(
-            buildBackupPrintMessage(
-              backupPrintedItems,
-              itemToGroups,
-              itemGroups,
-            ),
-            "error",
-          );
+        if (notify) {
+          if (
+            !isIntentionalPrinterSelection &&
+            routingActive &&
+            backupPrintedItems.length > 0
+          ) {
+            showCustomToast(
+              buildBackupPrintMessage(
+                backupPrintedItems,
+                itemToGroups,
+                itemGroups,
+              ),
+              "error",
+            );
+          }
+
+          if (
+            !isIntentionalPrinterSelection &&
+            routingActive &&
+            unroutedItems.length > 0
+          ) {
+            showCustomToast(
+              buildUnroutedPrintMessage(unroutedItems, itemToGroups, itemGroups),
+              "error",
+            );
+          }
         }
 
         if (
@@ -1388,16 +1466,38 @@ export default function LiveOrderTerminal() {
           routingActive &&
           unroutedItems.length > 0
         ) {
-          showCustomToast(
-            buildUnroutedPrintMessage(unroutedItems, itemToGroups, itemGroups),
-            "error",
+          reportPrintFailure(
+            order,
+            {
+              success: false,
+              message: buildUnroutedPrintMessage(
+                unroutedItems,
+                itemToGroups,
+                itemGroups,
+              ),
+              failedPrints: unroutedItems.length,
+              successfulPrints: finalResult.successfulPrints ?? 0,
+              totalPrinters: finalResult.totalPrinters ?? printPlan.length,
+              failedPrinterErrors: unroutedItems.map((item) => ({
+                printerName: "routing",
+                error: item?.name || "Unrouted item",
+              })),
+            },
+            "final",
+            source,
           );
         }
 
         return finalResult;
       } else {
-        // toast.error(`No printers available for ${orderType} orders`);
-        return { success: false, message: "No printers available" };
+        const earlyResult = buildEarlyPrintFailureResult("No printers available");
+        applyPrintFailureFeedback(order, earlyResult, {
+          showCustomToast,
+          attempt: "early_return",
+          notify,
+          source,
+        });
+        return earlyResult;
       }
     } catch (error) {
       console.error("Error printing order:", error);
@@ -1410,22 +1510,29 @@ export default function LiveOrderTerminal() {
         await new Promise((resolve) =>
           setTimeout(resolve, PRINT_RETRY_DELAY_MS),
         );
-        return handlePrintingOrder(order, selectedPrinters, retryCount + 1);
+        return handlePrintingOrder(order, selectedPrinters, retryCount + 1, options);
       }
 
       // If retry also failed, show error toast
       const errorMessage = `Print failed: ${error.message || "Unknown error"}`;
-      showCustomToast(errorMessage, "error");
-      const exceptionResult = {
-        success: false,
-        message: errorMessage,
-        error: error.message,
-        failedPrints: 1,
-        successfulPrints: 0,
-        totalPrinters: 0,
-        failedPrinterErrors: [],
-      };
-      reportPrintFailure(order, exceptionResult, "exception");
+      applyPrintFailureFeedback(
+        order,
+        {
+          success: false,
+          message: errorMessage,
+          error: error.message,
+          failedPrints: 1,
+          successfulPrints: 0,
+          totalPrinters: 0,
+          failedPrinterErrors: [],
+        },
+        {
+          showCustomToast,
+          attempt: "exception",
+          notify,
+          source,
+        },
+      );
       return { success: false, error: error.message };
     }
   };
@@ -1473,12 +1580,12 @@ export default function LiveOrderTerminal() {
     closePrinterSelectionModal();
 
     // Print to selected printer
-    const printResult = await handlePrintingOrder(order, [selectedPrinter]);
+    const printResult = await handlePrintingOrder(order, [selectedPrinter], 0, {
+      source: "manual",
+    });
 
     if (printResult.success) {
       toast.success(`Order printed to ${selectedPrinter.name}`);
-    } else {
-      showCustomToast(printResult.message || "Failed to print order", "error");
     }
   };
 
@@ -1597,7 +1704,15 @@ export default function LiveOrderTerminal() {
             // For non-counter orders, only print if auto-printing is disabled
             const isCounterOrder = isCounterPayment(order.paymentMethod);
             if (isCounterOrder || !autoPrintingEnabled) {
-              const printResult = await handlePrintingOrder(order);
+              const printResult = await handlePrintingOrder(order, null, 0, {
+                source: "prepare",
+              });
+              if (!printResult?.success) {
+                console.warn(
+                  `[prepare print] Order ${order._id.slice(-6)} failed:`,
+                  printResult?.message,
+                );
+              }
             }
           }
         } catch (error) {
