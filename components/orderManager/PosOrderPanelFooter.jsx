@@ -1,6 +1,6 @@
 "use client";
 
-import { Folder, Tag, X } from "lucide-react";
+import { Folder, Send, Tag, X } from "lucide-react";
 import { cn } from "@/lib/helper";
 
 const GST_RATE = 10;
@@ -22,14 +22,17 @@ function formatMoney(amount) {
 }
 
 /**
- * Fixed footer for the POS order panel: totals + Clear / Hold / Discount.
+ * Fixed footer for the POS order panel: totals + Clear / Hold|Send / Discount.
+ * Middle action becomes Send when the order has items.
  */
 export default function PosOrderPanelFooter({
   subtotal = 0,
   discountAmount = null,
   taxPercentage = GST_RATE,
+  hasItems = false,
   onClear,
   onHold,
+  onSend,
   onDiscount,
   className,
 }) {
@@ -40,6 +43,7 @@ export default function PosOrderPanelFooter({
       : Number(discountAmount);
   const total = Math.max(0, safeSubtotal - (discount || 0));
   const taxAmount = computeIncludedTax(total, taxPercentage);
+  const showSend = Boolean(hasItems);
 
   return (
     <div
@@ -85,9 +89,9 @@ export default function PosOrderPanelFooter({
           className="border-r border-neutral-300"
         />
         <FooterAction
-          icon={Folder}
-          label="Hold"
-          onClick={onHold}
+          icon={showSend ? Send : Folder}
+          label={showSend ? "Send" : "Hold"}
+          onClick={showSend ? onSend : onHold}
           className="border-r border-neutral-300"
         />
         <FooterAction icon={Tag} label="Discount" onClick={onDiscount} />

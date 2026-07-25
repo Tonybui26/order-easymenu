@@ -530,6 +530,7 @@ export default function PosTerminal() {
 
           <PosOrderPanelFooter
             subtotal={cartSubtotal}
+            hasItems={cartLines.length > 0}
             onClear={handleClearOrder}
           />
         </section>
