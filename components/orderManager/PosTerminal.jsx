@@ -30,7 +30,7 @@ import PosPaymentDrawer from "./PosPaymentDrawer";
 import PosOrderPanelFooter from "./PosOrderPanelFooter";
 import PosItemCustomizePanel from "./PosItemCustomizePanel";
 import PosCartLine from "./PosCartLine";
-import Logo from "../../public/images/goeasymenu-logo-icon-white.svg";
+import Logo from "../../public/images/logo.svg";
 
 const POS_HEADER_ACTIONS = [
   { id: "support", label: "Support", Icon: Headset },
@@ -437,9 +437,11 @@ export default function PosTerminal() {
     setCartLines([]);
   }
 
-  function handlePaymentConfirm({ method, amountTendered, amountDue }) {
-    // Payment submit wiring comes later; keep selection captured for now.
-    console.log("POS payment selected", { method, amountTendered, amountDue });
+  function handleCompleteSale() {
+    setCartLines([]);
+    setCustomizingItem(null);
+    setCustomizingLineId(null);
+    setIsPaymentDrawerOpen(false);
   }
 
   const keypadInitialNumber =
@@ -461,7 +463,7 @@ export default function PosTerminal() {
 
   return (
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
-      <header className="flex shrink-0 items-center justify-between gap-4 border-b-4 border-[#f9b08c] bg-brand_accent px-4 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))]">
+      <header className="flex shrink-0 items-center justify-between gap-4 bg-[#1d1d1d] px-4 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))]">
         <div className="flex items-center gap-1.5">
           <Image
             src={Logo}
@@ -470,7 +472,7 @@ export default function PosTerminal() {
             priority
           />
           <span className="text-base font-bold text-white xl:text-lg">
-            Easy<span className="text-neutral-900">Menu</span>
+            Easy<span className="text-brand_accent">Menu</span>
           </span>
         </div>
 
@@ -483,7 +485,7 @@ export default function PosTerminal() {
               onClick={() => {
                 if (id === "qr") router.push("/");
               }}
-              className="flex size-10 items-center justify-center rounded-xl bg-black/15 text-white transition-colors active:bg-black/25 sm:size-11"
+              className="flex size-10 items-center justify-center rounded-xl bg-brand_accent/10 text-brand_accent transition-colors active:bg-black/25 sm:size-11"
             >
               <Icon size={24} strokeWidth={1.5} />
             </button>
@@ -516,7 +518,7 @@ export default function PosTerminal() {
             isOpen={isPaymentDrawerOpen}
             onClose={() => setIsPaymentDrawerOpen(false)}
             amountDue={cartSubtotal}
-            onConfirm={handlePaymentConfirm}
+            onCompleteSale={handleCompleteSale}
           />
 
           <div className="min-h-0 flex-1 overflow-y-auto bg-white">
