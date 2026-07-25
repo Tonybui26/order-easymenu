@@ -11,10 +11,11 @@ import {
   Plus,
   Printer,
   QrCode,
+  X,
 } from "lucide-react";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { cn } from "@/lib/helper";
-import PosTableEntryPopover from "./PosTableEntryPopover";
+import PosTableEntryDrawer from "./PosTableEntryDrawer";
 import PosOrderPanelFooter from "./PosOrderPanelFooter";
 import Logo from "../../public/images/goeasymenu-logo-icon-white.svg";
 
@@ -81,7 +82,7 @@ export default function PosTerminal() {
 
   const [selectedTabId, setSelectedTabId] = useState(null);
   const [cartLines, setCartLines] = useState([]);
-  const [isTablePopoverOpen, setIsTablePopoverOpen] = useState(false);
+  const [keypadDrawer, setKeypadDrawer] = useState(null);
   const [tableNumber, setTableNumber] = useState("");
   const [orderType, setOrderType] = useState(null);
 
@@ -111,26 +112,39 @@ export default function PosTerminal() {
   })();
 
   function handleAddItem(item) {
-    setCartLines((prev) => [
-      ...prev,
-      {
-        lineId: `${item.id}-${Date.now()}`,
-        itemId: item.id,
-        title: item.title || "Untitled",
-        price: item.price ?? 0,
-        quantity: 1,
-      },
-    ]);
+    setCartLines((prev) => {
+      const existingIndex = prev.findIndex((line) => line.itemId === item.id);
+      if (existingIndex >= 0) {
+        return prev.map((line, index) =>
+          index === existingIndex
+            ? { ...line, quantity: (line.quantity || 1) + 1 }
+            : line,
+        );
+      }
+      return [
+        ...prev,
+        {
+          lineId: `${item.id}-${Date.now()}`,
+          itemId: item.id,
+          title: item.title || "Untitled",
+          price: item.price ?? 0,
+          quantity: 1,
+        },
+      ];
+    });
   }
 
   function handleQtyClick(lineId) {
-    setCartLines((prev) =>
-      prev.map((line) =>
-        line.lineId === lineId
-          ? { ...line, quantity: (line.quantity || 1) + 1 }
-          : line,
-      ),
-    );
+    const line = cartLines.find((entry) => entry.lineId === lineId);
+    setKeypadDrawer({
+      mode: "quantity",
+      lineId,
+      initialNumber: String(line?.quantity || 1),
+    });
+  }
+
+  function handleRemoveLine(lineId) {
+    setCartLines((prev) => prev.filter((line) => line.lineId !== lineId));
   }
 
   function handleTableConfirm({ number, orderType: nextOrderType }) {
@@ -138,9 +152,38 @@ export default function PosTerminal() {
     setOrderType(nextOrderType || null);
   }
 
+  function handleQuantityConfirm({ quantity }) {
+    const lineId = keypadDrawer?.lineId;
+    if (!lineId) return;
+
+    if (!quantity || quantity <= 0) {
+      setCartLines((prev) => prev.filter((line) => line.lineId !== lineId));
+      return;
+    }
+
+    setCartLines((prev) =>
+      prev.map((line) =>
+        line.lineId === lineId ? { ...line, quantity } : line,
+      ),
+    );
+  }
+
+  function handleKeypadConfirm(payload) {
+    if (keypadDrawer?.mode === "quantity") {
+      handleQuantityConfirm(payload);
+      return;
+    }
+    handleTableConfirm(payload);
+  }
+
   function handleClearOrder() {
     setCartLines([]);
   }
+
+  const keypadInitialNumber =
+    keypadDrawer?.mode === "quantity"
+      ? keypadDrawer.initialNumber
+      : tableNumber;
 
   const cartSubtotal = cartLines.reduce(
     (sum, line) => sum + Number(line.price || 0) * (line.quantity || 1),
@@ -177,22 +220,23 @@ export default function PosTerminal() {
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Left: current order */}
         <section className="flex w-[34%] min-w-[280px] max-w-[440px] shrink-0 flex-col border-r border-neutral-300 bg-white">
-          <div className="relative flex shrink-0 items-stretch border-b border-neutral-200 bg-[#ececec] p-2">
+          <div className="flex shrink-0 items-stretch border-b border-neutral-200 bg-[#ececec] p-2">
             <button
               type="button"
-              onClick={() => setIsTablePopoverOpen(true)}
+              onClick={() => setKeypadDrawer({ mode: "table" })}
               className="flex min-h-[52px] w-full items-center justify-center rounded-md bg-white px-4 text-base font-semibold text-neutral-700 shadow-[0_0_0_1px_#d4d4d4] transition-colors hover:bg-neutral-50 active:bg-neutral-100"
             >
               {tableLabel}
             </button>
-
-            <PosTableEntryPopover
-              isOpen={isTablePopoverOpen}
-              onClose={() => setIsTablePopoverOpen(false)}
-              initialNumber={tableNumber}
-              onConfirm={handleTableConfirm}
-            />
           </div>
+
+          <PosTableEntryDrawer
+            isOpen={Boolean(keypadDrawer)}
+            mode={keypadDrawer?.mode || "table"}
+            onClose={() => setKeypadDrawer(null)}
+            initialNumber={keypadInitialNumber}
+            onConfirm={handleKeypadConfirm}
+          />
 
           <div className="min-h-0 flex-1 overflow-y-auto bg-white">
             {cartLines.length === 0 ? (
@@ -213,7 +257,7 @@ export default function PosTerminal() {
                         type="button"
                         onClick={() => handleQtyClick(line.lineId)}
                         className="inline-flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-neutral-300 bg-white px-2 text-sm font-bold text-neutral-800 shadow-sm transition-colors hover:bg-neutral-50 active:bg-neutral-100"
-                        aria-label={`Increase quantity of ${line.title}`}
+                        aria-label={`Edit quantity of ${line.title}`}
                       >
                         {qty}
                       </button>
@@ -223,6 +267,14 @@ export default function PosTerminal() {
                       <p className="shrink-0 text-sm font-semibold tabular-nums text-neutral-800">
                         ${lineTotal.toFixed(2)}
                       </p>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveLine(line.lineId)}
+                        className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
+                        aria-label={`Remove ${line.title}`}
+                      >
+                        <X size={14} strokeWidth={2.5} />
+                      </button>
                     </li>
                   );
                 })}
