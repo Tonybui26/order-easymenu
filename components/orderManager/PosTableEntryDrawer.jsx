@@ -7,9 +7,10 @@ import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/helper";
 
 const KEYPAD_ROWS = [
-  ["1", "2", "3", "0"],
-  ["4", "5", "6", "backspace"],
-  ["7", "8", "9", "reset"],
+  ["1", "2", "3"],
+  ["4", "5", "6"],
+  ["7", "8", "9"],
+  ["0", ".", "backspace"],
 ];
 
 const ORDER_TYPES = [
@@ -52,8 +53,12 @@ export default function PosTableEntryDrawer({
 
   function appendDigit(digit) {
     setDigits((prev) => {
+      if (digit === ".") {
+        if (prev.includes(".")) return prev;
+        return `${prev}.`;
+      }
       const next = `${prev}${digit}`;
-      const maxLen = isQuantityMode ? 3 : 6;
+      const maxLen = isQuantityMode ? 4 : 6;
       return next.length > maxLen ? prev : next;
     });
   }
@@ -61,10 +66,6 @@ export default function PosTableEntryDrawer({
   function handleKey(key) {
     if (key === "backspace") {
       setDigits((prev) => prev.slice(0, -1));
-      return;
-    }
-    if (key === "reset") {
-      setDigits("");
       return;
     }
     appendDigit(key);
@@ -129,13 +130,15 @@ export default function PosTableEntryDrawer({
               {digits ? (
                 digits
               ) : initialNumber ? (
-                <span className="text-neutral-300">{String(initialNumber)}</span>
+                <span className="text-neutral-300">
+                  {String(initialNumber)}
+                </span>
               ) : (
                 <span className="text-neutral-300">&nbsp;</span>
               )}
             </div>
 
-            <div className="mb-3 grid grid-cols-4 gap-2">
+            <div className="mb-3 grid grid-cols-3 gap-1.5">
               {KEYPAD_ROWS.flat().map((key) => {
                 if (key === "backspace") {
                   return (
@@ -143,22 +146,10 @@ export default function PosTableEntryDrawer({
                       key={key}
                       type="button"
                       onClick={() => handleKey(key)}
-                      className="flex aspect-square items-center justify-center rounded-lg bg-white text-neutral-800 shadow-sm transition-transform active:scale-95"
+                      className="flex h-11 items-center justify-center rounded-md bg-white text-neutral-800 shadow-sm transition-transform active:scale-95"
                       aria-label="Delete"
                     >
-                      <Delete size={22} strokeWidth={2.25} />
-                    </button>
-                  );
-                }
-                if (key === "reset") {
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => handleKey(key)}
-                      className="flex aspect-square items-center justify-center rounded-lg bg-neutral-800 text-xs font-bold tracking-wide text-white shadow-sm transition-transform active:scale-95"
-                    >
-                      RESET
+                      <Delete size={18} strokeWidth={2.25} />
                     </button>
                   );
                 }
@@ -167,7 +158,7 @@ export default function PosTableEntryDrawer({
                     key={key}
                     type="button"
                     onClick={() => handleKey(key)}
-                    className="flex aspect-square items-center justify-center rounded-lg bg-white text-2xl font-semibold text-neutral-900 shadow-sm transition-transform active:scale-95"
+                    className="flex h-16 items-center justify-center rounded-md bg-white text-xl font-semibold text-neutral-900 shadow-sm transition-transform active:scale-95"
                   >
                     {key}
                   </button>
