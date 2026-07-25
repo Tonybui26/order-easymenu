@@ -26,6 +26,7 @@ import {
   selectionMapsFromLine,
 } from "@/lib/pos/itemCustomization";
 import PosTableEntryDrawer from "./PosTableEntryDrawer";
+import PosPaymentDrawer from "./PosPaymentDrawer";
 import PosOrderPanelFooter from "./PosOrderPanelFooter";
 import PosItemCustomizePanel from "./PosItemCustomizePanel";
 import PosCartLine from "./PosCartLine";
@@ -96,6 +97,7 @@ export default function PosTerminal() {
   const [selectedTabId, setSelectedTabId] = useState(null);
   const [cartLines, setCartLines] = useState([]);
   const [keypadDrawer, setKeypadDrawer] = useState(null);
+  const [isPaymentDrawerOpen, setIsPaymentDrawerOpen] = useState(false);
   const [tableNumber, setTableNumber] = useState("");
   const [orderType, setOrderType] = useState(null);
   const [customizingItem, setCustomizingItem] = useState(null);
@@ -435,6 +437,11 @@ export default function PosTerminal() {
     setCartLines([]);
   }
 
+  function handlePaymentConfirm({ method, amountTendered, amountDue }) {
+    // Payment submit wiring comes later; keep selection captured for now.
+    console.log("POS payment selected", { method, amountTendered, amountDue });
+  }
+
   const keypadInitialNumber =
     keypadDrawer?.mode === "quantity"
       ? keypadDrawer.initialNumber
@@ -503,6 +510,13 @@ export default function PosTerminal() {
             onClose={() => setKeypadDrawer(null)}
             initialNumber={keypadInitialNumber}
             onConfirm={handleKeypadConfirm}
+          />
+
+          <PosPaymentDrawer
+            isOpen={isPaymentDrawerOpen}
+            onClose={() => setIsPaymentDrawerOpen(false)}
+            amountDue={cartSubtotal}
+            onConfirm={handlePaymentConfirm}
           />
 
           <div className="min-h-0 flex-1 overflow-y-auto bg-white">
@@ -596,6 +610,7 @@ export default function PosTerminal() {
               <button
                 type="button"
                 aria-label="Pay"
+                onClick={() => setIsPaymentDrawerOpen(true)}
                 className="flex w-full items-center justify-center gap-0 bg-[#ef3636] px-3 py-6 text-base font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24] sm:gap-1 sm:py-6 xl:text-lg"
               >
                 <span className="text-xl">$</span>
