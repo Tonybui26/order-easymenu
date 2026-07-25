@@ -7,6 +7,7 @@ import {
   Check,
   DollarSign,
   Headset,
+  PanelBottomOpen,
   Plus,
   Printer,
   QrCode,
@@ -274,16 +275,31 @@ export default function PosTerminal() {
               )}
             </div>
 
-            <button
-              type="button"
-              aria-label="Pay"
-              className="flex shrink-0 items-center justify-center gap-0 bg-[#ef3636] px-3 py-6 text-lg font-semibold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24] sm:gap-1 sm:py-6 sm:text-xl"
-            >
-              <span className="relative inline-flex size-7 items-center justify-center sm:size-8">
-                <DollarSign size={28} strokeWidth={2} />
-              </span>
-              Pay
-            </button>
+            <div className="shrink-0">
+              <button
+                type="button"
+                aria-label="Open drawer"
+                className="flex w-full items-center justify-center gap-1.5 bg-neutral-300 px-3 py-4 text-sm font-semibold uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-600 hover:text-white active:bg-neutral-700 sm:gap-2 sm:py-5 sm:text-base"
+              >
+                <PanelBottomOpen
+                  size={22}
+                  strokeWidth={2.25}
+                  className="shrink-0 sm:size-6"
+                  aria-hidden
+                />
+                Open drawer
+              </button>
+              <button
+                type="button"
+                aria-label="Pay"
+                className="flex w-full items-center justify-center gap-0 bg-[#ef3636] px-3 py-6 text-lg font-semibold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24] sm:gap-1 sm:py-6 sm:text-xl"
+              >
+                <span className="relative inline-flex size-7 items-center justify-center sm:size-8">
+                  <DollarSign size={28} strokeWidth={2} />
+                </span>
+                Pay
+              </button>
+            </div>
           </aside>
 
           {/* Products for selected tab */}
