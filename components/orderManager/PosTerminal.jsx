@@ -11,12 +11,24 @@ import {
   Plus,
   Printer,
   QrCode,
-  X,
 } from "lucide-react";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { cn } from "@/lib/helper";
+import {
+  buildDefaultModifierSelections,
+  buildDefaultVariantSelections,
+  buildSelectedModifiersPayload,
+  buildSelectedVariantsPayload,
+  cartConfigKey,
+  computeLineBasePrice,
+  computeLineUnitPrice,
+  itemNeedsCustomization,
+  selectionMapsFromLine,
+} from "@/lib/pos/itemCustomization";
 import PosTableEntryDrawer from "./PosTableEntryDrawer";
 import PosOrderPanelFooter from "./PosOrderPanelFooter";
+import PosItemCustomizePanel from "./PosItemCustomizePanel";
+import PosCartLine from "./PosCartLine";
 import Logo from "../../public/images/goeasymenu-logo-icon-white.svg";
 
 const POS_HEADER_ACTIONS = [
@@ -74,7 +86,8 @@ function PosProductCard({ item, onAdd }) {
 
 export default function PosTerminal() {
   const router = useRouter();
-  const { menuContent, posLayouts } = useMenuContext();
+  const { menuContent, posLayouts, globalModifiers, globalVariants } =
+    useMenuContext();
   const itemsById = useAllMenuItems(menuContent);
 
   const activeLayout = posLayouts?.[0] || null;
@@ -85,6 +98,10 @@ export default function PosTerminal() {
   const [keypadDrawer, setKeypadDrawer] = useState(null);
   const [tableNumber, setTableNumber] = useState("");
   const [orderType, setOrderType] = useState(null);
+  const [customizingItem, setCustomizingItem] = useState(null);
+  const [customizingLineId, setCustomizingLineId] = useState(null);
+  const [selectedVariants, setSelectedVariants] = useState({});
+  const [selectedModifiers, setSelectedModifiers] = useState({});
 
   useEffect(() => {
     if (tabs.length === 0) {
@@ -111,9 +128,16 @@ export default function PosTerminal() {
     return `TABLE: ${tableNumber || "--"}`;
   })();
 
-  function handleAddItem(item) {
+  function addConfiguredLine(item, variantsPayload, modifiersPayload, unitPrice) {
+    const basePrice = computeLineBasePrice(
+      variantsPayload,
+      Number(item.price || 0),
+    );
+    const configKey = cartConfigKey(variantsPayload, modifiersPayload);
     setCartLines((prev) => {
-      const existingIndex = prev.findIndex((line) => line.itemId === item.id);
+      const existingIndex = prev.findIndex(
+        (line) => line.itemId === item.id && line.configKey === configKey,
+      );
       if (existingIndex >= 0) {
         return prev.map((line, index) =>
           index === existingIndex
@@ -127,10 +151,165 @@ export default function PosTerminal() {
           lineId: `${item.id}-${Date.now()}`,
           itemId: item.id,
           title: item.title || "Untitled",
-          price: item.price ?? 0,
+          basePrice,
+          price: unitPrice,
           quantity: 1,
+          selectedVariants: variantsPayload,
+          selectedModifiers: modifiersPayload,
+          configKey,
         },
       ];
+    });
+  }
+
+  function buildLineFromSelections(item, variantMap, modifierMap) {
+    const variantsPayload = buildSelectedVariantsPayload(item, variantMap);
+    const modifiersPayload = buildSelectedModifiersPayload(
+      item,
+      modifierMap,
+      globalModifiers || {},
+    );
+    const basePrice = computeLineBasePrice(
+      variantsPayload,
+      Number(item.price || 0),
+    );
+    const price = computeLineUnitPrice(basePrice, modifiersPayload);
+    const configKey = cartConfigKey(variantsPayload, modifiersPayload);
+    return {
+      variantsPayload,
+      modifiersPayload,
+      basePrice,
+      price,
+      configKey,
+    };
+  }
+
+  function closeCustomization() {
+    setCustomizingItem(null);
+    setCustomizingLineId(null);
+    setSelectedVariants({});
+    setSelectedModifiers({});
+  }
+
+  function openCustomization(item) {
+    const variantMap = buildDefaultVariantSelections(
+      item,
+      globalVariants || {},
+    );
+    const modifierMap = buildDefaultModifierSelections(
+      item,
+      globalModifiers || {},
+    );
+    const built = buildLineFromSelections(item, variantMap, modifierMap);
+    const lineId = `${item.id}-${Date.now()}`;
+
+    setCartLines((prev) => [
+      ...prev,
+      {
+        lineId,
+        itemId: item.id,
+        title: item.title || "Untitled",
+        basePrice: built.basePrice,
+        price: built.price,
+        quantity: 1,
+        selectedVariants: built.variantsPayload,
+        selectedModifiers: built.modifiersPayload,
+        configKey: built.configKey,
+      },
+    ]);
+
+    setCustomizingLineId(lineId);
+    setCustomizingItem(item);
+    setSelectedVariants(variantMap);
+    setSelectedModifiers(modifierMap);
+  }
+
+  function syncCustomizingLine(variantMap, modifierMap) {
+    if (!customizingItem || !customizingLineId) return;
+    const built = buildLineFromSelections(
+      customizingItem,
+      variantMap,
+      modifierMap,
+    );
+    setCartLines((prev) =>
+      prev.map((line) =>
+        line.lineId === customizingLineId
+          ? {
+              ...line,
+              basePrice: built.basePrice,
+              price: built.price,
+              selectedVariants: built.variantsPayload,
+              selectedModifiers: built.modifiersPayload,
+              configKey: built.configKey,
+            }
+          : line,
+      ),
+    );
+  }
+
+  function handleSelectCartLine(lineId) {
+    const line = cartLines.find((entry) => entry.lineId === lineId);
+    if (!line) return;
+
+    const item = itemsById.get(line.itemId);
+    if (!item || !itemNeedsCustomization(item)) {
+      closeCustomization();
+      return;
+    }
+
+    const maps = selectionMapsFromLine(line, item);
+    setCustomizingLineId(lineId);
+    setCustomizingItem(item);
+    setSelectedVariants(maps.selectedVariants);
+    setSelectedModifiers(maps.selectedModifiers);
+  }
+
+  function handleAddItem(item) {
+    if (itemNeedsCustomization(item)) {
+      openCustomization(item);
+      return;
+    }
+
+    closeCustomization();
+    addConfiguredLine(item, [], [], Number(item.price || 0));
+  }
+
+  function handleTabClick(tabId) {
+    if (customizingItem) closeCustomization();
+    setSelectedTabId(tabId);
+  }
+
+  function handleSelectVariant(groupId, optionId) {
+    setSelectedVariants((prev) => {
+      const next = { ...prev, [groupId]: optionId };
+      syncCustomizingLine(next, selectedModifiers);
+      return next;
+    });
+  }
+
+  function handleToggleModifier(groupKey, optionId, maxSelection) {
+    setSelectedModifiers((prev) => {
+      const current = prev[groupKey] || [];
+      const isSelected = current.includes(optionId);
+      let nextGroup;
+
+      if (maxSelection === 1) {
+        nextGroup = isSelected ? [] : [optionId];
+      } else if (isSelected) {
+        nextGroup = current.filter((id) => id !== optionId);
+      } else if (
+        maxSelection &&
+        maxSelection > 0 &&
+        current.length >= maxSelection
+      ) {
+        nextGroup = [...current.slice(1), optionId];
+      } else {
+        nextGroup = [...current, optionId];
+      }
+
+      const next = { ...prev, [groupKey]: nextGroup };
+      syncCustomizingLine(selectedVariants, next);
+      return next;
     });
   }
 
@@ -145,6 +324,77 @@ export default function PosTerminal() {
 
   function handleRemoveLine(lineId) {
     setCartLines((prev) => prev.filter((line) => line.lineId !== lineId));
+    if (lineId === customizingLineId) closeCustomization();
+  }
+
+  function refreshLinePricing(line, selectedVariants, selectedModifiers) {
+    const item = itemsById.get(line.itemId);
+    const basePrice = computeLineBasePrice(
+      selectedVariants,
+      Number(item?.price || line.basePrice || 0),
+    );
+    const price = computeLineUnitPrice(basePrice, selectedModifiers);
+    const configKey = cartConfigKey(selectedVariants, selectedModifiers);
+    return {
+      ...line,
+      selectedVariants,
+      selectedModifiers,
+      basePrice,
+      price,
+      configKey,
+    };
+  }
+
+  function handleRemoveVariant(lineId, optionId) {
+    setCartLines((prev) =>
+      prev.map((line) => {
+        if (line.lineId !== lineId) return line;
+        const selectedVariantsNext = (line.selectedVariants || []).filter(
+          (variant) => variant.optionId !== optionId,
+        );
+        return refreshLinePricing(
+          line,
+          selectedVariantsNext,
+          line.selectedModifiers || [],
+        );
+      }),
+    );
+
+    if (lineId === customizingLineId) {
+      setSelectedVariants((prev) => {
+        const next = { ...prev };
+        Object.entries(next).forEach(([groupId, id]) => {
+          if (id === optionId) delete next[groupId];
+        });
+        return next;
+      });
+    }
+  }
+
+  function handleRemoveModifier(lineId, optionId) {
+    setCartLines((prev) =>
+      prev.map((line) => {
+        if (line.lineId !== lineId) return line;
+        const selectedModifiersNext = (line.selectedModifiers || []).filter(
+          (modifier) => modifier.optionId !== optionId,
+        );
+        return refreshLinePricing(
+          line,
+          line.selectedVariants || [],
+          selectedModifiersNext,
+        );
+      }),
+    );
+
+    if (lineId === customizingLineId) {
+      setSelectedModifiers((prev) => {
+        const next = {};
+        Object.entries(prev).forEach(([groupKey, ids]) => {
+          next[groupKey] = (ids || []).filter((id) => id !== optionId);
+        });
+        return next;
+      });
+    }
   }
 
   function handleTableConfirm({ number, orderType: nextOrderType }) {
@@ -184,6 +434,13 @@ export default function PosTerminal() {
     keypadDrawer?.mode === "quantity"
       ? keypadDrawer.initialNumber
       : tableNumber;
+
+  const activeCartLine = customizingLineId
+    ? cartLines.find((line) => line.lineId === customizingLineId)
+    : null;
+  const panelSelections = activeCartLine
+    ? selectionMapsFromLine(activeCartLine, customizingItem)
+    : { selectedVariants, selectedModifiers };
 
   const cartSubtotal = cartLines.reduce(
     (sum, line) => sum + Number(line.price || 0) * (line.quantity || 1),
@@ -244,40 +501,19 @@ export default function PosTerminal() {
                 Tap products to add them to this order
               </div>
             ) : (
-              <ul className="divide-y divide-neutral-100">
-                {cartLines.map((line) => {
-                  const qty = line.quantity || 1;
-                  const lineTotal = Number(line.price || 0) * qty;
-                  return (
-                    <li
-                      key={line.lineId}
-                      className="flex items-center gap-2.5 px-3 py-2.5"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => handleQtyClick(line.lineId)}
-                        className="inline-flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-neutral-300 bg-white px-2 text-sm font-bold text-neutral-800 shadow-sm transition-colors hover:bg-neutral-50 active:bg-neutral-100"
-                        aria-label={`Edit quantity of ${line.title}`}
-                      >
-                        {qty}
-                      </button>
-                      <p className="min-w-0 flex-1 truncate text-sm font-semibold text-neutral-900">
-                        {line.title}
-                      </p>
-                      <p className="shrink-0 text-sm font-semibold tabular-nums text-neutral-800">
-                        ${lineTotal.toFixed(2)}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveLine(line.lineId)}
-                        className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
-                        aria-label={`Remove ${line.title}`}
-                      >
-                        <X size={14} strokeWidth={2.5} />
-                      </button>
-                    </li>
-                  );
-                })}
+              <ul>
+                {cartLines.map((line) => (
+                  <PosCartLine
+                    key={line.lineId}
+                    line={line}
+                    isActive={line.lineId === customizingLineId}
+                    onSelect={handleSelectCartLine}
+                    onQtyClick={handleQtyClick}
+                    onRemoveLine={handleRemoveLine}
+                    onRemoveVariant={handleRemoveVariant}
+                    onRemoveModifier={handleRemoveModifier}
+                  />
+                ))}
               </ul>
             )}
           </div>
@@ -304,10 +540,11 @@ export default function PosTerminal() {
                     <button
                       key={tab.id}
                       type="button"
-                      onClick={() => setSelectedTabId(tab.id)}
+                      onClick={() => handleTabClick(tab.id)}
                       className={cn(
                         "relative flex min-h-[72px] w-full items-center justify-start px-3 py-7 text-left text-lg font-semibold text-neutral-900 transition-opacity",
-                        isSelected ? "z-20" : "hover:opacity-90",
+                        isSelected || customizingItem ? "z-20" : "hover:opacity-90",
+                        customizingItem && isSelected && "ring-2 ring-inset ring-black/10",
                       )}
                       style={{
                         backgroundColor: tab.backgroundColor || "#d9d9d9",
@@ -354,9 +591,19 @@ export default function PosTerminal() {
             </div>
           </aside>
 
-          {/* Products for selected tab */}
-          <div className="relative z-0 min-h-0 min-w-0 flex-1 overflow-y-auto bg-[#f0f0f0]">
-            {!selectedTab ? (
+          {/* Products / item customization */}
+          <div className="relative z-0 min-h-0 min-w-0 flex-1 overflow-hidden bg-[#f0f0f0]">
+            {customizingItem ? (
+              <PosItemCustomizePanel
+                item={customizingItem}
+                globalModifiers={globalModifiers || {}}
+                globalVariants={globalVariants || {}}
+                selectedVariants={panelSelections.selectedVariants}
+                selectedModifiers={panelSelections.selectedModifiers}
+                onSelectVariant={handleSelectVariant}
+                onToggleModifier={handleToggleModifier}
+              />
+            ) : !selectedTab ? (
               <div className="flex h-full items-center justify-center text-sm text-neutral-500">
                 Select a tab
               </div>
@@ -365,26 +612,28 @@ export default function PosTerminal() {
                 This tab has no products yet
               </div>
             ) : (
-              <div className="flex flex-col gap-4 p-4">
-                {selectedRows.map((row) => {
-                  const rowItems = (row.itemIds || [])
-                    .map((id) => itemsById.get(id))
-                    .filter(Boolean);
+              <div className="h-full overflow-y-auto">
+                <div className="flex flex-col gap-4 p-4">
+                  {selectedRows.map((row) => {
+                    const rowItems = (row.itemIds || [])
+                      .map((id) => itemsById.get(id))
+                      .filter(Boolean);
 
-                  if (rowItems.length === 0) return null;
+                    if (rowItems.length === 0) return null;
 
-                  return (
-                    <div key={row.id} className="grid grid-cols-5 gap-3">
-                      {rowItems.map((item) => (
-                        <PosProductCard
-                          key={`${row.id}-${item.id}`}
-                          item={item}
-                          onAdd={handleAddItem}
-                        />
-                      ))}
-                    </div>
-                  );
-                })}
+                    return (
+                      <div key={row.id} className="grid grid-cols-5 gap-3">
+                        {rowItems.map((item) => (
+                          <PosProductCard
+                            key={`${row.id}-${item.id}`}
+                            item={item}
+                            onAdd={handleAddItem}
+                          />
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
