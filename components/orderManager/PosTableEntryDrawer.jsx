@@ -46,7 +46,8 @@ export default function PosTableEntryDrawer({
 
   useEffect(() => {
     if (!isOpen) return;
-    setDigits(initialNumber ? String(initialNumber) : "");
+    // Start blank so the current value is only a placeholder; typing replaces it.
+    setDigits("");
   }, [isOpen, initialNumber]);
 
   function appendDigit(digit) {
@@ -69,16 +70,20 @@ export default function PosTableEntryDrawer({
     appendDigit(key);
   }
 
+  function resolvedDigits() {
+    return digits === "" ? String(initialNumber || "") : digits;
+  }
+
   function handleSelectOrderType(orderTypeId) {
     onConfirm?.({
-      number: digits,
+      number: resolvedDigits(),
       orderType: orderTypeId,
     });
     onClose?.();
   }
 
   function handleConfirmQuantity() {
-    const quantity = Number.parseInt(digits, 10);
+    const quantity = Number.parseInt(resolvedDigits(), 10);
     onConfirm?.({
       quantity: Number.isFinite(quantity) ? quantity : 0,
     });
@@ -121,7 +126,13 @@ export default function PosTableEntryDrawer({
             </p>
 
             <div className="mb-3 flex min-h-[3.25rem] items-center justify-center rounded-lg bg-white px-4 text-3xl font-bold tabular-nums text-neutral-900">
-              {digits || <span className="text-neutral-300">&nbsp;</span>}
+              {digits ? (
+                digits
+              ) : initialNumber ? (
+                <span className="text-neutral-300">{String(initialNumber)}</span>
+              ) : (
+                <span className="text-neutral-300">&nbsp;</span>
+              )}
             </div>
 
             <div className="mb-3 grid grid-cols-4 gap-2">
