@@ -1084,6 +1084,10 @@ export default function LiveOrderTerminal() {
 
       // Use selected printers if provided, otherwise check availability
       let printersToUse = selectedPrinters;
+      // Manual print passes an explicit printer list — items outside those
+      // printers' groups are intentionally skipped, not routing errors.
+      const isIntentionalPrinterSelection =
+        Array.isArray(selectedPrinters) && selectedPrinters.length > 0;
 
       if (!printersToUse || printersToUse.length === 0) {
         // Fallback to checking printer availability (for auto-print scenarios)
@@ -1122,13 +1126,21 @@ export default function LiveOrderTerminal() {
         const menuLink = storeProfile?.menuLink || null;
 
         console.log("printPlan", printPlan);
-        if (routingActive && backupPrintedItems.length > 0) {
+        if (
+          !isIntentionalPrinterSelection &&
+          routingActive &&
+          backupPrintedItems.length > 0
+        ) {
           console.warn(
             "[printerGroupRouting] Backup-printed items:",
             backupPrintedItems.map((item) => item?.name),
           );
         }
-        if (routingActive && unroutedItems.length > 0) {
+        if (
+          !isIntentionalPrinterSelection &&
+          routingActive &&
+          unroutedItems.length > 0
+        ) {
           console.warn(
             "[printerGroupRouting] Unrouted items:",
             unroutedItems.map((item) => item?.name),
@@ -1140,8 +1152,9 @@ export default function LiveOrderTerminal() {
           // Treat the same as "no printers available" — caller decides UX.
           return {
             success: false,
-            message:
-              "No printers want any item from this order (group filters)",
+            message: isIntentionalPrinterSelection
+              ? "No items for the selected printer (group filters)"
+              : "No printers want any item from this order (group filters)",
           };
         }
 
@@ -1191,10 +1204,22 @@ export default function LiveOrderTerminal() {
           successfulPrinterNames: successfulPrinterNames.join(", "),
           failedPrinterNames: failedPrinterNames.join(", "),
           failedPrinterErrors,
-          routingPartialFailure: routingActive && unroutedItems.length > 0,
-          unroutedItems: routingActive ? unroutedItems : [],
-          backupPartialFailure: routingActive && backupPrintedItems.length > 0,
-          backupPrintedItems: routingActive ? backupPrintedItems : [],
+          routingPartialFailure:
+            !isIntentionalPrinterSelection &&
+            routingActive &&
+            unroutedItems.length > 0,
+          unroutedItems:
+            !isIntentionalPrinterSelection && routingActive
+              ? unroutedItems
+              : [],
+          backupPartialFailure:
+            !isIntentionalPrinterSelection &&
+            routingActive &&
+            backupPrintedItems.length > 0,
+          backupPrintedItems:
+            !isIntentionalPrinterSelection && routingActive
+              ? backupPrintedItems
+              : [],
           message:
             successfulPrints === totalPrinters
               ? `Order printed successfully to ${successfulPrints}/${totalPrinters} printer(s)!`
@@ -1343,7 +1368,11 @@ export default function LiveOrderTerminal() {
           reportPrintFailure(order, finalResult, "final");
         }
 
-        if (routingActive && backupPrintedItems.length > 0) {
+        if (
+          !isIntentionalPrinterSelection &&
+          routingActive &&
+          backupPrintedItems.length > 0
+        ) {
           showCustomToast(
             buildBackupPrintMessage(
               backupPrintedItems,
@@ -1354,7 +1383,11 @@ export default function LiveOrderTerminal() {
           );
         }
 
-        if (routingActive && unroutedItems.length > 0) {
+        if (
+          !isIntentionalPrinterSelection &&
+          routingActive &&
+          unroutedItems.length > 0
+        ) {
           showCustomToast(
             buildUnroutedPrintMessage(unroutedItems, itemToGroups, itemGroups),
             "error",
