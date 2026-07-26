@@ -135,7 +135,6 @@ export default function PosPaymentDrawer({
 
   function handleCompleteSale() {
     onCompleteSale?.(paymentSummary);
-    onClose?.();
   }
 
   function handleClose() {

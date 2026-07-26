@@ -12,8 +12,10 @@ import {
   Printer,
   QrCode,
 } from "lucide-react";
+import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { cn } from "@/lib/helper";
+import { completePosSale, sendPosOrder } from "@/lib/api/fetchApi";
 import {
   buildDefaultModifierSelections,
   buildDefaultVariantSelections,
@@ -31,6 +33,23 @@ import PosOrderPanelFooter from "./PosOrderPanelFooter";
 import PosItemCustomizePanel from "./PosItemCustomizePanel";
 import PosCartLine from "./PosCartLine";
 import Logo from "../../public/images/logo.svg";
+
+function mapPosOrderType(orderType) {
+  if (orderType === "dine-in") return "dine-in";
+  return "pick-up";
+}
+
+function buildPosSendItems(cartLines) {
+  return (cartLines || []).map((line) => ({
+    lineId: line.lineId,
+    menuItemId: line.itemId,
+    name: line.title,
+    price: Number(line.price || 0),
+    quantity: Number(line.quantity || 1),
+    selectedVariants: line.selectedVariants || [],
+    selectedModifiers: line.selectedModifiers || [],
+  }));
+}
 
 const POS_HEADER_ACTIONS = [
   { id: "support", label: "Support", Icon: Headset },
@@ -96,6 +115,9 @@ export default function PosTerminal() {
 
   const [selectedTabId, setSelectedTabId] = useState(null);
   const [cartLines, setCartLines] = useState([]);
+  const [activeOrderId, setActiveOrderId] = useState(null);
+  const [isSending, setIsSending] = useState(false);
+  const [isCompletingSale, setIsCompletingSale] = useState(false);
   const [keypadDrawer, setKeypadDrawer] = useState(null);
   const [isPaymentDrawerOpen, setIsPaymentDrawerOpen] = useState(false);
   const [tableNumber, setTableNumber] = useState("");
@@ -435,13 +457,82 @@ export default function PosTerminal() {
 
   function handleClearOrder() {
     setCartLines([]);
+    setActiveOrderId(null);
+    closeCustomization();
   }
 
-  function handleCompleteSale() {
-    setCartLines([]);
-    setCustomizingItem(null);
-    setCustomizingLineId(null);
-    setIsPaymentDrawerOpen(false);
+  async function handleSendOrder() {
+    if (cartLines.length === 0 || isSending) return;
+
+    setIsSending(true);
+    try {
+      const payload = {
+        orderType: mapPosOrderType(orderType),
+        items: buildPosSendItems(cartLines),
+      };
+      if (activeOrderId) payload.orderId = activeOrderId;
+      if (tableNumber) payload.table = tableNumber;
+
+      const result = await sendPosOrder(payload);
+      if (!result?.success || !result.order?._id) {
+        toast.error(result?.error || "Failed to send order");
+        return;
+      }
+
+      setActiveOrderId(result.order._id);
+      setCartLines((prev) =>
+        prev.map((line) =>
+          line.kitchenStatus === "sent"
+            ? line
+            : { ...line, kitchenStatus: "sent" },
+        ),
+      );
+      toast.success(activeOrderId ? "Items sent" : "Order sent to kitchen");
+    } catch (error) {
+      toast.error(error?.message || "Failed to send order");
+    } finally {
+      setIsSending(false);
+    }
+  }
+
+  async function handleCompleteSale(paymentSummary) {
+    if (!activeOrderId) {
+      toast.error("Send the order before completing payment");
+      return;
+    }
+    if (!paymentSummary?.method || isCompletingSale) return;
+
+    setIsCompletingSale(true);
+    try {
+      const result = await completePosSale(activeOrderId, {
+        method: paymentSummary.method,
+        amountTendered: Number(paymentSummary.amountTendered || 0),
+        changeDue: Number(paymentSummary.change || 0),
+      });
+
+      if (!result?.success) {
+        toast.error(result?.error || "Failed to complete sale");
+        return;
+      }
+
+      setCartLines([]);
+      setActiveOrderId(null);
+      closeCustomization();
+      setIsPaymentDrawerOpen(false);
+      toast.success("Sale completed");
+    } catch (error) {
+      toast.error(error?.message || "Failed to complete sale");
+    } finally {
+      setIsCompletingSale(false);
+    }
+  }
+
+  function handleOpenPayment() {
+    if (!activeOrderId) {
+      toast.error("Send the order before payment");
+      return;
+    }
+    setIsPaymentDrawerOpen(true);
   }
 
   const keypadInitialNumber =
@@ -463,7 +554,7 @@ export default function PosTerminal() {
 
   return (
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
-      <header className="flex shrink-0 items-center justify-between gap-4 bg-[#1d1d1d] px-4 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))]">
+      <header className="flex shrink-0 items-center justify-between gap-4 bg-[#301C0F] px-4 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))]">
         <div className="flex items-center gap-1.5">
           <Image
             src={Logo}
@@ -548,6 +639,7 @@ export default function PosTerminal() {
             subtotal={cartSubtotal}
             hasItems={cartLines.length > 0}
             onClear={handleClearOrder}
+            onSend={handleSendOrder}
           />
         </section>
 
@@ -612,8 +704,9 @@ export default function PosTerminal() {
               <button
                 type="button"
                 aria-label="Pay"
-                onClick={() => setIsPaymentDrawerOpen(true)}
-                className="flex w-full items-center justify-center gap-0 bg-[#ef3636] px-3 py-6 text-base font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24] sm:gap-1 sm:py-6 xl:text-lg"
+                onClick={handleOpenPayment}
+                disabled={!activeOrderId || isCompletingSale}
+                className="flex w-full items-center justify-center gap-0 bg-[#ef3636] px-3 py-6 text-base font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24] disabled:cursor-not-allowed disabled:bg-neutral-400 disabled:hover:bg-neutral-400 sm:gap-1 sm:py-6 xl:text-lg"
               >
                 <span className="text-xl">$</span>
                 Pay
