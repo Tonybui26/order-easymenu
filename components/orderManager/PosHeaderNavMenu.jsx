@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Check,
   ChevronDown,
+  Folder,
   MonitorSmartphone,
   Printer,
   QrCode,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useMenuContext } from "@/components/context/MenuContext";
 import { cn } from "@/lib/helper";
 
 const NAV_ITEMS = [
@@ -20,6 +20,13 @@ const NAV_ITEMS = [
     description: "Counter point of sale",
     href: "/pos",
     Icon: MonitorSmartphone,
+  },
+  {
+    id: "held",
+    label: "Held Orders",
+    description: "Parked tickets waiting to resume",
+    href: "/pos/held",
+    Icon: Folder,
   },
   {
     id: "live-orders",
@@ -37,18 +44,33 @@ const NAV_ITEMS = [
   },
 ];
 
+function resolveActiveItem(pathname) {
+  if (pathname === "/pos/held" || pathname?.startsWith("/pos/held/")) {
+    return NAV_ITEMS.find((item) => item.id === "held") || NAV_ITEMS[0];
+  }
+  if (pathname === "/pos" || pathname?.startsWith("/pos/")) {
+    return NAV_ITEMS.find((item) => item.id === "pos") || NAV_ITEMS[0];
+  }
+  if (pathname === "/printer-management") {
+    return NAV_ITEMS.find((item) => item.id === "printers") || NAV_ITEMS[0];
+  }
+  if (pathname === "/") {
+    return NAV_ITEMS.find((item) => item.id === "live-orders") || NAV_ITEMS[0];
+  }
+  return NAV_ITEMS[0];
+}
+
 /**
  * Feature switcher for the POS header (far right).
  * Icon + stacked labels + chevron; shaded to merge with the dark header.
  */
 export default function PosHeaderNavMenu({ className }) {
   const router = useRouter();
-  const { storeProfile } = useMenuContext();
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef(null);
 
-  const storeName = storeProfile?.storeName?.trim() || "Order Manager";
-  const current = NAV_ITEMS[0];
+  const current = resolveActiveItem(pathname);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -75,7 +97,7 @@ export default function PosHeaderNavMenu({ className }) {
 
   function handleSelect(item) {
     setIsOpen(false);
-    if (item.id === "pos") return;
+    if (item.id === current.id) return;
     router.push(item.href);
   }
 
@@ -125,7 +147,7 @@ export default function PosHeaderNavMenu({ className }) {
             className="absolute right-0 top-[calc(100%+0.5rem)] w-[min(calc(100vw-2rem),18rem)] origin-top-right overflow-hidden rounded-2xl bg-[#3d2618] p-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.45)] ring-1 ring-white/10"
           >
             {NAV_ITEMS.map((item) => {
-              const isActive = item.id === "pos";
+              const isActive = item.id === current.id;
               const Icon = item.Icon;
               return (
                 <button

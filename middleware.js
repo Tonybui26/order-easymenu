@@ -62,5 +62,6 @@ export const config = {
     // Protected pages that require authentication
     "/",
     "/pos",
+    "/pos/held",
   ],
 };

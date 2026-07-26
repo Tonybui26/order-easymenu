@@ -2,15 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import {
   Check,
-  DollarSign,
-  Headset,
   PanelBottomOpen,
   Plus,
-  Printer,
-  QrCode,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
@@ -32,8 +27,7 @@ import PosPaymentDrawer from "./PosPaymentDrawer";
 import PosOrderPanelFooter from "./PosOrderPanelFooter";
 import PosItemCustomizePanel from "./PosItemCustomizePanel";
 import PosCartLine from "./PosCartLine";
-import PosHeaderNavMenu from "./PosHeaderNavMenu";
-import Logo from "../../public/images/logo.svg";
+import PosChromeHeader from "./PosChromeHeader";
 
 function mapPosOrderType(orderType) {
   if (orderType === "dine-in") return "dine-in";
@@ -51,12 +45,6 @@ function buildPosSendItems(cartLines) {
     selectedModifiers: line.selectedModifiers || [],
   }));
 }
-
-const POS_HEADER_ACTIONS = [
-  { id: "support", label: "Support", Icon: Headset },
-  { id: "qr", label: "QR", Icon: QrCode },
-  { id: "print", label: "Printer", Icon: Printer },
-];
 
 function useAllMenuItems(menuContent) {
   return useMemo(() => {
@@ -106,7 +94,6 @@ function PosProductCard({ item, onAdd }) {
 }
 
 export default function PosTerminal() {
-  const router = useRouter();
   const { menuContent, posLayouts, globalModifiers, globalVariants } =
     useMenuContext();
   const itemsById = useAllMenuItems(menuContent);
@@ -555,36 +542,7 @@ export default function PosTerminal() {
 
   return (
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
-      <header className="flex shrink-0 items-center justify-between gap-4 bg-[#301C0F] px-4 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))]">
-        <div className="flex items-center gap-1.5">
-          <Image
-            src={Logo}
-            alt="EasyMenu"
-            className="size-8 xl:size-9"
-            priority
-          />
-          <span className="text-base font-bold text-white xl:text-lg">
-            Easy<span className="text-brand_accent">Menu</span>
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3 sm:gap-6">
-          {POS_HEADER_ACTIONS.map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              type="button"
-              aria-label={label}
-              onClick={() => {
-                if (id === "qr") router.push("/");
-              }}
-              className="flex size-10 items-center justify-center rounded-xl bg-brand_accent/10 text-white transition-colors active:bg-black/25 sm:size-11"
-            >
-              <Icon size={24} strokeWidth={1.5} />
-            </button>
-          ))}
-          <PosHeaderNavMenu />
-        </div>
-      </header>
+      <PosChromeHeader />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Left: current order */}
