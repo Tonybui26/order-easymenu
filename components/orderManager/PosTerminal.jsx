@@ -32,6 +32,7 @@ import PosPaymentDrawer from "./PosPaymentDrawer";
 import PosOrderPanelFooter from "./PosOrderPanelFooter";
 import PosItemCustomizePanel from "./PosItemCustomizePanel";
 import PosCartLine from "./PosCartLine";
+import PosHeaderNavMenu from "./PosHeaderNavMenu";
 import Logo from "../../public/images/logo.svg";
 
 function mapPosOrderType(orderType) {
@@ -567,7 +568,7 @@ export default function PosTerminal() {
           </span>
         </div>
 
-        <div className="flex items-center gap-3 sm:gap-8">
+        <div className="flex items-center gap-3 sm:gap-6">
           {POS_HEADER_ACTIONS.map(({ id, label, Icon }) => (
             <button
               key={id}
@@ -576,11 +577,12 @@ export default function PosTerminal() {
               onClick={() => {
                 if (id === "qr") router.push("/");
               }}
-              className="flex size-10 items-center justify-center rounded-xl bg-brand_accent/10 text-brand_accent transition-colors active:bg-black/25 sm:size-11"
+              className="flex size-10 items-center justify-center rounded-xl bg-brand_accent/10 text-white transition-colors active:bg-black/25 sm:size-11"
             >
               <Icon size={24} strokeWidth={1.5} />
             </button>
           ))}
+          <PosHeaderNavMenu />
         </div>
       </header>
 
