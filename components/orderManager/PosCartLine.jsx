@@ -25,14 +25,22 @@ export default function PosCartLine({
   const variants = line.selectedVariants || [];
   const modifiers = line.selectedModifiers || [];
   const hasChildren = variants.length > 0 || modifiers.length > 0;
+  const isSentToKitchen = line.kitchenStatus === "sent";
 
   return (
     <li
       className={cn(
-        "border-b border-neutral-100 transition-colors",
+        "relative border-b border-neutral-100 transition-colors",
         isActive ? "bg-[#f4f7fb]" : "bg-white",
       )}
     >
+      {isSentToKitchen ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-[1] bg-neutral-300/25"
+          aria-hidden
+        />
+      ) : null}
+
       <div
         role="button"
         tabIndex={0}
@@ -43,7 +51,13 @@ export default function PosCartLine({
             onSelect?.(line.lineId);
           }
         }}
-        className="flex cursor-pointer items-center gap-2.5 px-3 py-2.5"
+        className={cn(
+          "relative z-[2] flex cursor-pointer items-center gap-2.5 px-3 py-2.5",
+          isSentToKitchen && "text-neutral-500",
+        )}
+        aria-label={
+          isSentToKitchen ? `${line.title}, sent to kitchen` : undefined
+        }
       >
         <button
           type="button"
@@ -79,7 +93,7 @@ export default function PosCartLine({
       </div>
 
       {hasChildren ? (
-        <ul className="pb-1">
+        <ul className={cn("relative z-[2] pb-1", isSentToKitchen && "text-neutral-500")}>
           {variants.map((variant) => (
             <li
               key={`variant-${variant.groupName}-${variant.optionId}`}

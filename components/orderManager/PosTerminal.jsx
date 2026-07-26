@@ -153,7 +153,7 @@ export default function PosTerminal() {
         }
 
         const resumeState = buildPosResumeState(result.orders);
-        const lines = buildCartLinesFromResumeOrders(result.orders, itemsById);
+        const lines = buildCartLinesFromResumeOrders(result.orders);
 
         setCustomizingItem(null);
         setCustomizingLineId(null);
@@ -179,7 +179,7 @@ export default function PosTerminal() {
     return () => {
       cancelled = true;
     };
-  }, [resumeParam, menuContent, itemsById, router]);
+  }, [resumeParam, menuContent, router]);
 
   useEffect(() => {
     if (tabs.length === 0) {
