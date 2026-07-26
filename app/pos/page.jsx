@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useMenuContext } from "@/components/context/MenuContext";
 import PosTerminal from "@/components/orderManager/PosTerminal";
@@ -19,5 +19,9 @@ export default function PosPage() {
     return null;
   }
 
-  return <PosTerminal />;
+  return (
+    <Suspense fallback={null}>
+      <PosTerminal />
+    </Suspense>
+  );
 }

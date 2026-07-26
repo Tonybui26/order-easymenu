@@ -45,12 +45,33 @@ function customerLabel(order) {
   return name || "N/A";
 }
 
+function formatOrderIdLabel(orderId) {
+  const id = String(orderId ?? "").trim();
+  if (!id) return null;
+  return `#${id.slice(-6).toUpperCase()}`;
+}
+
 function orderNumberLabel(order) {
+  const orderIds = Array.isArray(order?.orderIds) ? order.orderIds : null;
+  if (orderIds?.length) {
+    if (orderIds.length === 1) {
+      return formatOrderIdLabel(orderIds[0]) || "#—";
+    }
+    const labels = orderIds
+      .slice(0, 2)
+      .map((id) => formatOrderIdLabel(id))
+      .filter(Boolean);
+    if (orderIds.length > 2) {
+      return `${labels.join(", ")} +${orderIds.length - 2}`;
+    }
+    return labels.join(", ");
+  }
+
   if (order?.orderNumber != null && order.orderNumber !== "") {
     return `#${order.orderNumber}`;
   }
-  if (order?._id) {
-    return `#${String(order._id).slice(-4).toUpperCase()}`;
+  if (order?._id || order?.id) {
+    return formatOrderIdLabel(order._id || order.id) || "#—";
   }
   return "#—";
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Check,
   PanelBottomOpen,
@@ -10,7 +11,7 @@ import {
 import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { cn } from "@/lib/helper";
-import { completePosSale, sendPosOrder } from "@/lib/api/fetchApi";
+import { completePosSale, fetchPosResumeOrders, sendPosOrder } from "@/lib/api/fetchApi";
 import {
   buildDefaultModifierSelections,
   buildDefaultVariantSelections,
@@ -22,6 +23,10 @@ import {
   itemNeedsCustomization,
   selectionMapsFromLine,
 } from "@/lib/pos/itemCustomization";
+import {
+  buildCartLinesFromResumeOrders,
+  buildPosResumeState,
+} from "@/lib/pos/posResumeOrder";
 import PosTableEntryDrawer from "./PosTableEntryDrawer";
 import PosPaymentDrawer from "./PosPaymentDrawer";
 import PosOrderPanelFooter from "./PosOrderPanelFooter";
@@ -94,6 +99,10 @@ function PosProductCard({ item, onAdd }) {
 }
 
 export default function PosTerminal() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const resumeParam = searchParams.get("resume");
+  const resumeLoadedRef = useRef(null);
   const { menuContent, posLayouts, globalModifiers, globalVariants } =
     useMenuContext();
   const itemsById = useAllMenuItems(menuContent);
@@ -104,8 +113,10 @@ export default function PosTerminal() {
   const [selectedTabId, setSelectedTabId] = useState(null);
   const [cartLines, setCartLines] = useState([]);
   const [activeOrderId, setActiveOrderId] = useState(null);
+  const [resumeOrderIds, setResumeOrderIds] = useState([]);
   const [isSending, setIsSending] = useState(false);
   const [isCompletingSale, setIsCompletingSale] = useState(false);
+  const [isResumingOrder, setIsResumingOrder] = useState(false);
   const [keypadDrawer, setKeypadDrawer] = useState(null);
   const [isPaymentDrawerOpen, setIsPaymentDrawerOpen] = useState(false);
   const [tableNumber, setTableNumber] = useState("");
@@ -114,6 +125,61 @@ export default function PosTerminal() {
   const [customizingLineId, setCustomizingLineId] = useState(null);
   const [selectedVariants, setSelectedVariants] = useState({});
   const [selectedModifiers, setSelectedModifiers] = useState({});
+
+  useEffect(() => {
+    if (!resumeParam || !menuContent) return;
+    if (resumeLoadedRef.current === resumeParam) return;
+
+    const orderIds = resumeParam
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
+    if (orderIds.length === 0) return;
+
+    let cancelled = false;
+    resumeLoadedRef.current = resumeParam;
+    setIsResumingOrder(true);
+
+    (async () => {
+      try {
+        const result = await fetchPosResumeOrders(orderIds);
+        if (cancelled) return;
+
+        if (!result?.success || !result.orders?.length) {
+          toast.error(result?.error || "Could not load held order");
+          resumeLoadedRef.current = null;
+          router.replace("/pos");
+          return;
+        }
+
+        const resumeState = buildPosResumeState(result.orders);
+        const lines = buildCartLinesFromResumeOrders(result.orders, itemsById);
+
+        setCustomizingItem(null);
+        setCustomizingLineId(null);
+        setSelectedVariants({});
+        setSelectedModifiers({});
+        setCartLines(lines);
+        setResumeOrderIds(resumeState.orderIds);
+        setActiveOrderId(resumeState.activeOrderId);
+        setTableNumber(resumeState.tableNumber);
+        setOrderType(resumeState.orderType);
+        router.replace("/pos");
+      } catch (error) {
+        if (!cancelled) {
+          toast.error(error?.message || "Could not load held order");
+          resumeLoadedRef.current = null;
+          router.replace("/pos");
+        }
+      } finally {
+        if (!cancelled) setIsResumingOrder(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resumeParam, menuContent, itemsById, router]);
 
   useEffect(() => {
     if (tabs.length === 0) {
@@ -446,6 +512,8 @@ export default function PosTerminal() {
   function handleClearOrder() {
     setCartLines([]);
     setActiveOrderId(null);
+    setResumeOrderIds([]);
+    resumeLoadedRef.current = null;
     closeCustomization();
   }
 
@@ -484,7 +552,14 @@ export default function PosTerminal() {
   }
 
   async function handleCompleteSale(paymentSummary) {
-    if (!activeOrderId) {
+    const orderIdsToComplete =
+      resumeOrderIds.length > 0
+        ? resumeOrderIds
+        : activeOrderId
+          ? [activeOrderId]
+          : [];
+
+    if (orderIdsToComplete.length === 0) {
       toast.error("Send the order before completing payment");
       return;
     }
@@ -492,19 +567,27 @@ export default function PosTerminal() {
 
     setIsCompletingSale(true);
     try {
-      const result = await completePosSale(activeOrderId, {
-        method: paymentSummary.method,
-        amountTendered: Number(paymentSummary.amountTendered || 0),
-        changeDue: Number(paymentSummary.change || 0),
-      });
+      for (let index = 0; index < orderIdsToComplete.length; index += 1) {
+        const orderId = orderIdsToComplete[index];
+        const isLast = index === orderIdsToComplete.length - 1;
+        const result = await completePosSale(orderId, {
+          method: paymentSummary.method,
+          amountTendered: isLast
+            ? Number(paymentSummary.amountTendered || 0)
+            : 0,
+          changeDue: isLast ? Number(paymentSummary.change || 0) : 0,
+        });
 
-      if (!result?.success) {
-        toast.error(result?.error || "Failed to complete sale");
-        return;
+        if (!result?.success) {
+          toast.error(result?.error || "Failed to complete sale");
+          return;
+        }
       }
 
       setCartLines([]);
       setActiveOrderId(null);
+      setResumeOrderIds([]);
+      resumeLoadedRef.current = null;
       closeCustomization();
       setIsPaymentDrawerOpen(false);
       toast.success("Sale completed");
@@ -516,7 +599,7 @@ export default function PosTerminal() {
   }
 
   function handleOpenPayment() {
-    if (!activeOrderId) {
+    if (!activeOrderId && resumeOrderIds.length === 0) {
       toast.error("Send the order before payment");
       return;
     }
@@ -573,7 +656,11 @@ export default function PosTerminal() {
           />
 
           <div className="min-h-0 flex-1 overflow-y-auto bg-white">
-            {cartLines.length === 0 ? (
+            {isResumingOrder ? (
+              <div className="flex h-full items-center justify-center px-6 text-center text-sm text-neutral-400">
+                Loading held order…
+              </div>
+            ) : cartLines.length === 0 ? (
               <div className="flex h-full items-center justify-center px-6 text-center text-sm text-neutral-400">
                 Tap products to add them to this order
               </div>
@@ -665,7 +752,11 @@ export default function PosTerminal() {
                 type="button"
                 aria-label="Pay"
                 onClick={handleOpenPayment}
-                disabled={!activeOrderId || isCompletingSale}
+                disabled={
+                  (!activeOrderId && resumeOrderIds.length === 0) ||
+                  isCompletingSale ||
+                  isResumingOrder
+                }
                 className="flex w-full items-center justify-center gap-0 bg-[#ef3636] px-3 py-6 text-base font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24] disabled:cursor-not-allowed disabled:bg-neutral-400 disabled:hover:bg-neutral-400 sm:gap-1 sm:py-6 xl:text-lg"
               >
                 <span className="text-xl">$</span>

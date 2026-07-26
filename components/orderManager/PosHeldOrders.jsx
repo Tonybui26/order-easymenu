@@ -1,60 +1,71 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
+import { fetchPosHeldOrders } from "@/lib/api/fetchApi";
 import PosChromeHeader from "./PosChromeHeader";
 import PosHeldOrderCard from "./PosHeldOrderCard";
 
-/** UI preview samples until Hold persistence is wired. */
-const PREVIEW_HELD_ORDERS = [
-  {
-    _id: "preview-held-1",
-    orderNumber: 1042,
-    total: 48.5,
-    orderType: "dine-in",
-    table: "5",
-    customerName: "Alex",
-    createdAt: new Date(Date.now() - 1000 * 60 * 2 - 1000 * 18).toISOString(),
-    heldAt: new Date(Date.now() - 1000 * 60 * 2 - 1000 * 18).toISOString(),
-  },
-  {
-    _id: "preview-held-2",
-    orderNumber: 1043,
-    total: 22,
-    orderType: "pick-up",
-    customerName: "",
-    createdAt: new Date(Date.now() - 1000 * 60 * 18 - 1000 * 40).toISOString(),
-    heldAt: new Date(Date.now() - 1000 * 60 * 18 - 1000 * 40).toISOString(),
-  },
-  {
-    _id: "preview-held-3",
-    orderNumber: 1045,
-    total: 76.25,
-    orderType: "dine-in",
-    table: "12",
-    customerName: "Sam Nguyen",
-    createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-    heldAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-  },
-];
+const HELD_ORDERS_POLL_MS = 10000;
 
 /**
- * Held Orders screen — parked POS tickets.
+ * Held Orders screen — unpaid POS tickets (dine-in merged by table).
  */
 export default function PosHeldOrders() {
-  const heldOrders = PREVIEW_HELD_ORDERS;
+  const router = useRouter();
+  const [heldOrders, setHeldOrders] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadHeldOrders = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setIsLoading(true);
+
+    try {
+      const result = await fetchPosHeldOrders();
+      if (!result?.success) {
+        if (!silent) {
+          toast.error(result?.error || "Failed to load held orders");
+        }
+        return;
+      }
+      setHeldOrders(result.heldOrders || []);
+    } catch (error) {
+      if (!silent) {
+        toast.error(error?.message || "Failed to load held orders");
+      }
+    } finally {
+      if (!silent) setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHeldOrders();
+    const id = setInterval(() => loadHeldOrders({ silent: true }), HELD_ORDERS_POLL_MS);
+    return () => clearInterval(id);
+  }, [loadHeldOrders]);
+
+  function handleSelectHeldOrder(order) {
+    if (!order?.orderIds?.length) return;
+    router.push(`/pos?resume=${encodeURIComponent(order.orderIds.join(","))}`);
+  }
 
   return (
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       <PosChromeHeader />
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-[#f0f0f0] pb-[env(safe-area-inset-bottom)]">
-        {heldOrders.length === 0 ? (
+        {isLoading ? (
+          <div className="flex h-full items-center justify-center px-6 text-center">
+            <p className="text-sm text-neutral-500">Loading held orders…</p>
+          </div>
+        ) : heldOrders.length === 0 ? (
           <div className="flex h-full items-center justify-center px-6 text-center">
             <div>
               <p className="text-lg font-semibold text-neutral-700">
                 Held Orders
               </p>
               <p className="mt-2 text-sm text-neutral-400">
-                No held orders yet
+                No unpaid orders on hold
               </p>
             </div>
           </div>
@@ -73,8 +84,11 @@ export default function PosHeldOrders() {
 
             <ul className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {heldOrders.map((order) => (
-                <li key={order._id}>
-                  <PosHeldOrderCard order={order} />
+                <li key={order.id}>
+                  <PosHeldOrderCard
+                    order={order}
+                    onSelect={handleSelectHeldOrder}
+                  />
                 </li>
               ))}
             </ul>
