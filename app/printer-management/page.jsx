@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Printer, Plus, Settings, MoveLeft } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { Printer, Plus, Settings } from "lucide-react";
 import {
   addPrinter,
   deletePrinter,
@@ -12,12 +11,12 @@ import PrinterCard from "./components/PrinterCard";
 import PrinterSetupModal from "./components/PrinterSetupModal";
 import { toast } from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
+import PosChromeHeader from "@/components/orderManager/PosChromeHeader";
 
 export default function PrinterManagementPage() {
-  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [printers, setPrinters] = useState([]);
-  const { menuConfig, setMenuConfig, updateMenuConfigField } = useMenuContext();
+  const { menuConfig, updateMenuConfigField } = useMenuContext();
   const [autoPrintingEnabled, setAutoPrintingEnabled] = useState(
     menuConfig?.autoPrinting?.enabled || false,
   );
@@ -92,27 +91,19 @@ export default function PrinterManagementPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
-      <div className="mx-auto max-w-6xl">
-        {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="mb-2 text-2xl font-bold text-gray-900 lg:text-3xl">
+    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+      <PosChromeHeader />
+
+      <div className="min-h-0 flex-1 overflow-y-auto bg-gray-50 pb-[env(safe-area-inset-bottom)]">
+        <div className="mx-auto max-w-6xl p-4 md:p-6">
+          <div className="mb-6">
+            <h1 className="text-xl font-bold text-neutral-900 sm:text-2xl">
               Printer Management
             </h1>
-            <p className="text-gray-600">
+            <p className="mt-0.5 text-sm text-neutral-500">
               Manage your printers and printing configurations
             </p>
           </div>
-          <button
-            onClick={() => router.back()}
-            className="btn btn-ghost"
-            title="Go back"
-          >
-            <MoveLeft className="mr-1 size-5" />
-            Back
-          </button>
-        </div>
 
         {/* Printer Setup Section */}
         <div className="mb-6 rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -202,6 +193,7 @@ export default function PrinterManagementPage() {
               />
             </div>
           </div>
+        </div>
         </div>
       </div>
 

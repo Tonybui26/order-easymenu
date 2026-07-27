@@ -11,6 +11,7 @@ import {
   QrCode,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { useMenuContext } from "@/components/context/MenuContext";
 import { cn } from "@/lib/helper";
 
 const NAV_ITEMS = [
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
     description: "Counter point of sale",
     href: "/pos",
     Icon: MonitorSmartphone,
+    requiresPos: true,
   },
   {
     id: "held",
@@ -27,6 +29,7 @@ const NAV_ITEMS = [
     description: "Parked tickets waiting to resume",
     href: "/pos/held",
     Icon: Folder,
+    requiresPos: true,
   },
   {
     id: "live-orders",
@@ -44,20 +47,21 @@ const NAV_ITEMS = [
   },
 ];
 
-function resolveActiveItem(pathname) {
+function resolveActiveItem(pathname, items) {
+  const list = items.length > 0 ? items : NAV_ITEMS;
   if (pathname === "/pos/held" || pathname?.startsWith("/pos/held/")) {
-    return NAV_ITEMS.find((item) => item.id === "held") || NAV_ITEMS[0];
+    return list.find((item) => item.id === "held") || list[0];
   }
   if (pathname === "/pos" || pathname?.startsWith("/pos/")) {
-    return NAV_ITEMS.find((item) => item.id === "pos") || NAV_ITEMS[0];
+    return list.find((item) => item.id === "pos") || list[0];
   }
   if (pathname === "/printer-management") {
-    return NAV_ITEMS.find((item) => item.id === "printers") || NAV_ITEMS[0];
+    return list.find((item) => item.id === "printers") || list[0];
   }
   if (pathname === "/") {
-    return NAV_ITEMS.find((item) => item.id === "live-orders") || NAV_ITEMS[0];
+    return list.find((item) => item.id === "live-orders") || list[0];
   }
-  return NAV_ITEMS[0];
+  return list[0];
 }
 
 /**
@@ -67,10 +71,15 @@ function resolveActiveItem(pathname) {
 export default function PosHeaderNavMenu({ className }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { menuConfig } = useMenuContext();
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef(null);
 
-  const current = resolveActiveItem(pathname);
+  const posEnabled = Boolean(menuConfig?.posEnabled);
+  const navItems = NAV_ITEMS.filter(
+    (item) => !item.requiresPos || posEnabled,
+  );
+  const current = resolveActiveItem(pathname, navItems);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -146,7 +155,7 @@ export default function PosHeaderNavMenu({ className }) {
             transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
             className="absolute right-0 top-[calc(100%+0.5rem)] w-[min(calc(100vw-2rem),18rem)] origin-top-right overflow-hidden rounded-2xl bg-[#3d2618] p-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.45)] ring-1 ring-white/10"
           >
-            {NAV_ITEMS.map((item) => {
+            {navItems.map((item) => {
               const isActive = item.id === current.id;
               const Icon = item.Icon;
               return (

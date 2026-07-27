@@ -3,14 +3,26 @@
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { Folder, Headset, Printer, QrCode } from "lucide-react";
+import { useMenuContext } from "@/components/context/MenuContext";
 import PosHeaderNavMenu from "./PosHeaderNavMenu";
 import Logo from "../../public/images/logo.svg";
 
 const POS_HEADER_ACTIONS = [
   { id: "support", label: "Support", Icon: Headset },
-  { id: "held", label: "Held Orders", Icon: Folder, href: "/pos/held" },
+  {
+    id: "held",
+    label: "Held Orders",
+    Icon: Folder,
+    href: "/pos/held",
+    requiresPos: true,
+  },
   { id: "qr", label: "QR", Icon: QrCode, href: "/" },
-  { id: "print", label: "Printer", Icon: Printer, href: "/printer-management" },
+  {
+    id: "print",
+    label: "Printer",
+    Icon: Printer,
+    href: "/printer-management",
+  },
 ];
 
 const POS_HOME_PATH = "/pos";
@@ -22,11 +34,18 @@ const POS_HOME_PATH = "/pos";
 export default function PosChromeHeader({ onLogoClick }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { menuConfig } = useMenuContext();
+  const posEnabled = Boolean(menuConfig?.posEnabled);
+
+  const headerActions = POS_HEADER_ACTIONS.filter(
+    (action) => !action.requiresPos || posEnabled,
+  );
 
   function handleLogoClick() {
     onLogoClick?.();
-    if (pathname !== POS_HOME_PATH) {
-      router.push(POS_HOME_PATH);
+    const homePath = posEnabled ? POS_HOME_PATH : "/";
+    if (pathname !== homePath) {
+      router.push(homePath);
     }
   }
 
@@ -51,7 +70,7 @@ export default function PosChromeHeader({ onLogoClick }) {
       </button>
 
       <div className="flex items-center gap-3 sm:gap-6">
-        {POS_HEADER_ACTIONS.map(({ id, label, Icon, href }) => {
+        {headerActions.map(({ id, label, Icon, href }) => {
           const isActive =
             href &&
             (pathname === href ||
