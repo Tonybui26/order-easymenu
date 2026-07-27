@@ -263,8 +263,17 @@ export default function OrderCard({
       return true;
     }
 
-    // For counter orders (dine-in only): show after preparing (skip ready status)
-    if (isCounterOrder && order.status === "preparing") {
+    // For counter dine-in: show after preparing (skip ready status)
+    if (isCounterOrder && isTableOrder && order.status === "preparing") {
+      return true;
+    }
+
+    // For counter takeaway/delivery: show after ready (same as online pickup flow)
+    if (
+      isCounterOrder &&
+      (isPickUp || isDelivery) &&
+      order.status === "ready"
+    ) {
       return true;
     }
 
