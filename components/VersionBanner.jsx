@@ -20,11 +20,11 @@ export default function VersionBanner() {
       const response = await fetch("/api/version", {
         cache: "no-store",
       });
-      
+
       if (!response.ok) {
         return;
       }
-      
+
       const data = await response.json();
       const currentBuildId = data.buildId;
 
@@ -51,13 +51,13 @@ export default function VersionBanner() {
   useEffect(() => {
     // Initial check
     checkVersion();
-    
+
     // Poll every 5 minutes
     pollIntervalRef.current = setInterval(() => {
       checkVersion();
       console.log(" polling version testing script");
     }, 300000);
-    
+
     return () => {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
@@ -79,7 +79,7 @@ export default function VersionBanner() {
   }
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 bg-blue-600 text-white shadow-lg">
+    <div className="fixed left-0 right-0 top-0 z-[9999] bg-blue-600 text-white shadow-lg">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -97,7 +97,7 @@ export default function VersionBanner() {
             </button>
             <button
               onClick={handleDismiss}
-              className="rounded-md hidden p-1.5 text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600"
+              className="hidden rounded-md p-1.5 text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600"
               aria-label="Dismiss"
             >
               <X className="h-5 w-5" />
@@ -108,4 +108,3 @@ export default function VersionBanner() {
     </div>
   );
 }
-
