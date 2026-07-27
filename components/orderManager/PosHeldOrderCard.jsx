@@ -6,6 +6,7 @@ import { cn } from "@/lib/helper";
 import {
   getHeldAggregateStatusLabel,
   getPosHeldCardActions,
+  isPosDineInHeldOrder,
 } from "@/lib/pos/posHeldOrder";
 
 function formatMoney(amount) {
@@ -35,13 +36,33 @@ function formatHoldDuration(ms) {
 
 function orderTypeLabel(order) {
   const type = String(order?.orderType || "").trim();
-  if (type === "dine-in") {
-    return order?.table ? `Table: ${order.table}` : "Dine-in";
-  }
   if (type === "pick-up") return "Takeaway";
   if (type === "delivery") return "Delivery";
+  if (type === "dine-in") return "Dine-in";
   if (order?.table) return `Table: ${order.table}`;
   return "Order";
+}
+
+function heldCardPrimaryLabel(order) {
+  if (isPosDineInHeldOrder(order)) {
+    const table = String(order?.table || "").trim();
+    return table ? `Table ${table}` : "Dine-in";
+  }
+  return orderNumberLabel(order);
+}
+
+function heldCardSecondaryLabel(order) {
+  if (!isPosDineInHeldOrder(order)) return null;
+
+  const orderIds = Array.isArray(order?.orderIds) ? order.orderIds : [];
+  if (orderIds.length <= 1) return null;
+
+  return `${orderIds.length} tickets`;
+}
+
+function heldCardTypeLabel(order) {
+  if (isPosDineInHeldOrder(order)) return "Dine-in";
+  return orderTypeLabel(order);
 }
 
 function customerLabel(order) {
@@ -115,9 +136,7 @@ export default function PosHeldOrderCard({
   }, []);
 
   const heldMs = heldAt ? now - new Date(heldAt).getTime() : 0;
-  const holdLabel = formatHoldDuration(
-    Number.isFinite(heldMs) ? heldMs : 0,
-  );
+  const holdLabel = formatHoldDuration(Number.isFinite(heldMs) ? heldMs : 0);
   const isLongHold = heldMs >= 15 * 60 * 1000;
 
   return (
@@ -130,7 +149,7 @@ export default function PosHeldOrderCard({
       <button
         type="button"
         onClick={() => onSelect?.(order)}
-        className="flex w-full flex-col gap-3 p-4 text-left transition-transform active:scale-[0.99] hover:bg-neutral-50/80"
+        className="flex w-full flex-col gap-3 p-4 text-left transition-transform hover:bg-neutral-50/80 active:scale-[0.99]"
       >
         <div className="flex items-start justify-between gap-3">
           <div
@@ -167,19 +186,29 @@ export default function PosHeldOrderCard({
         </div>
 
         <div className="flex items-baseline justify-between gap-3">
-          <span className="text-lg font-bold tracking-tight text-neutral-900">
-            {orderNumberLabel(order)}
-          </span>
-          <div className="flex flex-col items-end gap-0.5">
+          <div className="min-w-0">
+            <span
+              className={cn(
+                "block text-xl font-bold tracking-tight text-neutral-900",
+              )}
+            >
+              {heldCardPrimaryLabel(order)}
+            </span>
+            {heldCardSecondaryLabel(order) ? (
+              <span className="mt-0.5 block text-sm font-medium text-neutral-500">
+                {heldCardSecondaryLabel(order)}
+              </span>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-0.5">
             <span className="text-sm font-medium text-neutral-500">
-              {orderTypeLabel(order)}
+              {heldCardTypeLabel(order)}
             </span>
             {showStatus ? (
               <span
                 className={cn(
                   "rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide",
-                  aggregateStatus === "ready" ||
-                  aggregateStatus === "delivered"
+                  aggregateStatus === "ready" || aggregateStatus === "delivered"
                     ? "bg-green-100 text-green-800"
                     : "bg-blue-100 text-blue-800",
                 )}
