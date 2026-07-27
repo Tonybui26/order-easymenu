@@ -121,6 +121,7 @@ export default function PosTerminal() {
   const [cartLines, setCartLines] = useState([]);
   const [activeOrderId, setActiveOrderId] = useState(null);
   const [checkOrderIds, setCheckOrderIds] = useState([]);
+  const [posCheckId, setPosCheckId] = useState(null);
   const [isSending, setIsSending] = useState(false);
   const [isCompletingSale, setIsCompletingSale] = useState(false);
   const [isResumingOrder, setIsResumingOrder] = useState(false);
@@ -169,6 +170,7 @@ export default function PosTerminal() {
         setCartLines(lines);
         setCheckOrderIds(resumeState.orderIds);
         setActiveOrderId(resumeState.activeOrderId);
+        setPosCheckId(resumeState.posCheckId);
         setTableNumber(resumeState.tableNumber);
         setOrderType(resumeState.orderType);
         router.replace("/pos");
@@ -520,6 +522,7 @@ export default function PosTerminal() {
     setCartLines([]);
     setActiveOrderId(null);
     setCheckOrderIds([]);
+    setPosCheckId(null);
     resumeLoadedRef.current = null;
     closeCustomization();
   }
@@ -542,6 +545,7 @@ export default function PosTerminal() {
         items: buildPosSendItems(unsentLines),
       };
       if (tableNumber) payload.table = tableNumber;
+      if (posCheckId) payload.posCheckId = posCheckId;
 
       const result = await sendPosOrder(payload);
       if (!result?.success || !result.order?._id) {
@@ -551,8 +555,11 @@ export default function PosTerminal() {
 
       const sentLineIds = new Set(unsentLines.map((line) => line.lineId));
       const newOrderId = String(result.order._id);
+      const nextCheckId =
+        String(result.order?.posCheckId || "").trim() || posCheckId;
 
       setActiveOrderId(newOrderId);
+      if (nextCheckId) setPosCheckId(nextCheckId);
       setCheckOrderIds((prev) => appendCheckOrderId(prev, newOrderId));
       setCartLines((prev) =>
         prev.map((line) =>
@@ -600,6 +607,7 @@ export default function PosTerminal() {
       setCartLines([]);
       setActiveOrderId(null);
       setCheckOrderIds([]);
+      setPosCheckId(null);
       resumeLoadedRef.current = null;
       closeCustomization();
       setIsPaymentDrawerOpen(false);
