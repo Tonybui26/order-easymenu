@@ -37,7 +37,7 @@ export default function PosCartLine({
     >
       {isSentToKitchen ? (
         <div
-          className="pointer-events-none absolute inset-0 z-[1] bg-neutral-300/25"
+          className="pointer-events-none absolute inset-0 z-[1] bg-red-100/25"
           aria-hidden
         />
       ) : null}
@@ -106,7 +106,12 @@ export default function PosCartLine({
       </div>
 
       {hasChildren ? (
-        <ul className={cn("relative z-[2] pb-1", isSentToKitchen && "text-neutral-500")}>
+        <ul
+          className={cn(
+            "relative z-[2] pb-1",
+            isSentToKitchen && "text-neutral-500",
+          )}
+        >
           {variants.map((variant) => (
             <li
               key={`variant-${variant.groupName}-${variant.optionId}`}
@@ -119,7 +124,9 @@ export default function PosCartLine({
               {!readOnly ? (
                 <button
                   type="button"
-                  onClick={() => onRemoveVariant?.(line.lineId, variant.optionId)}
+                  onClick={() =>
+                    onRemoveVariant?.(line.lineId, variant.optionId)
+                  }
                   className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
                   aria-label={`Remove ${variant.optionName}`}
                 >
