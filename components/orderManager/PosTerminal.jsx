@@ -34,6 +34,7 @@ import PosOrderPanelFooter from "./PosOrderPanelFooter";
 import PosItemCustomizePanel from "./PosItemCustomizePanel";
 import PosCartLine from "./PosCartLine";
 import PosChromeHeader from "./PosChromeHeader";
+import { printKitchenOrder } from "@/lib/helper/printKitchenOrder";
 
 function mapPosOrderType(orderType) {
   if (orderType === "dine-in") return "dine-in";
@@ -113,7 +114,7 @@ export default function PosTerminal() {
   const searchParams = useSearchParams();
   const resumeParam = searchParams.get("resume");
   const resumeLoadedRef = useRef(null);
-  const { menuContent, posLayouts, globalModifiers, globalVariants } =
+  const { menuContent, posLayouts, globalModifiers, globalVariants, storeProfile, itemGroups } =
     useMenuContext();
   const itemsById = useAllMenuItems(menuContent);
 
@@ -616,6 +617,22 @@ export default function PosTerminal() {
         ),
       );
       toast.success("Order sent to kitchen");
+
+      // Each Send creates one kitchen order with only this fire's items — print that ticket.
+      try {
+        await printKitchenOrder(result.order, {
+          storeProfile,
+          itemGroups,
+          source: "pos_send",
+          notify: true,
+          notifySuccess: false,
+          silentNoPrinters: true,
+          showCustomToast: (message) => toast.error(message),
+        });
+      } catch (printError) {
+        console.error("POS send print error:", printError);
+        toast.error("Kitchen ticket print failed");
+      }
     } catch (error) {
       toast.error(error?.message || "Failed to send order");
     } finally {
