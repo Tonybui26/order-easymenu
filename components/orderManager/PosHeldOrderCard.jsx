@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { Clock3, User } from "lucide-react";
 import { cn } from "@/lib/helper";
-import { getPosHeldTakeawayActions } from "@/lib/pos/posHeldOrder";
+import {
+  getHeldAggregateStatusLabel,
+  getPosHeldCardActions,
+} from "@/lib/pos/posHeldOrder";
 
 function formatMoney(amount) {
   return `$${Number(amount || 0).toFixed(2)}`;
@@ -77,26 +80,34 @@ function orderNumberLabel(order) {
   return "#—";
 }
 
-function aggregateStatusLabel(status) {
-  return status === "ready" ? "Ready" : "Preparing";
+function aggregateStatusLabel(heldOrder, status) {
+  return getHeldAggregateStatusLabel(heldOrder, status);
 }
 
 /**
- * Held-order card with optional Ready/Complete actions for takeaway/delivery.
+ * Held-order card with kitchen status and Ready/Complete actions.
  */
 export default function PosHeldOrderCard({
   order,
   onSelect,
   onReady,
+  onAllItemsServed,
   onComplete,
   isProcessing = false,
   className,
 }) {
   const heldAt = order?.heldAt || order?.createdAt;
   const [now, setNow] = useState(() => Date.now());
-  const { showReady, showComplete, aggregateStatus } =
-    getPosHeldTakeawayActions(order);
-  const hasActions = showReady || showComplete;
+  const {
+    showStatus,
+    showReady,
+    showAllItemsServed,
+    showComplete,
+    aggregateStatus,
+    completeLabel,
+    allItemsServedLabel,
+  } = getPosHeldCardActions(order);
+  const hasActions = showReady || showAllItemsServed || showComplete;
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -160,16 +171,17 @@ export default function PosHeldOrderCard({
             <span className="text-sm font-medium text-neutral-500">
               {orderTypeLabel(order)}
             </span>
-            {hasActions ? (
+            {showStatus ? (
               <span
                 className={cn(
                   "rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide",
-                  aggregateStatus === "ready"
+                  aggregateStatus === "ready" ||
+                  aggregateStatus === "delivered"
                     ? "bg-green-100 text-green-800"
                     : "bg-blue-100 text-blue-800",
                 )}
               >
-                {aggregateStatusLabel(aggregateStatus)}
+                {aggregateStatusLabel(order, aggregateStatus)}
               </span>
             ) : null}
           </div>
@@ -193,6 +205,24 @@ export default function PosHeldOrderCard({
 
       {hasActions ? (
         <div className="grid grid-cols-1 gap-2 border-t border-neutral-100 bg-neutral-50/80 p-3">
+          {showAllItemsServed ? (
+            <button
+              type="button"
+              disabled={isProcessing}
+              onClick={(event) => {
+                event.stopPropagation();
+                onAllItemsServed?.(order);
+              }}
+              className={cn(
+                "rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold tracking-wide text-white transition-colors",
+                isProcessing
+                  ? "cursor-not-allowed opacity-50"
+                  : "hover:bg-green-700 active:bg-green-800",
+              )}
+            >
+              {isProcessing ? "Updating…" : allItemsServedLabel || "All items served"}
+            </button>
+          ) : null}
           {showReady ? (
             <button
               type="button"
@@ -226,7 +256,7 @@ export default function PosHeldOrderCard({
                   : "hover:bg-purple-700 active:bg-purple-800",
               )}
             >
-              {isProcessing ? "Updating…" : "Complete"}
+              {isProcessing ? "Updating…" : completeLabel || "Complete"}
             </button>
           ) : null}
         </div>
