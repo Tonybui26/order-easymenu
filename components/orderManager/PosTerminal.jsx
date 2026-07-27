@@ -527,6 +527,15 @@ export default function PosTerminal() {
     closeCustomization();
   }
 
+  function handleLogoHome() {
+    handleClearOrder();
+    setTableNumber("");
+    setOrderType(null);
+    setKeypadDrawer(null);
+    setIsPaymentDrawerOpen(false);
+    router.replace("/pos");
+  }
+
   async function handleSendOrder() {
     if (cartLines.length === 0 || isSending) return;
 
@@ -646,7 +655,7 @@ export default function PosTerminal() {
 
   return (
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
-      <PosChromeHeader />
+      <PosChromeHeader onLogoClick={handleLogoHome} />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Left: current order */}
