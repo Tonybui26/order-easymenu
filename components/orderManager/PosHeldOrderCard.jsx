@@ -220,7 +220,7 @@ export default function PosHeldOrderCard({
                   : "hover:bg-green-700 active:bg-green-800",
               )}
             >
-              {isProcessing ? "Updating…" : allItemsServedLabel || "All items served"}
+              {isProcessing ? "Updating…" : allItemsServedLabel || "All Served"}
             </button>
           ) : null}
           {showReady ? (

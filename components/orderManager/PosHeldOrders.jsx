@@ -113,7 +113,7 @@ export default function PosHeldOrders() {
       toast.error("No tickets to update");
       return;
     }
-    await markTicketsDelivered(order, ticketIds, "All items served");
+    await markTicketsDelivered(order, ticketIds, "All Served");
   }
 
   async function handleCompleteHeldOrder(order) {
