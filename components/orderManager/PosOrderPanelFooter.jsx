@@ -23,13 +23,13 @@ function formatMoney(amount) {
 
 /**
  * Fixed footer for the POS order panel: totals + Clear / Hold|Send / Discount.
- * Middle action becomes Send when the order has items.
+ * Middle action is Send when there are cart lines not yet sent to kitchen.
  */
 export default function PosOrderPanelFooter({
   subtotal = 0,
   discountAmount = null,
   taxPercentage = GST_RATE,
-  hasItems = false,
+  hasUnsentItems = false,
   viewOnly = false,
   onClear,
   onHold,
@@ -44,7 +44,7 @@ export default function PosOrderPanelFooter({
       : Number(discountAmount);
   const total = Math.max(0, safeSubtotal - (discount || 0));
   const taxAmount = computeIncludedTax(total, taxPercentage);
-  const showSend = Boolean(hasItems) && !viewOnly;
+  const showSend = Boolean(hasUnsentItems) && !viewOnly;
 
   return (
     <div

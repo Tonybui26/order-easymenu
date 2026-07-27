@@ -666,6 +666,9 @@ export default function PosTerminal() {
     (sum, line) => sum + Number(line.price || 0) * (line.quantity || 1),
     0,
   );
+  const hasUnsentLines = cartLines.some(
+    (line) => line.kitchenStatus !== "sent",
+  );
 
   return (
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
@@ -730,7 +733,7 @@ export default function PosTerminal() {
 
           <PosOrderPanelFooter
             subtotal={cartSubtotal}
-            hasItems={cartLines.length > 0}
+            hasUnsentItems={hasUnsentLines}
             viewOnly={isViewOnly}
             onClear={handleClearOrder}
             onHold={handleGoToHeldOrders}
