@@ -155,11 +155,14 @@ export default function PosHeldOrderCard({
             <span className="text-xl font-bold tabular-nums text-neutral-900">
               {formatMoney(order?.total)}
             </span>
-            {order?.allPaid ? (
-              <span className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
-                Paid
-              </span>
-            ) : null}
+            <span
+              className={cn(
+                "text-xs font-semibold uppercase tracking-wide",
+                order?.allPaid ? "text-emerald-600" : "text-amber-700",
+              )}
+            >
+              {order?.allPaid ? "Paid" : "Unpaid"}
+            </span>
           </div>
         </div>
 
