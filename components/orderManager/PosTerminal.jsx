@@ -630,6 +630,9 @@ export default function PosTerminal() {
       setCheckOrderIds([]);
       setPosCheckId(null);
       setIsCheckPaid(false);
+      setTableNumber("");
+      setOrderType(null);
+      setKeypadDrawer(null);
       resumeLoadedRef.current = null;
       closeCustomization();
       setIsPaymentDrawerOpen(false);
