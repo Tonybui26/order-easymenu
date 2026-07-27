@@ -11,7 +11,7 @@ import {
 import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { cn } from "@/lib/helper";
-import { completePosSale, fetchPosResumeOrders, sendPosOrder } from "@/lib/api/fetchApi";
+import { completePosSaleBatch, fetchPosResumeOrders, sendPosOrder } from "@/lib/api/fetchApi";
 import {
   buildDefaultModifierSelections,
   buildDefaultVariantSelections,
@@ -49,6 +49,13 @@ function buildPosSendItems(cartLines) {
     selectedVariants: line.selectedVariants || [],
     selectedModifiers: line.selectedModifiers || [],
   }));
+}
+
+function appendCheckOrderId(existingIds, orderId) {
+  const id = String(orderId || "").trim();
+  if (!id) return existingIds;
+  if ((existingIds || []).includes(id)) return existingIds;
+  return [...(existingIds || []), id];
 }
 
 function useAllMenuItems(menuContent) {
@@ -113,7 +120,7 @@ export default function PosTerminal() {
   const [selectedTabId, setSelectedTabId] = useState(null);
   const [cartLines, setCartLines] = useState([]);
   const [activeOrderId, setActiveOrderId] = useState(null);
-  const [resumeOrderIds, setResumeOrderIds] = useState([]);
+  const [checkOrderIds, setCheckOrderIds] = useState([]);
   const [isSending, setIsSending] = useState(false);
   const [isCompletingSale, setIsCompletingSale] = useState(false);
   const [isResumingOrder, setIsResumingOrder] = useState(false);
@@ -160,7 +167,7 @@ export default function PosTerminal() {
         setSelectedVariants({});
         setSelectedModifiers({});
         setCartLines(lines);
-        setResumeOrderIds(resumeState.orderIds);
+        setCheckOrderIds(resumeState.orderIds);
         setActiveOrderId(resumeState.activeOrderId);
         setTableNumber(resumeState.tableNumber);
         setOrderType(resumeState.orderType);
@@ -512,7 +519,7 @@ export default function PosTerminal() {
   function handleClearOrder() {
     setCartLines([]);
     setActiveOrderId(null);
-    setResumeOrderIds([]);
+    setCheckOrderIds([]);
     resumeLoadedRef.current = null;
     closeCustomization();
   }
@@ -520,13 +527,20 @@ export default function PosTerminal() {
   async function handleSendOrder() {
     if (cartLines.length === 0 || isSending) return;
 
+    const unsentLines = cartLines.filter(
+      (line) => line.kitchenStatus !== "sent",
+    );
+    if (unsentLines.length === 0) {
+      toast.error("Nothing new to send");
+      return;
+    }
+
     setIsSending(true);
     try {
       const payload = {
         orderType: mapPosOrderType(orderType),
-        items: buildPosSendItems(cartLines),
+        items: buildPosSendItems(unsentLines),
       };
-      if (activeOrderId) payload.orderId = activeOrderId;
       if (tableNumber) payload.table = tableNumber;
 
       const result = await sendPosOrder(payload);
@@ -535,15 +549,19 @@ export default function PosTerminal() {
         return;
       }
 
-      setActiveOrderId(result.order._id);
+      const sentLineIds = new Set(unsentLines.map((line) => line.lineId));
+      const newOrderId = String(result.order._id);
+
+      setActiveOrderId(newOrderId);
+      setCheckOrderIds((prev) => appendCheckOrderId(prev, newOrderId));
       setCartLines((prev) =>
         prev.map((line) =>
-          line.kitchenStatus === "sent"
-            ? line
-            : { ...line, kitchenStatus: "sent" },
+          sentLineIds.has(line.lineId)
+            ? { ...line, kitchenStatus: "sent" }
+            : line,
         ),
       );
-      toast.success(activeOrderId ? "Items sent" : "Order sent to kitchen");
+      toast.success("Order sent to kitchen");
     } catch (error) {
       toast.error(error?.message || "Failed to send order");
     } finally {
@@ -553,8 +571,8 @@ export default function PosTerminal() {
 
   async function handleCompleteSale(paymentSummary) {
     const orderIdsToComplete =
-      resumeOrderIds.length > 0
-        ? resumeOrderIds
+      checkOrderIds.length > 0
+        ? checkOrderIds
         : activeOrderId
           ? [activeOrderId]
           : [];
@@ -567,26 +585,21 @@ export default function PosTerminal() {
 
     setIsCompletingSale(true);
     try {
-      for (let index = 0; index < orderIdsToComplete.length; index += 1) {
-        const orderId = orderIdsToComplete[index];
-        const isLast = index === orderIdsToComplete.length - 1;
-        const result = await completePosSale(orderId, {
-          method: paymentSummary.method,
-          amountTendered: isLast
-            ? Number(paymentSummary.amountTendered || 0)
-            : 0,
-          changeDue: isLast ? Number(paymentSummary.change || 0) : 0,
-        });
+      const result = await completePosSaleBatch({
+        orderIds: orderIdsToComplete,
+        method: paymentSummary.method,
+        amountTendered: Number(paymentSummary.amountTendered || 0),
+        changeDue: Number(paymentSummary.change || 0),
+      });
 
-        if (!result?.success) {
-          toast.error(result?.error || "Failed to complete sale");
-          return;
-        }
+      if (!result?.success) {
+        toast.error(result?.error || "Failed to complete sale");
+        return;
       }
 
       setCartLines([]);
       setActiveOrderId(null);
-      setResumeOrderIds([]);
+      setCheckOrderIds([]);
       resumeLoadedRef.current = null;
       closeCustomization();
       setIsPaymentDrawerOpen(false);
@@ -599,7 +612,7 @@ export default function PosTerminal() {
   }
 
   function handleOpenPayment() {
-    if (!activeOrderId && resumeOrderIds.length === 0) {
+    if (checkOrderIds.length === 0) {
       toast.error("Send the order before payment");
       return;
     }
@@ -753,7 +766,7 @@ export default function PosTerminal() {
                 aria-label="Pay"
                 onClick={handleOpenPayment}
                 disabled={
-                  (!activeOrderId && resumeOrderIds.length === 0) ||
+                  checkOrderIds.length === 0 ||
                   isCompletingSale ||
                   isResumingOrder
                 }
