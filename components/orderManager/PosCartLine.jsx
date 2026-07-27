@@ -14,6 +14,7 @@ function formatMoney(amount) {
 export default function PosCartLine({
   line,
   isActive = false,
+  readOnly = false,
   onSelect,
   onQtyClick,
   onRemoveLine,
@@ -42,34 +43,44 @@ export default function PosCartLine({
       ) : null}
 
       <div
-        role="button"
-        tabIndex={0}
-        onClick={() => onSelect?.(line.lineId)}
+        role={readOnly ? undefined : "button"}
+        tabIndex={readOnly ? undefined : 0}
+        onClick={() => {
+          if (!readOnly) onSelect?.(line.lineId);
+        }}
         onKeyDown={(event) => {
+          if (readOnly) return;
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             onSelect?.(line.lineId);
           }
         }}
         className={cn(
-          "relative z-[2] flex cursor-pointer items-center gap-2.5 px-3 py-2.5",
+          "relative z-[2] flex items-center gap-2.5 px-3 py-2.5",
+          !readOnly && "cursor-pointer",
           isSentToKitchen && "text-neutral-500",
         )}
         aria-label={
           isSentToKitchen ? `${line.title}, sent to kitchen` : undefined
         }
       >
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onQtyClick?.(line.lineId);
-          }}
-          className="inline-flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-neutral-200 bg-white px-2 text-sm font-bold text-neutral-800 shadow-sm transition-colors hover:bg-neutral-50 active:bg-neutral-100"
-          aria-label={`Edit quantity of ${line.title}`}
-        >
-          {qty}
-        </button>
+        {readOnly ? (
+          <span className="inline-flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-neutral-200 bg-neutral-50 px-2 text-sm font-bold text-neutral-800">
+            {qty}
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onQtyClick?.(line.lineId);
+            }}
+            className="inline-flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-neutral-200 bg-white px-2 text-sm font-bold text-neutral-800 shadow-sm transition-colors hover:bg-neutral-50 active:bg-neutral-100"
+            aria-label={`Edit quantity of ${line.title}`}
+          >
+            {qty}
+          </button>
+        )}
 
         <p className="min-w-0 flex-1 text-base font-medium text-neutral-800">
           {line.title}
@@ -79,17 +90,19 @@ export default function PosCartLine({
           {formatMoney(basePrice)}
         </span>
 
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onRemoveLine?.(line.lineId);
-          }}
-          className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
-          aria-label={`Remove ${line.title}`}
-        >
-          <X size={14} strokeWidth={2.5} />
-        </button>
+        {!readOnly ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onRemoveLine?.(line.lineId);
+            }}
+            className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
+            aria-label={`Remove ${line.title}`}
+          >
+            <X size={14} strokeWidth={2.5} />
+          </button>
+        ) : null}
       </div>
 
       {hasChildren ? (
@@ -103,14 +116,16 @@ export default function PosCartLine({
                 {variant.optionName}
               </p>
               <span className="w-12 shrink-0" aria-hidden />
-              <button
-                type="button"
-                onClick={() => onRemoveVariant?.(line.lineId, variant.optionId)}
-                className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
-                aria-label={`Remove ${variant.optionName}`}
-              >
-                <X size={14} strokeWidth={2.5} />
-              </button>
+              {!readOnly ? (
+                <button
+                  type="button"
+                  onClick={() => onRemoveVariant?.(line.lineId, variant.optionId)}
+                  className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
+                  aria-label={`Remove ${variant.optionName}`}
+                >
+                  <X size={14} strokeWidth={2.5} />
+                </button>
+              ) : null}
             </li>
           ))}
 
@@ -131,16 +146,18 @@ export default function PosCartLine({
                 ) : (
                   <span className="min-w-[3rem] shrink-0" aria-hidden />
                 )}
-                <button
-                  type="button"
-                  onClick={() =>
-                    onRemoveModifier?.(line.lineId, modifier.optionId)
-                  }
-                  className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
-                  aria-label={`Remove ${modifier.optionName}`}
-                >
-                  <X size={14} strokeWidth={2.5} />
-                </button>
+                {!readOnly ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onRemoveModifier?.(line.lineId, modifier.optionId)
+                    }
+                    className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
+                    aria-label={`Remove ${modifier.optionName}`}
+                  >
+                    <X size={14} strokeWidth={2.5} />
+                  </button>
+                ) : null}
               </li>
             );
           })}

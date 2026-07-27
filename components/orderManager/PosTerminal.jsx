@@ -73,12 +73,13 @@ function useAllMenuItems(menuContent) {
   }, [menuContent]);
 }
 
-function PosProductCard({ item, onAdd }) {
+function PosProductCard({ item, onAdd, disabled = false }) {
   return (
     <button
       type="button"
       onClick={() => onAdd?.(item)}
-      className="relative flex w-full flex-col overflow-hidden rounded-lg bg-white shadow-[0_0_0_1px_#1a1a1a0f] transition-transform active:scale-[0.98]"
+      disabled={disabled}
+      className="relative flex w-full flex-col overflow-hidden rounded-lg bg-white shadow-[0_0_0_1px_#1a1a1a0f] transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
     >
       <span className="absolute left-2 top-2 z-10 flex size-8 items-center justify-center rounded-full bg-white text-neutral-600 shadow-sm ring-1 ring-black/5">
         <Plus size={18} strokeWidth={2.5} />
@@ -122,6 +123,7 @@ export default function PosTerminal() {
   const [activeOrderId, setActiveOrderId] = useState(null);
   const [checkOrderIds, setCheckOrderIds] = useState([]);
   const [posCheckId, setPosCheckId] = useState(null);
+  const [isCheckPaid, setIsCheckPaid] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isCompletingSale, setIsCompletingSale] = useState(false);
   const [isResumingOrder, setIsResumingOrder] = useState(false);
@@ -173,6 +175,7 @@ export default function PosTerminal() {
         setPosCheckId(resumeState.posCheckId);
         setTableNumber(resumeState.tableNumber);
         setOrderType(resumeState.orderType);
+        setIsCheckPaid(resumeState.isCheckPaid);
         router.replace("/pos");
       } catch (error) {
         if (!cancelled) {
@@ -203,6 +206,7 @@ export default function PosTerminal() {
 
   const selectedTab = tabs.find((tab) => tab.id === selectedTabId) || null;
   const selectedRows = selectedTab?.rows || [];
+  const isViewOnly = isCheckPaid;
 
   const tableLabel = (() => {
     if (!tableNumber && !orderType) return "TABLE: --";
@@ -340,6 +344,7 @@ export default function PosTerminal() {
   }
 
   function handleSelectCartLine(lineId) {
+    if (isViewOnly) return;
     const line = cartLines.find((entry) => entry.lineId === lineId);
     if (!line) return;
 
@@ -357,6 +362,7 @@ export default function PosTerminal() {
   }
 
   function handleAddItem(item) {
+    if (isViewOnly) return;
     if (itemNeedsCustomization(item)) {
       openCustomization(item);
       return;
@@ -406,6 +412,7 @@ export default function PosTerminal() {
   }
 
   function handleQtyClick(lineId) {
+    if (isViewOnly) return;
     const line = cartLines.find((entry) => entry.lineId === lineId);
     setKeypadDrawer({
       mode: "quantity",
@@ -523,8 +530,13 @@ export default function PosTerminal() {
     setActiveOrderId(null);
     setCheckOrderIds([]);
     setPosCheckId(null);
+    setIsCheckPaid(false);
     resumeLoadedRef.current = null;
     closeCustomization();
+  }
+
+  function handleGoToHeldOrders() {
+    router.push("/pos/held");
   }
 
   function handleLogoHome() {
@@ -537,7 +549,7 @@ export default function PosTerminal() {
   }
 
   async function handleSendOrder() {
-    if (cartLines.length === 0 || isSending) return;
+    if (isViewOnly || cartLines.length === 0 || isSending) return;
 
     const unsentLines = cartLines.filter(
       (line) => line.kitchenStatus !== "sent",
@@ -617,6 +629,7 @@ export default function PosTerminal() {
       setActiveOrderId(null);
       setCheckOrderIds([]);
       setPosCheckId(null);
+      setIsCheckPaid(false);
       resumeLoadedRef.current = null;
       closeCustomization();
       setIsPaymentDrawerOpen(false);
@@ -629,6 +642,7 @@ export default function PosTerminal() {
   }
 
   function handleOpenPayment() {
+    if (isViewOnly) return;
     if (checkOrderIds.length === 0) {
       toast.error("Send the order before payment");
       return;
@@ -664,7 +678,8 @@ export default function PosTerminal() {
             <button
               type="button"
               onClick={() => setKeypadDrawer({ mode: "table" })}
-              className="flex min-h-[52px] w-full items-center justify-center rounded-md bg-white px-4 text-base font-semibold text-neutral-700 shadow-[0_0_0_1px_#d4d4d4] transition-colors hover:bg-neutral-50 active:bg-neutral-100"
+              disabled={isViewOnly}
+              className="flex min-h-[52px] w-full items-center justify-center rounded-md bg-white px-4 text-base font-semibold text-neutral-700 shadow-[0_0_0_1px_#d4d4d4] transition-colors hover:bg-neutral-50 active:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
             >
               {tableLabel}
             </button>
@@ -701,6 +716,7 @@ export default function PosTerminal() {
                     key={line.lineId}
                     line={line}
                     isActive={line.lineId === customizingLineId}
+                    readOnly={isViewOnly}
                     onSelect={handleSelectCartLine}
                     onQtyClick={handleQtyClick}
                     onRemoveLine={handleRemoveLine}
@@ -715,7 +731,9 @@ export default function PosTerminal() {
           <PosOrderPanelFooter
             subtotal={cartSubtotal}
             hasItems={cartLines.length > 0}
+            viewOnly={isViewOnly}
             onClear={handleClearOrder}
+            onHold={handleGoToHeldOrders}
             onSend={handleSendOrder}
           />
         </section>
@@ -783,6 +801,7 @@ export default function PosTerminal() {
                 aria-label="Pay"
                 onClick={handleOpenPayment}
                 disabled={
+                  isViewOnly ||
                   checkOrderIds.length === 0 ||
                   isCompletingSale ||
                   isResumingOrder
@@ -835,6 +854,7 @@ export default function PosTerminal() {
                             key={`${row.id}-${item.id}`}
                             item={item}
                             onAdd={handleAddItem}
+                            disabled={isViewOnly}
                           />
                         ))}
                       </div>

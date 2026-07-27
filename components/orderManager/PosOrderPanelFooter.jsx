@@ -30,6 +30,7 @@ export default function PosOrderPanelFooter({
   discountAmount = null,
   taxPercentage = GST_RATE,
   hasItems = false,
+  viewOnly = false,
   onClear,
   onHold,
   onSend,
@@ -43,7 +44,7 @@ export default function PosOrderPanelFooter({
       : Number(discountAmount);
   const total = Math.max(0, safeSubtotal - (discount || 0));
   const taxAmount = computeIncludedTax(total, taxPercentage);
-  const showSend = Boolean(hasItems);
+  const showSend = Boolean(hasItems) && !viewOnly;
 
   return (
     <div
@@ -86,27 +87,38 @@ export default function PosOrderPanelFooter({
           icon={X}
           label="Clear"
           onClick={onClear}
+          disabled={viewOnly}
           className="border-r border-neutral-300"
         />
         <FooterAction
           icon={showSend ? Send : Folder}
           label={showSend ? "Send" : "Hold"}
           onClick={showSend ? onSend : onHold}
+          disabled={!showSend && !viewOnly && !onHold}
           className="border-r border-neutral-300"
         />
-        <FooterAction icon={Tag} label="Discount" onClick={onDiscount} />
+        <FooterAction
+          icon={Tag}
+          label="Discount"
+          onClick={onDiscount}
+          disabled={viewOnly}
+        />
       </div>
     </div>
   );
 }
 
-function FooterAction({ icon: Icon, label, onClick, className }) {
+function FooterAction({ icon: Icon, label, onClick, disabled = false, className }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className={cn(
-        "flex min-h-[4.25rem] items-center justify-center gap-1.5 px-2 text-sm font-semibold uppercase tracking-wide text-neutral-900 transition-colors hover:bg-neutral-200/80 active:bg-neutral-300/70",
+        "flex min-h-[4.25rem] items-center justify-center gap-1.5 px-2 text-sm font-semibold uppercase tracking-wide text-neutral-900 transition-colors",
+        disabled
+          ? "cursor-not-allowed opacity-40"
+          : "hover:bg-neutral-200/80 active:bg-neutral-300/70",
         className,
       )}
     >
