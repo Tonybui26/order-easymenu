@@ -3,16 +3,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  Check,
-  PanelBottomOpen,
-  Plus,
-} from "lucide-react";
+import { Check, PanelBottomOpen, Plus } from "lucide-react";
 import { motion } from "motion/react";
 import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { cn } from "@/lib/helper";
-import { completePosSaleBatch, fetchPosResumeOrders, sendPosOrder } from "@/lib/api/fetchApi";
+import {
+  completePosSaleBatch,
+  fetchPosResumeOrders,
+  sendPosOrder,
+} from "@/lib/api/fetchApi";
 import {
   buildDefaultModifierSelections,
   buildDefaultVariantSelections,
@@ -126,6 +126,7 @@ export default function PosTerminal() {
   const [checkOrderIds, setCheckOrderIds] = useState([]);
   const [posCheckId, setPosCheckId] = useState(null);
   const [isCheckPaid, setIsCheckPaid] = useState(false);
+  const [isResumedCheck, setIsResumedCheck] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isCompletingSale, setIsCompletingSale] = useState(false);
   const [isResumingOrder, setIsResumingOrder] = useState(false);
@@ -180,6 +181,7 @@ export default function PosTerminal() {
         setTableNumber(resumeState.tableNumber);
         setOrderType(resumeState.orderType);
         setIsCheckPaid(resumeState.isCheckPaid);
+        setIsResumedCheck(true);
         setIsOrderTypeMissing(false);
         router.replace("/pos");
       } catch (error) {
@@ -212,6 +214,7 @@ export default function PosTerminal() {
   const selectedTab = tabs.find((tab) => tab.id === selectedTabId) || null;
   const selectedRows = selectedTab?.rows || [];
   const isViewOnly = isCheckPaid;
+  const isTableFieldLocked = isViewOnly || isResumedCheck;
 
   const tableLabel = (() => {
     if (!orderType) {
@@ -505,6 +508,7 @@ export default function PosTerminal() {
   }
 
   function handleTableConfirm({ number, orderType: nextOrderType }) {
+    if (isTableFieldLocked) return;
     setTableNumber(number || "");
     setOrderType(nextOrderType || null);
     if (nextOrderType) setIsOrderTypeMissing(false);
@@ -545,6 +549,7 @@ export default function PosTerminal() {
     setCheckOrderIds([]);
     setPosCheckId(null);
     setIsCheckPaid(false);
+    setIsResumedCheck(false);
     setIsOrderTypeMissing(false);
     resumeLoadedRef.current = null;
     closeCustomization();
@@ -651,6 +656,7 @@ export default function PosTerminal() {
       setCheckOrderIds([]);
       setPosCheckId(null);
       setIsCheckPaid(false);
+      setIsResumedCheck(false);
       setTableNumber("");
       setOrderType(null);
       setKeypadDrawer(null);
@@ -705,15 +711,18 @@ export default function PosTerminal() {
             <motion.button
               key={tableFieldShakeKey}
               type="button"
-              onClick={() => setKeypadDrawer({ mode: "table" })}
-              disabled={isViewOnly}
+              onClick={() => {
+                if (isTableFieldLocked) return;
+                setKeypadDrawer({ mode: "table" });
+              }}
+              disabled={isTableFieldLocked}
               initial={{ x: 0 }}
               animate={
                 tableFieldShakeKey > 0 ? { x: [0, -6, 6, -4, 4, 0] } : { x: 0 }
               }
               transition={{ duration: 0.35, ease: "easeInOut" }}
               className={cn(
-                "flex min-h-[52px] w-full items-center justify-center rounded-md bg-white px-4 text-base font-semibold shadow-[0_0_0_1px_#d4d4d4] transition-colors hover:bg-neutral-50 active:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400",
+                "flex min-h-[52px] w-full items-center justify-center rounded-md bg-white px-4 text-base font-semibold shadow-[0_0_0_1px_#d4d4d4] transition-colors hover:bg-neutral-50 active:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-800",
                 isOrderTypeMissing && !orderType
                   ? "bg-red-50 text-red-700 shadow-[0_0_0_2px_#ef4444]"
                   : "text-neutral-700",
