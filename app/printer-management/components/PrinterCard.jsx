@@ -243,7 +243,13 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
               </div>
 
               {/* Order Type Indicators */}
-              <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                {printer.forReceipt && (
+                  <span className="flex items-center gap-1 rounded-full bg-teal-100 px-2 py-1 text-teal-800">
+                    <CheckCircle className="h-3 w-3" />
+                    Receipt
+                  </span>
+                )}
                 {printer.forTakeaway && (
                   <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-green-700">
                     <CheckCircle className="h-3 w-3" />
@@ -256,8 +262,10 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
                     Dine-in
                   </span>
                 )}
-                {!printer.forTakeaway && !printer.forDineIn && (
-                  <span className="text-gray-400">No order types assigned</span>
+                {!printer.forReceipt &&
+                  !printer.forTakeaway &&
+                  !printer.forDineIn && (
+                  <span className="text-gray-400">No roles assigned</span>
                 )}
               </div>
 

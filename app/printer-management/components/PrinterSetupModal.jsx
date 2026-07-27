@@ -24,6 +24,7 @@ export default function PrinterSetupModal({
     port: "9100",
     forTakeaway: false,
     forDineIn: false,
+    forReceipt: false,
     // Item group routing. Empty array = no group filter → printer prints
     // every item it receives (default + backwards compatible). When any box
     // is ticked we only print items that belong to one of the selected groups;
@@ -45,6 +46,7 @@ export default function PrinterSetupModal({
         port: printer.port || "9100",
         forTakeaway: printer.forTakeaway || false,
         forDineIn: printer.forDineIn || false,
+        forReceipt: printer.forReceipt || false,
         // Existing printers may not have groupIds yet; default to "no filter".
         groupIds: Array.isArray(printer.groupIds) ? printer.groupIds : [],
         commandLanguage:
@@ -101,7 +103,16 @@ export default function PrinterSetupModal({
   };
 
   const handleInputChange = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value };
+      if (
+        field === "commandLanguage" &&
+        value === PRINTER_COMMAND_LANGUAGES.TSPL
+      ) {
+        next.forReceipt = false;
+      }
+      return next;
+    });
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: "" }));
@@ -148,6 +159,7 @@ export default function PrinterSetupModal({
       port: "9100",
       forTakeaway: false,
       forDineIn: false,
+      forReceipt: false,
       groupIds: [],
       commandLanguage: DEFAULT_PRINTER_COMMAND_LANGUAGE,
     });
@@ -352,6 +364,39 @@ export default function PrinterSetupModal({
               {errors.orderTypes && (
                 <div className="text-sm text-error">{errors.orderTypes}</div>
               )}
+            </div>
+
+            {/* Receipt printer */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium text-base-content">
+                Receipt printer
+              </h3>
+              <p className="text-xs text-gray-500">
+                Also use this printer for customer receipts and the cash drawer.
+                Kitchen routing still uses Takeaway / Dine-in and item groups
+                above.
+              </p>
+              <div className="form-control">
+                <label className="label cursor-pointer justify-between">
+                  <span className="label-text">This is a receipt printer</span>
+                  <input
+                    type="checkbox"
+                    checked={formData.forReceipt}
+                    disabled={
+                      formData.commandLanguage === PRINTER_COMMAND_LANGUAGES.TSPL
+                    }
+                    onChange={(e) =>
+                      handleInputChange("forReceipt", e.target.checked)
+                    }
+                    className="toggle toggle-primary"
+                  />
+                </label>
+              </div>
+              {formData.commandLanguage === PRINTER_COMMAND_LANGUAGES.TSPL ? (
+                <p className="text-xs text-amber-700">
+                  Label (TSPL) printers cannot be receipt printers.
+                </p>
+              ) : null}
             </div>
 
             {/* Item Group Routing */}
