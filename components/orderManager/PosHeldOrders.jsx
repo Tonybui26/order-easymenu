@@ -3,19 +3,25 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { fetchPosHeldOrders } from "@/lib/api/fetchApi";
+import {
+  fetchPosHeldOrders,
+  updatePosHeldCheckStatus,
+} from "@/lib/api/fetchApi";
+import { getTicketIdsByStatus, getAllTicketIds } from "@/lib/pos/posHeldOrder";
 import PosChromeHeader from "./PosChromeHeader";
 import PosHeldOrderCard from "./PosHeldOrderCard";
 
 const HELD_ORDERS_POLL_MS = 10000;
 
 /**
- * Held Orders screen — open POS tickets until paid and delivered.
+ * Held Orders — open POS checks until delivered.
+ * Takeaway/delivery cards: Ready / Complete without opening Live Orders.
  */
 export default function PosHeldOrders() {
   const router = useRouter();
   const [heldOrders, setHeldOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [processingCheckId, setProcessingCheckId] = useState(null);
 
   const loadHeldOrders = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setIsLoading(true);
@@ -47,6 +53,67 @@ export default function PosHeldOrders() {
   function handleSelectHeldOrder(order) {
     if (!order?.orderIds?.length) return;
     router.push(`/pos?resume=${encodeURIComponent(order.orderIds.join(","))}`);
+  }
+
+  async function handleReadyHeldOrder(order) {
+    if (!order?.id || processingCheckId) return;
+
+    const preparingIds = getTicketIdsByStatus(order, "preparing");
+    if (preparingIds.length === 0) {
+      toast.error("No tickets to mark ready");
+      return;
+    }
+
+    setProcessingCheckId(order.id);
+    try {
+      const result = await updatePosHeldCheckStatus({
+        orderIds: preparingIds,
+        status: "ready",
+      });
+      if (!result?.success) {
+        toast.error(result?.error || "Failed to mark ready");
+        return;
+      }
+      toast.success("Marked ready");
+      await loadHeldOrders({ silent: true });
+    } catch (error) {
+      toast.error(error?.message || "Failed to mark ready");
+    } finally {
+      setProcessingCheckId(null);
+    }
+  }
+
+  async function handleCompleteHeldOrder(order) {
+    if (!order?.id || processingCheckId) return;
+
+    if (!order.allPaid) {
+      toast.error("Pay the check before completing");
+      return;
+    }
+
+    const ticketIds = getAllTicketIds(order);
+    if (ticketIds.length === 0) {
+      toast.error("No tickets to complete");
+      return;
+    }
+
+    setProcessingCheckId(order.id);
+    try {
+      const result = await updatePosHeldCheckStatus({
+        orderIds: ticketIds,
+        status: "delivered",
+      });
+      if (!result?.success) {
+        toast.error(result?.error || "Failed to complete order");
+        return;
+      }
+      toast.success("Order completed");
+      await loadHeldOrders({ silent: true });
+    } catch (error) {
+      toast.error(error?.message || "Failed to complete order");
+    } finally {
+      setProcessingCheckId(null);
+    }
   }
 
   return (
@@ -88,6 +155,9 @@ export default function PosHeldOrders() {
                   <PosHeldOrderCard
                     order={order}
                     onSelect={handleSelectHeldOrder}
+                    onReady={handleReadyHeldOrder}
+                    onComplete={handleCompleteHeldOrder}
+                    isProcessing={processingCheckId === order.id}
                   />
                 </li>
               ))}

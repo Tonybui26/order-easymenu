@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Clock3, User } from "lucide-react";
 import { cn } from "@/lib/helper";
+import { getPosHeldTakeawayActions } from "@/lib/pos/posHeldOrder";
 
 function formatMoney(amount) {
   return `$${Number(amount || 0).toFixed(2)}`;
@@ -76,12 +77,26 @@ function orderNumberLabel(order) {
   return "#—";
 }
 
+function aggregateStatusLabel(status) {
+  return status === "ready" ? "Ready" : "Preparing";
+}
+
 /**
- * Minimal held-order card: live hold timer, number, total, placed time, type, customer.
+ * Held-order card with optional Ready/Complete actions for takeaway/delivery.
  */
-export default function PosHeldOrderCard({ order, onSelect, className }) {
+export default function PosHeldOrderCard({
+  order,
+  onSelect,
+  onReady,
+  onComplete,
+  isProcessing = false,
+  className,
+}) {
   const heldAt = order?.heldAt || order?.createdAt;
   const [now, setNow] = useState(() => Date.now());
+  const { showReady, showComplete, aggregateStatus } =
+    getPosHeldTakeawayActions(order);
+  const hasActions = showReady || showComplete;
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -95,73 +110,127 @@ export default function PosHeldOrderCard({ order, onSelect, className }) {
   const isLongHold = heldMs >= 15 * 60 * 1000;
 
   return (
-    <button
-      type="button"
-      onClick={() => onSelect?.(order)}
+    <div
       className={cn(
-        "flex w-full flex-col gap-3 rounded-2xl bg-white p-4 text-left shadow-[0_0_0_1px_rgba(0,0,0,0.06)] transition-transform active:scale-[0.99] hover:shadow-[0_0_0_1px_rgba(0,0,0,0.1),0_8px_24px_rgba(0,0,0,0.06)]",
+        "flex w-full flex-col overflow-hidden rounded-2xl bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.06)]",
         className,
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-lg px-2 py-1 font-mono text-base font-semibold tabular-nums tracking-tight",
-            isLongHold
-              ? "bg-amber-50 text-amber-800"
-              : "bg-neutral-100 text-neutral-800",
-          )}
-          aria-label={`Held for ${holdLabel}`}
-        >
-          <span
+      <button
+        type="button"
+        onClick={() => onSelect?.(order)}
+        className="flex w-full flex-col gap-3 p-4 text-left transition-transform active:scale-[0.99] hover:bg-neutral-50/80"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div
             className={cn(
-              "size-1.5 shrink-0 rounded-full",
-              isLongHold ? "bg-amber-500" : "animate-pulse bg-emerald-500",
+              "inline-flex items-center gap-1.5 rounded-lg px-2 py-1 font-mono text-base font-semibold tabular-nums tracking-tight",
+              isLongHold
+                ? "bg-amber-50 text-amber-800"
+                : "bg-neutral-100 text-neutral-800",
             )}
-            aria-hidden
-          />
-          {holdLabel}
+            aria-label={`Held for ${holdLabel}`}
+          >
+            <span
+              className={cn(
+                "size-1.5 shrink-0 rounded-full",
+                isLongHold ? "bg-amber-500" : "animate-pulse bg-emerald-500",
+              )}
+              aria-hidden
+            />
+            {holdLabel}
+          </div>
+          <div className="flex flex-col items-end gap-0.5">
+            <span className="text-xl font-bold tabular-nums text-neutral-900">
+              {formatMoney(order?.total)}
+            </span>
+            {order?.allPaid ? (
+              <span className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
+                Paid
+              </span>
+            ) : null}
+          </div>
         </div>
-        <div className="flex flex-col items-end gap-0.5">
-          <span className="text-xl font-bold tabular-nums text-neutral-900">
-            {formatMoney(order?.allPaid ? order?.total : order?.amountDue ?? order?.total)}
+
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="text-lg font-bold tracking-tight text-neutral-900">
+            {orderNumberLabel(order)}
           </span>
-          {order?.allPaid ? (
-            <span className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
-              Paid
+          <div className="flex flex-col items-end gap-0.5">
+            <span className="text-sm font-medium text-neutral-500">
+              {orderTypeLabel(order)}
             </span>
-          ) : order?.amountDue != null &&
-            Number(order.amountDue) < Number(order?.total || 0) ? (
-            <span className="text-xs font-medium tabular-nums text-neutral-500">
-              of {formatMoney(order?.total)}
+            {hasActions ? (
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide",
+                  aggregateStatus === "ready"
+                    ? "bg-green-100 text-green-800"
+                    : "bg-blue-100 text-blue-800",
+                )}
+              >
+                {aggregateStatusLabel(aggregateStatus)}
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-neutral-100 pt-3 text-sm text-neutral-500">
+          <span className="inline-flex items-center gap-1.5">
+            <Clock3 size={14} strokeWidth={2} className="shrink-0 opacity-70" />
+            <span className="tabular-nums">
+              {formatOrderClock(order?.createdAt || heldAt)}
             </span>
+          </span>
+          <span className="inline-flex min-w-0 items-center gap-1.5">
+            <User size={14} strokeWidth={2} className="shrink-0 opacity-70" />
+            <span className="truncate font-medium text-neutral-700">
+              {customerLabel(order)}
+            </span>
+          </span>
+        </div>
+      </button>
+
+      {hasActions ? (
+        <div className="grid grid-cols-1 gap-2 border-t border-neutral-100 bg-neutral-50/80 p-3">
+          {showReady ? (
+            <button
+              type="button"
+              disabled={isProcessing}
+              onClick={(event) => {
+                event.stopPropagation();
+                onReady?.(order);
+              }}
+              className={cn(
+                "rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
+                isProcessing
+                  ? "cursor-not-allowed opacity-50"
+                  : "hover:bg-green-700 active:bg-green-800",
+              )}
+            >
+              {isProcessing ? "Updating…" : "Ready"}
+            </button>
+          ) : null}
+          {showComplete ? (
+            <button
+              type="button"
+              disabled={isProcessing}
+              onClick={(event) => {
+                event.stopPropagation();
+                onComplete?.(order);
+              }}
+              className={cn(
+                "rounded-xl bg-purple-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
+                isProcessing
+                  ? "cursor-not-allowed opacity-50"
+                  : "hover:bg-purple-700 active:bg-purple-800",
+              )}
+            >
+              {isProcessing ? "Updating…" : "Complete"}
+            </button>
           ) : null}
         </div>
-      </div>
-
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="text-lg font-bold tracking-tight text-neutral-900">
-          {orderNumberLabel(order)}
-        </span>
-        <span className="text-sm font-medium text-neutral-500">
-          {orderTypeLabel(order)}
-        </span>
-      </div>
-
-      <div className="flex items-center justify-between gap-3 border-t border-neutral-100 pt-3 text-sm text-neutral-500">
-        <span className="inline-flex items-center gap-1.5">
-          <Clock3 size={14} strokeWidth={2} className="shrink-0 opacity-70" />
-          <span className="tabular-nums">
-            {formatOrderClock(order?.createdAt || heldAt)}
-          </span>
-        </span>
-        <span className="inline-flex min-w-0 items-center gap-1.5">
-          <User size={14} strokeWidth={2} className="shrink-0 opacity-70" />
-          <span className="truncate font-medium text-neutral-700">
-            {customerLabel(order)}
-          </span>
-        </span>
-      </div>
-    </button>
+      ) : null}
+    </div>
   );
 }
