@@ -122,9 +122,21 @@ export default function PosHeldOrderCard({ order, onSelect, className }) {
           />
           {holdLabel}
         </div>
-        <span className="text-xl font-bold tabular-nums text-neutral-900">
-          {formatMoney(order?.total)}
-        </span>
+        <div className="flex flex-col items-end gap-0.5">
+          <span className="text-xl font-bold tabular-nums text-neutral-900">
+            {formatMoney(order?.allPaid ? order?.total : order?.amountDue ?? order?.total)}
+          </span>
+          {order?.allPaid ? (
+            <span className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
+              Paid
+            </span>
+          ) : order?.amountDue != null &&
+            Number(order.amountDue) < Number(order?.total || 0) ? (
+            <span className="text-xs font-medium tabular-nums text-neutral-500">
+              of {formatMoney(order?.total)}
+            </span>
+          ) : null}
+        </div>
       </div>
 
       <div className="flex items-baseline justify-between gap-3">

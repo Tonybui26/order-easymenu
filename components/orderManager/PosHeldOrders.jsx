@@ -10,7 +10,7 @@ import PosHeldOrderCard from "./PosHeldOrderCard";
 const HELD_ORDERS_POLL_MS = 10000;
 
 /**
- * Held Orders screen — unpaid POS tickets (dine-in merged by table).
+ * Held Orders screen — open POS tickets until paid and delivered.
  */
 export default function PosHeldOrders() {
   const router = useRouter();
@@ -65,7 +65,7 @@ export default function PosHeldOrders() {
                 Held Orders
               </p>
               <p className="mt-2 text-sm text-neutral-400">
-                No unpaid orders on hold
+                No open orders on hold
               </p>
             </div>
           </div>
@@ -77,7 +77,7 @@ export default function PosHeldOrders() {
                   Held Orders
                 </h1>
                 <p className="mt-0.5 text-sm text-neutral-500">
-                  {heldOrders.length} waiting to resume
+                  {heldOrders.length} open {heldOrders.length === 1 ? "check" : "checks"}
                 </p>
               </div>
             </div>

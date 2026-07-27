@@ -230,9 +230,8 @@ export default function OrderCard({
 
   // 4. READY BUTTON
   const showReadyButton = (() => {
-    // Only for online takeaway/pickup orders that are preparing
+    // Takeaway/pickup in preparing — online or POS counter (paid at register)
     if (
-      !isCounterOrder &&
       (isPickUp ||
         isDelivery ||
         order.table === "takeaway" ||
