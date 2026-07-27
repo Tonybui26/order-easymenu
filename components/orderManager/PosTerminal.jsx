@@ -8,6 +8,7 @@ import {
   PanelBottomOpen,
   Plus,
 } from "lucide-react";
+import { motion } from "motion/react";
 import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { cn } from "@/lib/helper";
@@ -36,7 +37,8 @@ import PosChromeHeader from "./PosChromeHeader";
 
 function mapPosOrderType(orderType) {
   if (orderType === "dine-in") return "dine-in";
-  return "pick-up";
+  if (orderType === "takeaway") return "pick-up";
+  return null;
 }
 
 function buildPosSendItems(cartLines) {
@@ -135,6 +137,8 @@ export default function PosTerminal() {
   const [customizingLineId, setCustomizingLineId] = useState(null);
   const [selectedVariants, setSelectedVariants] = useState({});
   const [selectedModifiers, setSelectedModifiers] = useState({});
+  const [isOrderTypeMissing, setIsOrderTypeMissing] = useState(false);
+  const [tableFieldShakeKey, setTableFieldShakeKey] = useState(0);
 
   useEffect(() => {
     if (!resumeParam || !menuContent) return;
@@ -176,6 +180,7 @@ export default function PosTerminal() {
         setTableNumber(resumeState.tableNumber);
         setOrderType(resumeState.orderType);
         setIsCheckPaid(resumeState.isCheckPaid);
+        setIsOrderTypeMissing(false);
         router.replace("/pos");
       } catch (error) {
         if (!cancelled) {
@@ -209,7 +214,10 @@ export default function PosTerminal() {
   const isViewOnly = isCheckPaid;
 
   const tableLabel = (() => {
-    if (!tableNumber && !orderType) return "TABLE: --";
+    if (!orderType) {
+      if (isOrderTypeMissing) return "SELECT ORDER TYPE";
+      return "TABLE: --";
+    }
     if (orderType === "dine-in") return `TABLE: ${tableNumber || "--"}`;
     if (orderType === "buzzer") return `BUZZER: ${tableNumber || "--"}`;
     if (orderType === "takeaway")
@@ -499,6 +507,12 @@ export default function PosTerminal() {
   function handleTableConfirm({ number, orderType: nextOrderType }) {
     setTableNumber(number || "");
     setOrderType(nextOrderType || null);
+    if (nextOrderType) setIsOrderTypeMissing(false);
+  }
+
+  function nudgeTableFieldForMissingOrderType() {
+    setIsOrderTypeMissing(true);
+    setTableFieldShakeKey((key) => key + 1);
   }
 
   function handleQuantityConfirm({ quantity }) {
@@ -531,6 +545,7 @@ export default function PosTerminal() {
     setCheckOrderIds([]);
     setPosCheckId(null);
     setIsCheckPaid(false);
+    setIsOrderTypeMissing(false);
     resumeLoadedRef.current = null;
     closeCustomization();
   }
@@ -559,10 +574,16 @@ export default function PosTerminal() {
       return;
     }
 
+    const mappedOrderType = mapPosOrderType(orderType);
+    if (!mappedOrderType) {
+      nudgeTableFieldForMissingOrderType();
+      return;
+    }
+
     setIsSending(true);
     try {
       const payload = {
-        orderType: mapPosOrderType(orderType),
+        orderType: mappedOrderType,
         items: buildPosSendItems(unsentLines),
       };
       if (tableNumber) payload.table = tableNumber;
@@ -681,14 +702,25 @@ export default function PosTerminal() {
         {/* Left: current order */}
         <section className="flex w-[34%] min-w-[280px] max-w-[440px] shrink-0 flex-col border-r border-neutral-300 bg-white pb-[env(safe-area-inset-bottom)]">
           <div className="flex shrink-0 items-stretch border-b border-neutral-200 bg-[#ececec] p-2">
-            <button
+            <motion.button
+              key={tableFieldShakeKey}
               type="button"
               onClick={() => setKeypadDrawer({ mode: "table" })}
               disabled={isViewOnly}
-              className="flex min-h-[52px] w-full items-center justify-center rounded-md bg-white px-4 text-base font-semibold text-neutral-700 shadow-[0_0_0_1px_#d4d4d4] transition-colors hover:bg-neutral-50 active:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+              initial={{ x: 0 }}
+              animate={
+                tableFieldShakeKey > 0 ? { x: [0, -6, 6, -4, 4, 0] } : { x: 0 }
+              }
+              transition={{ duration: 0.35, ease: "easeInOut" }}
+              className={cn(
+                "flex min-h-[52px] w-full items-center justify-center rounded-md bg-white px-4 text-base font-semibold shadow-[0_0_0_1px_#d4d4d4] transition-colors hover:bg-neutral-50 active:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400",
+                isOrderTypeMissing && !orderType
+                  ? "bg-red-50 text-red-700 shadow-[0_0_0_2px_#ef4444]"
+                  : "text-neutral-700",
+              )}
             >
               {tableLabel}
-            </button>
+            </motion.button>
           </div>
 
           <PosTableEntryDrawer
