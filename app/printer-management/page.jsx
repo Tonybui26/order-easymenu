@@ -12,6 +12,7 @@ import PrinterSetupModal from "./components/PrinterSetupModal";
 import { toast } from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
 import PosChromeHeader from "@/components/orderManager/PosChromeHeader";
+import { usePosOpenCashDrawer } from "@/components/orderManager/usePosOpenCashDrawer";
 
 export default function PrinterManagementPage() {
   const [loading, setLoading] = useState(true);
@@ -20,6 +21,7 @@ export default function PrinterManagementPage() {
   const [autoPrintingEnabled, setAutoPrintingEnabled] = useState(
     menuConfig?.autoPrinting?.enabled || false,
   );
+  const { handleOpenCashDrawer } = usePosOpenCashDrawer();
   // Fetch printers on component mount
   useEffect(() => {
     fetchPrintersData();
@@ -92,7 +94,7 @@ export default function PrinterManagementPage() {
 
   return (
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
-      <PosChromeHeader />
+      <PosChromeHeader onOpenCashDrawer={handleOpenCashDrawer} />
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-gray-50 pb-[env(safe-area-inset-bottom)]">
         <div className="mx-auto max-w-6xl p-4 md:p-6">

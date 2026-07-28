@@ -38,6 +38,7 @@ import PosCancelSentLineDrawer, {
   POS_CANCEL_SENT_LINE_DRAWER_CLOSED,
 } from "./PosCancelSentLineDrawer";
 import PosChromeHeader from "./PosChromeHeader";
+import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 import DismissibleToast, {
   useDismissibleToast,
 } from "@/components/orderManager/DismissibleToast";
@@ -172,6 +173,7 @@ export default function PosTerminal() {
     POS_CANCEL_SENT_LINE_DRAWER_CLOSED,
   );
   const [isVoidingLine, setIsVoidingLine] = useState(false);
+  const { handleOpenCashDrawer } = usePosOpenCashDrawer(showDismissibleToast);
 
   useEffect(() => {
     if (!resumeParam || !menuContent) return;
@@ -857,7 +859,10 @@ export default function PosTerminal() {
   return (
     <>
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
-      <PosChromeHeader onLogoClick={handleLogoHome} />
+      <PosChromeHeader
+        onLogoClick={handleLogoHome}
+        onOpenCashDrawer={handleOpenCashDrawer}
+      />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Left: current order */}
