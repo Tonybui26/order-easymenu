@@ -146,10 +146,18 @@ export default function PosHeldOrderCard({
         className,
       )}
     >
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Resume ${heldCardPrimaryLabel(order)}`}
         onClick={() => onSelect?.(order)}
-        className="flex w-full flex-col gap-3 p-4 text-left transition-transform hover:bg-neutral-50/80 active:scale-[0.99]"
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onSelect?.(order);
+          }
+        }}
+        className="flex w-full cursor-pointer flex-col gap-3 p-4 text-left transition-transform hover:bg-neutral-50/80 active:scale-[0.99]"
       >
         <div className="flex items-start justify-between gap-3">
           <div
@@ -233,7 +241,7 @@ export default function PosHeldOrderCard({
             </span>
           </span>
         </div>
-      </button>
+      </div>
 
       {hasActions ? (
         <div className="grid grid-cols-1 gap-2 border-t border-neutral-100 bg-neutral-50/80 p-3">
