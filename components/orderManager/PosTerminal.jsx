@@ -252,7 +252,10 @@ export default function PosTerminal() {
     const configKey = cartConfigKey(variantsPayload, modifiersPayload);
     setCartLines((prev) => {
       const existingIndex = prev.findIndex(
-        (line) => line.itemId === item.id && line.configKey === configKey,
+        (line) =>
+          line.itemId === item.id &&
+          line.configKey === configKey &&
+          line.kitchenStatus !== "sent",
       );
       if (existingIndex >= 0) {
         return prev.map((line, index) =>
