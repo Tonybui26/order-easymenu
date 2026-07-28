@@ -54,6 +54,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
     storeLogo: (menuData && menuData.storeProfileImage) || "",
     menuLink: (menuData && menuData.menuLink) || "",
     storeAddress: (menuData && menuData.storeAddress) || "",
+    storeABN: (menuData && menuData.storeABN) || "",
     stripeConfig: (menuData && menuData.stripeConfig) || {},
     paymentMethods: (menuData && menuData.paymentMethods) || {
       stripe: { enabled: false, isDefault: false },
@@ -87,6 +88,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
             storeLogo: data.storeProfileImage || "",
             menuLink: data.menuLink || "",
             storeAddress: data.storeAddress || "",
+            storeABN: data.storeABN || "",
             stripeConfig: data.stripeConfig || {},
             paymentMethods: data.paymentMethods || {
               stripe: { enabled: false, isDefault: false },
@@ -162,6 +164,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
           storeLogo: data.storeProfileImage || "",
           menuLink: data.menuLink || "",
           storeAddress: data.storeAddress || "",
+          storeABN: data.storeABN || "",
           stripeConfig: data.stripeConfig || {},
           paymentMethods: data.paymentMethods || {
             stripe: { enabled: false, isDefault: false },
