@@ -52,6 +52,8 @@ export default function PosPaymentDrawer({
   onCompleteSale,
   onPrintReceipt,
   isPrintingReceipt = false,
+  trainingMode = false,
+  onTrainingDone,
 }) {
   const [digits, setDigits] = useState("");
   const [portalReady, setPortalReady] = useState(false);
@@ -188,6 +190,8 @@ export default function PosPaymentDrawer({
               onCompleteSale={handleCompleteSale}
               onPrintReceipt={onPrintReceipt}
               isPrintingReceipt={isPrintingReceipt}
+              trainingMode={trainingMode}
+              onTrainingDone={onTrainingDone}
             />
           ) : (
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
@@ -273,11 +277,15 @@ function FinaliseSaleStep({
   onCompleteSale,
   onPrintReceipt,
   isPrintingReceipt = false,
+  trainingMode = false,
+  onTrainingDone,
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5">
       <div className="flex flex-1 flex-col items-center justify-center text-center">
-        <h2 className="text-2xl font-bold text-white">Finalise Sale!</h2>
+        <h2 className="text-2xl font-bold text-white">
+          {trainingMode ? "Training Payment" : "Finalise Sale!"}
+        </h2>
         <p className="mt-2 text-base font-medium text-white/95">
           Change required from: {formatMoney(amountTendered)}
         </p>
@@ -288,31 +296,48 @@ function FinaliseSaleStep({
           </span>
         </div>
 
-        <div className="mt-5 grid w-full max-w-sm grid-cols-2 gap-3">
-          <button
-            type="button"
-            disabled={isPrintingReceipt}
-            onClick={() => onPrintReceipt?.(paymentSummary)}
-            className="min-h-[4.25rem] rounded-lg bg-[#E7AB94] px-3 text-sm font-bold uppercase tracking-wide text-[#984B23] transition-colors hover:bg-[#E7AB94] active:bg-[#E7AB94] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isPrintingReceipt ? "Printing…" : "Print Receipt"}
-          </button>
-          <button
-            type="button"
-            className="min-h-[4.25rem] rounded-lg bg-[#E7AB94] px-3 text-sm font-bold uppercase tracking-wide text-[#984B23] transition-colors hover:bg-[#E7AB94] active:bg-[#E7AB94]"
-          >
-            Email Receipt
-          </button>
-        </div>
+        {trainingMode ? (
+          <p className="mt-5 max-w-sm text-sm text-white/85">
+            Nothing is saved. Close this step, then tap Hold to clear the
+            training check.
+          </p>
+        ) : (
+          <div className="mt-5 grid w-full max-w-sm grid-cols-2 gap-3">
+            <button
+              type="button"
+              disabled={isPrintingReceipt}
+              onClick={() => onPrintReceipt?.(paymentSummary)}
+              className="min-h-[4.25rem] rounded-lg bg-[#E7AB94] px-3 text-sm font-bold uppercase tracking-wide text-[#984B23] transition-colors hover:bg-[#E7AB94] active:bg-[#E7AB94] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isPrintingReceipt ? "Printing…" : "Print Receipt"}
+            </button>
+            <button
+              type="button"
+              className="min-h-[4.25rem] rounded-lg bg-[#E7AB94] px-3 text-sm font-bold uppercase tracking-wide text-[#984B23] transition-colors hover:bg-[#E7AB94] active:bg-[#E7AB94]"
+            >
+              Email Receipt
+            </button>
+          </div>
+        )}
       </div>
 
-      <button
-        type="button"
-        onClick={onCompleteSale}
-        className="mt-6 flex min-h-[3.75rem] w-full items-center justify-center rounded-lg bg-[#ef3636] text-base font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
-      >
-        Complete Sale
-      </button>
+      {trainingMode ? (
+        <button
+          type="button"
+          onClick={onTrainingDone}
+          className="mt-6 flex min-h-[3.75rem] w-full items-center justify-center rounded-lg bg-white text-base font-bold uppercase tracking-wide text-[#984B28] transition-colors hover:bg-white/95 active:bg-white/90"
+        >
+          Done
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onCompleteSale}
+          className="mt-6 flex min-h-[3.75rem] w-full items-center justify-center rounded-lg bg-[#ef3636] text-base font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
+        >
+          Complete Sale
+        </button>
+      )}
     </div>
   );
 }

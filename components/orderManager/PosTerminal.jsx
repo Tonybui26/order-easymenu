@@ -45,6 +45,8 @@ import DismissibleToast, {
 import { printKitchenOrder } from "@/lib/helper/printKitchenOrder";
 import { buildTaxInvoiceReceiptFromPosCheck } from "@/lib/printers/receipt/buildTaxInvoiceReceiptFromPosCheck";
 import { printTaxInvoiceReceipt } from "@/lib/printers/printTaxInvoiceReceipt";
+import { resolvePosConfig } from "@/lib/pos/posConfig";
+import { buildTrainingKitchenOrder } from "@/lib/pos/buildTrainingKitchenOrder";
 
 function mapPosOrderType(orderType) {
   if (orderType === "dine-in") return "dine-in";
@@ -136,8 +138,15 @@ export default function PosTerminal() {
   const searchParams = useSearchParams();
   const resumeParam = searchParams.get("resume");
   const resumeLoadedRef = useRef(null);
-  const { menuContent, posLayouts, globalModifiers, globalVariants, storeProfile, itemGroups } =
-    useMenuContext();
+  const {
+    menuContent,
+    posLayouts,
+    globalModifiers,
+    globalVariants,
+    storeProfile,
+    itemGroups,
+    menuConfig,
+  } = useMenuContext();
   const {
     toast: dismissibleToast,
     showToast: showDismissibleToast,
@@ -174,9 +183,18 @@ export default function PosTerminal() {
   );
   const [isVoidingLine, setIsVoidingLine] = useState(false);
   const { handleOpenCashDrawer } = usePosOpenCashDrawer(showDismissibleToast);
+  const posConfig = useMemo(() => resolvePosConfig(menuConfig), [menuConfig]);
+  const isTrainingMode = Boolean(posConfig.trainingModeEnabled);
 
   useEffect(() => {
-    if (!resumeParam || !menuContent) return;
+    if (!isTrainingMode || !resumeParam) return;
+    showDismissibleToast("Held orders are not available in training mode");
+    resumeLoadedRef.current = resumeParam;
+    router.replace("/pos");
+  }, [isTrainingMode, resumeParam, router, showDismissibleToast]);
+
+  useEffect(() => {
+    if (!resumeParam || !menuContent || isTrainingMode) return;
     if (resumeLoadedRef.current === resumeParam) return;
 
     const orderIds = resumeParam
@@ -232,7 +250,7 @@ export default function PosTerminal() {
     return () => {
       cancelled = true;
     };
-  }, [resumeParam, menuContent, router]);
+  }, [resumeParam, menuContent, router, isTrainingMode]);
 
   useEffect(() => {
     if (tabs.length === 0) {
@@ -370,7 +388,9 @@ export default function PosTerminal() {
 
   function syncCustomizingLine(variantMap, modifierMap) {
     if (!customizingItem || !customizingLineId) return;
-    const activeLine = cartLines.find((line) => line.lineId === customizingLineId);
+    const activeLine = cartLines.find(
+      (line) => line.lineId === customizingLineId,
+    );
     if (isSentCartLine(activeLine) || isCancelledCartLine(activeLine)) return;
     const built = buildLineFromSelections(
       customizingItem,
@@ -608,6 +628,37 @@ export default function PosTerminal() {
     router.push("/pos/held");
   }
 
+  function handleTrainingHold() {
+    handleClearOrder();
+    setTableNumber("");
+    setOrderType(null);
+    setIsPaymentDrawerOpen(false);
+    toast.success("Training check cleared");
+  }
+
+  function handleFooterHold() {
+    if (isTrainingMode) {
+      handleTrainingHold();
+      return;
+    }
+    handleGoToHeldOrders();
+  }
+
+  function handleTrainingPaymentDone() {
+    setIsPaymentDrawerOpen(false);
+    toast.success("Training payment complete");
+  }
+
+  function markCartLinesSentLocally(sentLineIds) {
+    setCartLines((prev) =>
+      prev.map((line) =>
+        sentLineIds.has(line.lineId)
+          ? { ...line, kitchenStatus: "sent", isTrainingSent: true }
+          : line,
+      ),
+    );
+  }
+
   function handleLogoHome() {
     handleClearOrder();
     setTableNumber("");
@@ -634,6 +685,39 @@ export default function PosTerminal() {
 
     setIsSending(true);
     try {
+      const sentLineIds = new Set(unsentLines.map((line) => line.lineId));
+
+      if (isTrainingMode) {
+        const mockOrder = buildTrainingKitchenOrder({
+          lines: unsentLines,
+          orderType,
+          tableNumber,
+        });
+
+        try {
+          await printKitchenOrder(mockOrder, {
+            storeProfile,
+            itemGroups,
+            source: "pos_training",
+            notify: true,
+            notifySuccess: false,
+            silentNoPrinters: true,
+            showCustomToast: (message) => showDismissibleToast(message),
+          });
+        } catch (printError) {
+          console.error("POS training print error:", printError);
+          showDismissibleToast("Training docket print failed");
+          return;
+        }
+
+        markCartLinesSentLocally(sentLineIds);
+        if (customizingLineId && sentLineIds.has(customizingLineId)) {
+          closeCustomization();
+        }
+        toast.success("Training docket sent to kitchen printers");
+        return;
+      }
+
       const payload = {
         orderType: mappedOrderType,
         items: buildPosSendItems(unsentLines),
@@ -647,7 +731,6 @@ export default function PosTerminal() {
         return;
       }
 
-      const sentLineIds = new Set(unsentLines.map((line) => line.lineId));
       const newOrderId = String(result.order._id);
       const nextCheckId =
         String(result.order?.posCheckId || "").trim() || posCheckId;
@@ -690,7 +773,7 @@ export default function PosTerminal() {
   }
 
   async function handlePrintReceipt(paymentSummary) {
-    if (isPrintingReceipt) return;
+    if (isPrintingReceipt || isTrainingMode) return;
 
     const printableLines = cartLines.filter(
       (line) => !isCancelledCartLine(line),
@@ -727,6 +810,8 @@ export default function PosTerminal() {
   }
 
   async function handleCompleteSale(paymentSummary) {
+    if (isTrainingMode) return;
+
     const orderIdsToComplete =
       checkOrderIds.length > 0
         ? checkOrderIds
@@ -785,6 +870,11 @@ export default function PosTerminal() {
     const line = cancelSentLineDrawer.line;
     if (!line || isVoidingLine) return;
 
+    if (isTrainingMode) {
+      showDismissibleToast("Void is not available in training mode");
+      return;
+    }
+
     const orderId = String(line.sourceOrderId || "").trim();
     if (!orderId) {
       showDismissibleToast("Cannot void item — missing order reference");
@@ -803,8 +893,7 @@ export default function PosTerminal() {
         return;
       }
 
-      const cancelledAt =
-        result.item?.cancelledAt || new Date().toISOString();
+      const cancelledAt = result.item?.cancelledAt || new Date().toISOString();
       setCartLines((prev) =>
         prev.map((entry) =>
           entry.lineId === line.lineId
@@ -831,6 +920,16 @@ export default function PosTerminal() {
 
   function handleOpenPayment() {
     if (isViewOnly) return;
+
+    if (isTrainingMode) {
+      if (!cartLines.some(isSentCartLine)) {
+        showDismissibleToast("Send to kitchen before payment");
+        return;
+      }
+      setIsPaymentDrawerOpen(true);
+      return;
+    }
+
     if (checkOrderIds.length === 0) {
       showDismissibleToast("Send the order before payment");
       return;
@@ -855,231 +954,244 @@ export default function PosTerminal() {
     return sum + Number(line.price || 0) * (line.quantity || 1);
   }, 0);
   const hasUnsentLines = cartLines.some(isOpenCartLine);
+  const hasSentLines = cartLines.some(isSentCartLine);
 
   return (
     <>
-    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
-      <PosChromeHeader
-        onLogoClick={handleLogoHome}
-        onOpenCashDrawer={handleOpenCashDrawer}
-      />
+      <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+        <PosChromeHeader
+          onLogoClick={handleLogoHome}
+          onOpenCashDrawer={handleOpenCashDrawer}
+        />
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Left: current order */}
-        <section className="flex w-[34%] min-w-[280px] max-w-[440px] shrink-0 flex-col border-r border-neutral-300 bg-white pb-[env(safe-area-inset-bottom)]">
-          <div className="flex shrink-0 items-stretch border-b border-neutral-200 bg-[#ececec] p-2">
-            <motion.button
-              key={tableFieldShakeKey}
-              type="button"
-              onClick={() => {
-                if (isTableFieldLocked) return;
-                setKeypadDrawer({ mode: "table" });
-              }}
-              disabled={isTableFieldLocked}
-              initial={{ x: 0 }}
-              animate={
-                tableFieldShakeKey > 0 ? { x: [0, -6, 6, -4, 4, 0] } : { x: 0 }
-              }
-              transition={{ duration: 0.35, ease: "easeInOut" }}
-              className={cn(
-                "flex min-h-[52px] w-full items-center justify-center rounded-md bg-white px-4 text-base font-semibold shadow-[0_0_0_1px_#d4d4d4] transition-colors hover:bg-neutral-50 active:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-800",
-                isOrderTypeMissing && !orderType
-                  ? "bg-red-50 text-red-700 shadow-[0_0_0_2px_#ef4444]"
-                  : "text-neutral-700",
-              )}
-            >
-              {tableLabel}
-            </motion.button>
+        {isTrainingMode ? (
+          <div className="shrink-0 bg-amber-400 px-4 py-2 text-center text-sm font-semibold uppercase tracking-wide text-amber-950">
+            Training mode
           </div>
+        ) : null}
 
-          <PosTableEntryDrawer
-            isOpen={Boolean(keypadDrawer)}
-            mode={keypadDrawer?.mode || "table"}
-            onClose={() => setKeypadDrawer(null)}
-            initialNumber={keypadInitialNumber}
-            onConfirm={handleKeypadConfirm}
-          />
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          {/* Left: current order */}
+          <section className="flex w-[34%] min-w-[280px] max-w-[440px] shrink-0 flex-col border-r border-neutral-300 bg-white pb-[env(safe-area-inset-bottom)]">
+            <div className="flex shrink-0 items-stretch border-b border-neutral-200 bg-[#ececec] p-2">
+              <motion.button
+                key={tableFieldShakeKey}
+                type="button"
+                onClick={() => {
+                  if (isTableFieldLocked) return;
+                  setKeypadDrawer({ mode: "table" });
+                }}
+                disabled={isTableFieldLocked}
+                initial={{ x: 0 }}
+                animate={
+                  tableFieldShakeKey > 0
+                    ? { x: [0, -6, 6, -4, 4, 0] }
+                    : { x: 0 }
+                }
+                transition={{ duration: 0.35, ease: "easeInOut" }}
+                className={cn(
+                  "flex min-h-[52px] w-full items-center justify-center rounded-md bg-white px-4 text-base font-semibold shadow-[0_0_0_1px_#d4d4d4] transition-colors hover:bg-neutral-50 active:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-800",
+                  isOrderTypeMissing && !orderType
+                    ? "bg-red-50 text-red-700 shadow-[0_0_0_2px_#ef4444]"
+                    : "text-neutral-700",
+                )}
+              >
+                {tableLabel}
+              </motion.button>
+            </div>
 
-          <PosPaymentDrawer
-            isOpen={isPaymentDrawerOpen}
-            onClose={() => setIsPaymentDrawerOpen(false)}
-            amountDue={cartSubtotal}
-            onCompleteSale={handleCompleteSale}
-            onPrintReceipt={handlePrintReceipt}
-            isPrintingReceipt={isPrintingReceipt}
-          />
+            <PosTableEntryDrawer
+              isOpen={Boolean(keypadDrawer)}
+              mode={keypadDrawer?.mode || "table"}
+              onClose={() => setKeypadDrawer(null)}
+              initialNumber={keypadInitialNumber}
+              onConfirm={handleKeypadConfirm}
+            />
 
-          <div className="min-h-0 flex-1 overflow-y-auto bg-white">
-            {isResumingOrder ? (
-              <div className="flex h-full items-center justify-center px-6 text-center text-sm text-neutral-400">
-                Loading held order…
-              </div>
-            ) : cartLines.length === 0 ? (
-              <div className="flex h-full items-center justify-center px-6 text-center text-sm text-neutral-400">
-                Tap products to add them to this order
-              </div>
-            ) : (
-              <ul>
-                {cartLines.map((line) => (
-                  <PosCartLine
-                    key={line.lineId}
-                    line={line}
-                    isActive={line.lineId === customizingLineId}
-                    readOnly={isViewOnly}
-                    allowVoidSentLine={!isViewOnly}
-                    onSelect={handleSelectCartLine}
-                    onQtyClick={handleQtyClick}
-                    onRemoveLine={handleRemoveLine}
-                    onVoidSentLine={handleVoidSentLine}
-                    onRemoveVariant={handleRemoveVariant}
-                    onRemoveModifier={handleRemoveModifier}
-                  />
-                ))}
-              </ul>
-            )}
-          </div>
+            <PosPaymentDrawer
+              isOpen={isPaymentDrawerOpen}
+              onClose={() => setIsPaymentDrawerOpen(false)}
+              amountDue={cartSubtotal}
+              onCompleteSale={handleCompleteSale}
+              onPrintReceipt={handlePrintReceipt}
+              isPrintingReceipt={isPrintingReceipt}
+              trainingMode={isTrainingMode}
+              onTrainingDone={handleTrainingPaymentDone}
+            />
 
-          <PosOrderPanelFooter
-            subtotal={cartSubtotal}
-            hasUnsentItems={hasUnsentLines}
-            viewOnly={isViewOnly}
-            onClear={handleClearOrder}
-            onHold={handleGoToHeldOrders}
-            onSend={handleSendOrder}
-          />
-        </section>
-
-        {/* Right: POS menu layout (tabs + products) */}
-        <section className="flex min-w-0 flex-1">
-          {/* Tabs column — z-30 + overhang so selected indicator sits on top of products */}
-          <aside className="relative z-30 flex w-[120px] shrink-0 flex-col bg-[#e0e0e0] pb-[env(safe-area-inset-bottom)] sm:w-[150px]">
-            <div className="-mr-3 min-h-0 flex-1 overflow-y-auto pr-3">
-              {tabs.length === 0 ? (
-                <div className="p-3 text-center text-xs text-neutral-500">
-                  No POS tabs yet. Configure Menu layout in admin.
+            <div className="min-h-0 flex-1 overflow-y-auto bg-white">
+              {isResumingOrder ? (
+                <div className="flex h-full items-center justify-center px-6 text-center text-sm text-neutral-400">
+                  Loading held order…
+                </div>
+              ) : cartLines.length === 0 ? (
+                <div className="flex h-full items-center justify-center px-6 text-center text-sm text-neutral-400">
+                  Tap products to add them to this order
                 </div>
               ) : (
-                tabs.map((tab) => {
-                  const isSelected = tab.id === selectedTabId;
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => handleTabClick(tab.id)}
-                      className={cn(
-                        "relative flex min-h-[72px] w-full items-center justify-start px-3 py-6 text-left text-base font-semibold text-neutral-900 transition-opacity xl:text-lg",
-                        isSelected || customizingItem
-                          ? "z-20"
-                          : "hover:opacity-90",
-                        customizingItem &&
-                          isSelected &&
-                          "ring-2 ring-inset ring-black/10",
-                      )}
-                      style={{
-                        backgroundColor: tab.backgroundColor || "#d9d9d9",
-                      }}
-                    >
-                      <span className="line-clamp-2 pr-5 leading-tight">
-                        {tab.name}
-                      </span>
-                      {isSelected ? (
-                        <span className="pointer-events-none absolute right-0 top-1/2 z-40 flex size-6 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full bg-red-500 text-white shadow-md ring-2 ring-white">
-                          <Check size={14} strokeWidth={3} />
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })
+                <ul>
+                  {cartLines.map((line) => (
+                    <PosCartLine
+                      key={line.lineId}
+                      line={line}
+                      isActive={line.lineId === customizingLineId}
+                      readOnly={isViewOnly}
+                      allowVoidSentLine={!isViewOnly && !isTrainingMode}
+                      onSelect={handleSelectCartLine}
+                      onQtyClick={handleQtyClick}
+                      onRemoveLine={handleRemoveLine}
+                      onVoidSentLine={handleVoidSentLine}
+                      onRemoveVariant={handleRemoveVariant}
+                      onRemoveModifier={handleRemoveModifier}
+                    />
+                  ))}
+                </ul>
               )}
             </div>
 
-            <div className="shrink-0">
-              <button
-                type="button"
-                aria-label="Pay"
-                onClick={handleOpenPayment}
-                disabled={
-                  isViewOnly ||
-                  checkOrderIds.length === 0 ||
-                  isCompletingSale ||
-                  isResumingOrder
-                }
-                className="flex w-full items-center justify-center gap-0 bg-[#ef3636] px-3 py-6 text-base font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24] disabled:cursor-not-allowed disabled:bg-neutral-400 disabled:hover:bg-neutral-400 sm:gap-1 sm:py-6 xl:text-lg"
-              >
-                <span className="text-xl">$</span>
-                Pay
-              </button>
-            </div>
-          </aside>
+            <PosOrderPanelFooter
+              subtotal={cartSubtotal}
+              hasUnsentItems={hasUnsentLines}
+              viewOnly={isViewOnly}
+              onClear={handleClearOrder}
+              onHold={handleFooterHold}
+              onSend={handleSendOrder}
+            />
+          </section>
 
-          {/* Products / item customization */}
-          <div className="relative z-0 min-h-0 min-w-0 flex-1 overflow-hidden bg-[#f0f0f0]">
-            {customizingItem && isOpenCartLine(activeCartLine) ? (
-              <PosItemCustomizePanel
-                item={customizingItem}
-                globalModifiers={globalModifiers || {}}
-                globalVariants={globalVariants || {}}
-                selectedVariants={panelSelections.selectedVariants}
-                selectedModifiers={panelSelections.selectedModifiers}
-                onSelectVariant={handleSelectVariant}
-                onToggleModifier={handleToggleModifier}
-              />
-            ) : !selectedTab ? (
-              <div className="flex h-full items-center justify-center text-sm text-neutral-500">
-                Select a tab
-              </div>
-            ) : selectedRows.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-sm text-neutral-500">
-                This tab has no products yet
-              </div>
-            ) : (
-              <div className="h-full overflow-y-auto">
-                <div className="flex flex-col gap-4 p-4">
-                  {selectedRows.map((row) => {
-                    const rowItems = (row.itemIds || [])
-                      .map((id) => itemsById.get(id))
-                      .filter(Boolean);
-
-                    if (rowItems.length === 0) return null;
-
+          {/* Right: POS menu layout (tabs + products) */}
+          <section className="flex min-w-0 flex-1">
+            {/* Tabs column — z-30 + overhang so selected indicator sits on top of products */}
+            <aside className="relative z-30 flex w-[120px] shrink-0 flex-col bg-[#e0e0e0] pb-[env(safe-area-inset-bottom)] sm:w-[150px]">
+              <div className="-mr-3 min-h-0 flex-1 overflow-y-auto pr-3">
+                {tabs.length === 0 ? (
+                  <div className="p-3 text-center text-xs text-neutral-500">
+                    No POS tabs yet. Configure Menu layout in admin.
+                  </div>
+                ) : (
+                  tabs.map((tab) => {
+                    const isSelected = tab.id === selectedTabId;
                     return (
-                      <div
-                        key={row.id}
-                        className="grid grid-cols-4 gap-1 xl:grid-cols-5"
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => handleTabClick(tab.id)}
+                        className={cn(
+                          "relative flex min-h-[72px] w-full items-center justify-start px-3 py-6 text-left text-base font-semibold text-neutral-900 transition-opacity xl:text-lg",
+                          isSelected || customizingItem
+                            ? "z-20"
+                            : "hover:opacity-90",
+                          customizingItem &&
+                            isSelected &&
+                            "ring-2 ring-inset ring-black/10",
+                        )}
+                        style={{
+                          backgroundColor: tab.backgroundColor || "#d9d9d9",
+                        }}
                       >
-                        {rowItems.map((item) => (
-                          <PosProductCard
-                            key={`${row.id}-${item.id}`}
-                            item={item}
-                            onAdd={handleAddItem}
-                            disabled={isViewOnly}
-                          />
-                        ))}
-                      </div>
+                        <span className="line-clamp-2 pr-5 leading-tight">
+                          {tab.name}
+                        </span>
+                        {isSelected ? (
+                          <span className="pointer-events-none absolute right-0 top-1/2 z-40 flex size-6 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full bg-red-500 text-white shadow-md ring-2 ring-white">
+                            <Check size={14} strokeWidth={3} />
+                          </span>
+                        ) : null}
+                      </button>
                     );
-                  })}
-                </div>
+                  })
+                )}
               </div>
-            )}
-          </div>
-        </section>
+
+              <div className="shrink-0">
+                <button
+                  type="button"
+                  aria-label="Pay"
+                  onClick={handleOpenPayment}
+                  disabled={
+                    isViewOnly ||
+                    (isTrainingMode
+                      ? !hasSentLines
+                      : checkOrderIds.length === 0) ||
+                    isCompletingSale ||
+                    isResumingOrder
+                  }
+                  className="flex w-full items-center justify-center gap-0 bg-[#ef3636] px-3 py-6 text-base font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24] disabled:cursor-not-allowed disabled:bg-neutral-400 disabled:hover:bg-neutral-400 sm:gap-1 sm:py-6 xl:text-lg"
+                >
+                  <span className="text-xl">$</span>
+                  Pay
+                </button>
+              </div>
+            </aside>
+
+            {/* Products / item customization */}
+            <div className="relative z-0 min-h-0 min-w-0 flex-1 overflow-hidden bg-[#f0f0f0]">
+              {customizingItem && isOpenCartLine(activeCartLine) ? (
+                <PosItemCustomizePanel
+                  item={customizingItem}
+                  globalModifiers={globalModifiers || {}}
+                  globalVariants={globalVariants || {}}
+                  selectedVariants={panelSelections.selectedVariants}
+                  selectedModifiers={panelSelections.selectedModifiers}
+                  onSelectVariant={handleSelectVariant}
+                  onToggleModifier={handleToggleModifier}
+                />
+              ) : !selectedTab ? (
+                <div className="flex h-full items-center justify-center text-sm text-neutral-500">
+                  Select a tab
+                </div>
+              ) : selectedRows.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-sm text-neutral-500">
+                  This tab has no products yet
+                </div>
+              ) : (
+                <div className="h-full overflow-y-auto">
+                  <div className="flex flex-col gap-4 p-4">
+                    {selectedRows.map((row) => {
+                      const rowItems = (row.itemIds || [])
+                        .map((id) => itemsById.get(id))
+                        .filter(Boolean);
+
+                      if (rowItems.length === 0) return null;
+
+                      return (
+                        <div
+                          key={row.id}
+                          className="grid grid-cols-4 gap-1 xl:grid-cols-5"
+                        >
+                          {rowItems.map((item) => (
+                            <PosProductCard
+                              key={`${row.id}-${item.id}`}
+                              item={item}
+                              onAdd={handleAddItem}
+                              disabled={isViewOnly}
+                            />
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
       </div>
-    </div>
-    <DismissibleToast
-      toast={dismissibleToast}
-      onDismiss={hideDismissibleToast}
-      className="right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))]"
-    />
-    <PosCancelSentLineDrawer
-      drawerState={cancelSentLineDrawer}
-      onClose={() => {
-        if (!isVoidingLine) {
-          setCancelSentLineDrawer(POS_CANCEL_SENT_LINE_DRAWER_CLOSED);
-        }
-      }}
-      onConfirm={handleConfirmCancelSentLine}
-      isSubmitting={isVoidingLine}
-    />
+      <DismissibleToast
+        toast={dismissibleToast}
+        onDismiss={hideDismissibleToast}
+        className="right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))]"
+      />
+      <PosCancelSentLineDrawer
+        drawerState={cancelSentLineDrawer}
+        onClose={() => {
+          if (!isVoidingLine) {
+            setCancelSentLineDrawer(POS_CANCEL_SENT_LINE_DRAWER_CLOSED);
+          }
+        }}
+        onConfirm={handleConfirmCancelSentLine}
+        isSubmitting={isVoidingLine}
+      />
     </>
   );
 }
