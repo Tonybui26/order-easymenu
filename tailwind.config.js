@@ -11,6 +11,7 @@ module.exports = {
         background: "var(--background)",
         foreground: "var(--foreground)",
         primary: "#D76228", // Add primary as a regular Tailwind color for mobile compatibility
+        darken_primary: "#301c0f",
         brand_accent: "#D76228",
         dark_background: "#212121", // #212121,3A3B38
         dark_text: "#ffffff",
@@ -24,6 +25,7 @@ module.exports = {
         light: {
           ...require("daisyui/src/theming/themes")["light"],
           primary: "#D76228",
+          secondary: "#743207",
           ".btn-primary": {
             color: "#fff",
             backgroundColor: "#D76228",
