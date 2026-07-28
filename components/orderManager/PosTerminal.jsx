@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Check, PanelBottomOpen, Plus } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 import { motion } from "motion/react";
 import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
@@ -947,19 +947,6 @@ export default function PosTerminal() {
             </div>
 
             <div className="shrink-0">
-              <button
-                type="button"
-                aria-label="Open drawer"
-                className="flex w-full items-center justify-center gap-1.5 bg-neutral-300 px-3 py-4 text-sm font-semibold uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-600 hover:text-white active:bg-neutral-700 sm:gap-2 sm:py-5 xl:text-base"
-              >
-                <PanelBottomOpen
-                  size={22}
-                  strokeWidth={2.25}
-                  className="shrink-0 sm:size-6"
-                  aria-hidden
-                />
-                Open drawer
-              </button>
               <button
                 type="button"
                 aria-label="Pay"

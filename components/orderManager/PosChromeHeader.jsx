@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Folder, Headset, Printer, QrCode } from "lucide-react";
+import { Folder, Headset, PanelBottomOpen, Printer, QrCode } from "lucide-react";
 import { useMenuContext } from "@/components/context/MenuContext";
 import PosHeaderNavMenu from "./PosHeaderNavMenu";
 import Logo from "../../public/images/logo.svg";
@@ -18,6 +18,12 @@ const POS_HEADER_ACTIONS = [
   },
   { id: "qr", label: "QR", Icon: QrCode, href: "/" },
   {
+    id: "cash-drawer",
+    label: "Open drawer",
+    Icon: PanelBottomOpen,
+    requiresPos: true,
+  },
+  {
     id: "print",
     label: "Printer",
     Icon: Printer,
@@ -29,9 +35,9 @@ const POS_HOME_PATH = "/pos";
 
 /**
  * Shared POS chrome header: EasyMenu logo, shortcut icons, feature switcher.
- * @param {{ onLogoClick?: () => void }} props
+ * @param {{ onLogoClick?: () => void, onOpenCashDrawer?: () => void }} props
  */
-export default function PosChromeHeader({ onLogoClick }) {
+export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
   const router = useRouter();
   const pathname = usePathname();
   const { menuConfig } = useMenuContext();
@@ -83,6 +89,10 @@ export default function PosChromeHeader({ onLogoClick }) {
               aria-label={label}
               aria-current={isActive ? "page" : undefined}
               onClick={() => {
+                if (id === "cash-drawer") {
+                  onOpenCashDrawer?.();
+                  return;
+                }
                 if (href) router.push(href);
               }}
               className={`flex size-10 items-center justify-center rounded-xl transition-colors active:bg-black/25 sm:size-11 ${
