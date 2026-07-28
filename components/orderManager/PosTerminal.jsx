@@ -64,6 +64,10 @@ function appendCheckOrderId(existingIds, orderId) {
   return [...(existingIds || []), id];
 }
 
+function isSentCartLine(line) {
+  return line?.kitchenStatus === "sent";
+}
+
 function useAllMenuItems(menuContent) {
   return useMemo(() => {
     const map = new Map();
@@ -345,6 +349,8 @@ export default function PosTerminal() {
 
   function syncCustomizingLine(variantMap, modifierMap) {
     if (!customizingItem || !customizingLineId) return;
+    const activeLine = cartLines.find((line) => line.lineId === customizingLineId);
+    if (isSentCartLine(activeLine)) return;
     const built = buildLineFromSelections(
       customizingItem,
       variantMap,
@@ -369,7 +375,7 @@ export default function PosTerminal() {
   function handleSelectCartLine(lineId) {
     if (isViewOnly) return;
     const line = cartLines.find((entry) => entry.lineId === lineId);
-    if (!line) return;
+    if (!line || isSentCartLine(line)) return;
 
     const item = itemsById.get(line.itemId);
     if (!item || !itemNeedsCustomization(item)) {
@@ -437,6 +443,7 @@ export default function PosTerminal() {
   function handleQtyClick(lineId) {
     if (isViewOnly) return;
     const line = cartLines.find((entry) => entry.lineId === lineId);
+    if (!line || isSentCartLine(line)) return;
     setKeypadDrawer({
       mode: "quantity",
       lineId,
@@ -445,6 +452,8 @@ export default function PosTerminal() {
   }
 
   function handleRemoveLine(lineId) {
+    const line = cartLines.find((entry) => entry.lineId === lineId);
+    if (isViewOnly || isSentCartLine(line)) return;
     setCartLines((prev) => prev.filter((line) => line.lineId !== lineId));
     if (lineId === customizingLineId) closeCustomization();
   }
@@ -468,6 +477,8 @@ export default function PosTerminal() {
   }
 
   function handleRemoveVariant(lineId, optionId) {
+    const line = cartLines.find((entry) => entry.lineId === lineId);
+    if (isSentCartLine(line)) return;
     setCartLines((prev) =>
       prev.map((line) => {
         if (line.lineId !== lineId) return line;
@@ -494,6 +505,8 @@ export default function PosTerminal() {
   }
 
   function handleRemoveModifier(lineId, optionId) {
+    const line = cartLines.find((entry) => entry.lineId === lineId);
+    if (isSentCartLine(line)) return;
     setCartLines((prev) =>
       prev.map((line) => {
         if (line.lineId !== lineId) return line;
@@ -534,6 +547,9 @@ export default function PosTerminal() {
   function handleQuantityConfirm({ quantity }) {
     const lineId = keypadDrawer?.lineId;
     if (!lineId) return;
+
+    const line = cartLines.find((entry) => entry.lineId === lineId);
+    if (isSentCartLine(line)) return;
 
     if (!quantity || quantity <= 0) {
       setCartLines((prev) => prev.filter((line) => line.lineId !== lineId));
@@ -627,6 +643,9 @@ export default function PosTerminal() {
             : line,
         ),
       );
+      if (customizingLineId && sentLineIds.has(customizingLineId)) {
+        closeCustomization();
+      }
       toast.success("Order sent to kitchen");
 
       // Each Send creates one kitchen order with only this fire's items — print that ticket.
@@ -892,7 +911,7 @@ export default function PosTerminal() {
 
           {/* Products / item customization */}
           <div className="relative z-0 min-h-0 min-w-0 flex-1 overflow-hidden bg-[#f0f0f0]">
-            {customizingItem ? (
+            {customizingItem && !isSentCartLine(activeCartLine) ? (
               <PosItemCustomizePanel
                 item={customizingItem}
                 globalModifiers={globalModifiers || {}}
