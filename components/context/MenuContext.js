@@ -286,6 +286,23 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
     }
   };
 
+  /** Persist config to server without triggering the auto-save effect (Settings page). */
+  const saveMenuConfigExplicit = useCallback(async (configToSave) => {
+    isInitialLoadRef.current = true;
+    try {
+      await updateMenuConfig(configToSave);
+      setMenuConfig(configToSave);
+      return { success: true };
+    } catch (error) {
+      console.error("saveMenuConfigExplicit error:", error);
+      return { success: false, error };
+    } finally {
+      setTimeout(() => {
+        isInitialLoadRef.current = false;
+      }, 100);
+    }
+  }, []);
+
   // Use the effect for database update when menu config changes
   useSkipInitialEffect(() => {
     // Skip if we're currently refreshing or loading initial data to prevent double toast
@@ -310,6 +327,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         menuConfig,
         setMenuConfig,
         updateMenuConfigField, // Add reusable config update function
+        saveMenuConfigExplicit,
         refreshMenuDataWithToast, // Add refresh function with toast
         menuContent,
         setMenuContent,
