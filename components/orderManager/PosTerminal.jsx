@@ -42,6 +42,8 @@ import DismissibleToast, {
   useDismissibleToast,
 } from "@/components/orderManager/DismissibleToast";
 import { printKitchenOrder } from "@/lib/helper/printKitchenOrder";
+import { buildTaxInvoiceReceiptFromPosCheck } from "@/lib/printers/receipt/buildTaxInvoiceReceiptFromPosCheck";
+import { printTaxInvoiceReceipt } from "@/lib/printers/printTaxInvoiceReceipt";
 
 function mapPosOrderType(orderType) {
   if (orderType === "dine-in") return "dine-in";
@@ -154,6 +156,7 @@ export default function PosTerminal() {
   const [isResumedCheck, setIsResumedCheck] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isCompletingSale, setIsCompletingSale] = useState(false);
+  const [isPrintingReceipt, setIsPrintingReceipt] = useState(false);
   const [isResumingOrder, setIsResumingOrder] = useState(false);
   const [keypadDrawer, setKeypadDrawer] = useState(null);
   const [isPaymentDrawerOpen, setIsPaymentDrawerOpen] = useState(false);
@@ -684,6 +687,43 @@ export default function PosTerminal() {
     }
   }
 
+  async function handlePrintReceipt(paymentSummary) {
+    if (isPrintingReceipt) return;
+
+    const printableLines = cartLines.filter(
+      (line) => !isCancelledCartLine(line),
+    );
+    if (printableLines.length === 0) {
+      showDismissibleToast("Nothing on the check to print");
+      return;
+    }
+
+    setIsPrintingReceipt(true);
+    try {
+      const payload = buildTaxInvoiceReceiptFromPosCheck({
+        storeProfile,
+        cartLines: printableLines,
+        orderType,
+        tableNumber,
+        paymentSummary,
+        invoiceNo: posCheckId || checkOrderIds[0] || activeOrderId || "",
+        posCheckId,
+      });
+
+      const result = await printTaxInvoiceReceipt(payload);
+
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        showDismissibleToast(result.message || "Failed to print receipt");
+      }
+    } catch (error) {
+      showDismissibleToast(error?.message || "Failed to print receipt");
+    } finally {
+      setIsPrintingReceipt(false);
+    }
+  }
+
   async function handleCompleteSale(paymentSummary) {
     const orderIdsToComplete =
       checkOrderIds.length > 0
@@ -860,6 +900,8 @@ export default function PosTerminal() {
             onClose={() => setIsPaymentDrawerOpen(false)}
             amountDue={cartSubtotal}
             onCompleteSale={handleCompleteSale}
+            onPrintReceipt={handlePrintReceipt}
+            isPrintingReceipt={isPrintingReceipt}
           />
 
           <div className="min-h-0 flex-1 overflow-y-auto bg-white">
