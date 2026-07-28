@@ -50,6 +50,8 @@ export default function PosPaymentDrawer({
   onClose,
   amountDue = 0,
   onCompleteSale,
+  onPrintReceipt,
+  isPrintingReceipt = false,
 }) {
   const [digits, setDigits] = useState("");
   const [portalReady, setPortalReady] = useState(false);
@@ -180,9 +182,12 @@ export default function PosPaymentDrawer({
         >
           {step === "finalise" && paymentSummary ? (
             <FinaliseSaleStep
+              paymentSummary={paymentSummary}
               amountTendered={paymentSummary.amountTendered}
               change={paymentSummary.change}
               onCompleteSale={handleCompleteSale}
+              onPrintReceipt={onPrintReceipt}
+              isPrintingReceipt={isPrintingReceipt}
             />
           ) : (
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
@@ -261,7 +266,14 @@ export default function PosPaymentDrawer({
   );
 }
 
-function FinaliseSaleStep({ amountTendered, change, onCompleteSale }) {
+function FinaliseSaleStep({
+  paymentSummary,
+  amountTendered,
+  change,
+  onCompleteSale,
+  onPrintReceipt,
+  isPrintingReceipt = false,
+}) {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5">
       <div className="flex flex-1 flex-col items-center justify-center text-center">
@@ -279,9 +291,11 @@ function FinaliseSaleStep({ amountTendered, change, onCompleteSale }) {
         <div className="mt-5 grid w-full max-w-sm grid-cols-2 gap-3">
           <button
             type="button"
-            className="min-h-[4.25rem] rounded-lg bg-[#E7AB94] px-3 text-sm font-bold uppercase tracking-wide text-[#984B23] transition-colors hover:bg-[#E7AB94] active:bg-[#E7AB94]"
+            disabled={isPrintingReceipt}
+            onClick={() => onPrintReceipt?.(paymentSummary)}
+            className="min-h-[4.25rem] rounded-lg bg-[#E7AB94] px-3 text-sm font-bold uppercase tracking-wide text-[#984B23] transition-colors hover:bg-[#E7AB94] active:bg-[#E7AB94] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Print Receipt
+            {isPrintingReceipt ? "Printing…" : "Print Receipt"}
           </button>
           <button
             type="button"
