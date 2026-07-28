@@ -44,7 +44,8 @@ export default function PosPaymentSettings() {
             </h2>
             <span className="mt-1 block text-base text-neutral-500">
               Turn on for staff to practise on the POS without affecting live
-              sales.
+              sales.{" "}
+              <strong>Strictly for training and testing purposes.</strong>
             </span>
           </span>
           <input
