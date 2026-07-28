@@ -34,6 +34,9 @@ import PosOrderPanelFooter from "./PosOrderPanelFooter";
 import PosItemCustomizePanel from "./PosItemCustomizePanel";
 import PosCartLine from "./PosCartLine";
 import PosChromeHeader from "./PosChromeHeader";
+import DismissibleToast, {
+  useDismissibleToast,
+} from "@/components/orderManager/DismissibleToast";
 import { printKitchenOrder } from "@/lib/helper/printKitchenOrder";
 
 function mapPosOrderType(orderType) {
@@ -116,6 +119,11 @@ export default function PosTerminal() {
   const resumeLoadedRef = useRef(null);
   const { menuContent, posLayouts, globalModifiers, globalVariants, storeProfile, itemGroups } =
     useMenuContext();
+  const {
+    toast: dismissibleToast,
+    showToast: showDismissibleToast,
+    hideToast: hideDismissibleToast,
+  } = useDismissibleToast();
   const itemsById = useAllMenuItems(menuContent);
 
   const activeLayout = posLayouts?.[0] || null;
@@ -162,7 +170,7 @@ export default function PosTerminal() {
         if (cancelled) return;
 
         if (!result?.success || !result.orders?.length) {
-          toast.error(result?.error || "Could not load held order");
+          showDismissibleToast(result?.error || "Could not load held order");
           resumeLoadedRef.current = null;
           router.replace("/pos");
           return;
@@ -187,7 +195,7 @@ export default function PosTerminal() {
         router.replace("/pos");
       } catch (error) {
         if (!cancelled) {
-          toast.error(error?.message || "Could not load held order");
+          showDismissibleToast(error?.message || "Could not load held order");
           resumeLoadedRef.current = null;
           router.replace("/pos");
         }
@@ -576,7 +584,7 @@ export default function PosTerminal() {
       (line) => line.kitchenStatus !== "sent",
     );
     if (unsentLines.length === 0) {
-      toast.error("Nothing new to send");
+      showDismissibleToast("Nothing new to send");
       return;
     }
 
@@ -597,7 +605,7 @@ export default function PosTerminal() {
 
       const result = await sendPosOrder(payload);
       if (!result?.success || !result.order?._id) {
-        toast.error(result?.error || "Failed to send order");
+        showDismissibleToast(result?.error || "Failed to send order");
         return;
       }
 
@@ -627,14 +635,14 @@ export default function PosTerminal() {
           notify: true,
           notifySuccess: false,
           silentNoPrinters: true,
-          showCustomToast: (message) => toast.error(message),
+          showCustomToast: (message) => showDismissibleToast(message),
         });
       } catch (printError) {
         console.error("POS send print error:", printError);
-        toast.error("Kitchen ticket print failed");
+        showDismissibleToast("Kitchen ticket print failed");
       }
     } catch (error) {
-      toast.error(error?.message || "Failed to send order");
+      showDismissibleToast(error?.message || "Failed to send order");
     } finally {
       setIsSending(false);
     }
@@ -649,7 +657,7 @@ export default function PosTerminal() {
           : [];
 
     if (orderIdsToComplete.length === 0) {
-      toast.error("Send the order before completing payment");
+      showDismissibleToast("Send the order before completing payment");
       return;
     }
     if (!paymentSummary?.method || isCompletingSale) return;
@@ -664,7 +672,7 @@ export default function PosTerminal() {
       });
 
       if (!result?.success) {
-        toast.error(result?.error || "Failed to complete sale");
+        showDismissibleToast(result?.error || "Failed to complete sale");
         return;
       }
 
@@ -682,7 +690,7 @@ export default function PosTerminal() {
       setIsPaymentDrawerOpen(false);
       toast.success("Sale completed");
     } catch (error) {
-      toast.error(error?.message || "Failed to complete sale");
+      showDismissibleToast(error?.message || "Failed to complete sale");
     } finally {
       setIsCompletingSale(false);
     }
@@ -691,7 +699,7 @@ export default function PosTerminal() {
   function handleOpenPayment() {
     if (isViewOnly) return;
     if (checkOrderIds.length === 0) {
-      toast.error("Send the order before payment");
+      showDismissibleToast("Send the order before payment");
       return;
     }
     setIsPaymentDrawerOpen(true);
@@ -718,6 +726,7 @@ export default function PosTerminal() {
   );
 
   return (
+    <>
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       <PosChromeHeader onLogoClick={handleLogoHome} />
 
@@ -931,5 +940,11 @@ export default function PosTerminal() {
         </section>
       </div>
     </div>
+    <DismissibleToast
+      toast={dismissibleToast}
+      onDismiss={hideDismissibleToast}
+      className="right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))]"
+    />
+    </>
   );
 }

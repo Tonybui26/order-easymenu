@@ -15,6 +15,9 @@ import {
 } from "@/lib/pos/posHeldOrder";
 import PosChromeHeader from "./PosChromeHeader";
 import PosHeldOrderCard from "./PosHeldOrderCard";
+import DismissibleToast, {
+  useDismissibleToast,
+} from "@/components/orderManager/DismissibleToast";
 
 const HELD_ORDERS_POLL_MS = 10000;
 
@@ -23,6 +26,11 @@ const HELD_ORDERS_POLL_MS = 10000;
  */
 export default function PosHeldOrders() {
   const router = useRouter();
+  const {
+    toast: dismissibleToast,
+    showToast: showDismissibleToast,
+    hideToast: hideDismissibleToast,
+  } = useDismissibleToast();
   const [heldOrders, setHeldOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [processingCheckId, setProcessingCheckId] = useState(null);
@@ -34,14 +42,14 @@ export default function PosHeldOrders() {
       const result = await fetchPosHeldOrders();
       if (!result?.success) {
         if (!silent) {
-          toast.error(result?.error || "Failed to load held orders");
+          showDismissibleToast(result?.error || "Failed to load held orders");
         }
         return;
       }
       setHeldOrders(result.heldOrders || []);
     } catch (error) {
       if (!silent) {
-        toast.error(error?.message || "Failed to load held orders");
+        showDismissibleToast(error?.message || "Failed to load held orders");
       }
     } finally {
       if (!silent) setIsLoading(false);
@@ -69,13 +77,13 @@ export default function PosHeldOrders() {
         status: "delivered",
       });
       if (!result?.success) {
-        toast.error(result?.error || "Failed to update order");
+        showDismissibleToast(result?.error || "Failed to update order");
         return;
       }
       toast.success(successMessage);
       await loadHeldOrders({ silent: true });
     } catch (error) {
-      toast.error(error?.message || "Failed to update order");
+      showDismissibleToast(error?.message || "Failed to update order");
     } finally {
       setProcessingCheckId(null);
     }
@@ -84,7 +92,7 @@ export default function PosHeldOrders() {
   async function handleReadyHeldOrder(order) {
     const preparingIds = getTicketIdsByStatus(order, "preparing");
     if (preparingIds.length === 0) {
-      toast.error("No tickets to mark ready");
+      showDismissibleToast("No tickets to mark ready");
       return;
     }
 
@@ -95,13 +103,13 @@ export default function PosHeldOrders() {
         status: "ready",
       });
       if (!result?.success) {
-        toast.error(result?.error || "Failed to mark ready");
+        showDismissibleToast(result?.error || "Failed to mark ready");
         return;
       }
       toast.success("Marked ready");
       await loadHeldOrders({ silent: true });
     } catch (error) {
-      toast.error(error?.message || "Failed to mark ready");
+      showDismissibleToast(error?.message || "Failed to mark ready");
     } finally {
       setProcessingCheckId(null);
     }
@@ -110,7 +118,7 @@ export default function PosHeldOrders() {
   async function handleAllItemsServedHeldOrder(order) {
     const ticketIds = getTicketIdsNotDelivered(order);
     if (ticketIds.length === 0) {
-      toast.error("No tickets to update");
+      showDismissibleToast("No tickets to update");
       return;
     }
     await markTicketsDelivered(order, ticketIds, "All Served");
@@ -118,7 +126,7 @@ export default function PosHeldOrders() {
 
   async function handleCompleteHeldOrder(order) {
     if (!order.allPaid) {
-      toast.error("Pay the check before completing");
+      showDismissibleToast("Pay the check before completing");
       return;
     }
 
@@ -127,7 +135,7 @@ export default function PosHeldOrders() {
       : getAllTicketIds(order);
 
     if (ticketIds.length === 0) {
-      toast.error("No tickets to complete");
+      showDismissibleToast("No tickets to complete");
       return;
     }
 
@@ -135,6 +143,7 @@ export default function PosHeldOrders() {
   }
 
   return (
+    <>
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       <PosChromeHeader />
 
@@ -185,5 +194,11 @@ export default function PosHeldOrders() {
         )}
       </div>
     </div>
+    <DismissibleToast
+      toast={dismissibleToast}
+      onDismiss={hideDismissibleToast}
+      className="right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))]"
+    />
+    </>
   );
 }
