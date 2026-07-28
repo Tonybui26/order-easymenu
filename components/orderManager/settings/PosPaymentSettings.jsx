@@ -27,9 +27,33 @@ export default function PosPaymentSettings() {
     });
   }
 
+  async function handleTrainingModeChange(checked) {
+    await updateMenuConfigField("pos", {
+      ...posConfig,
+      trainingModeEnabled: checked,
+    });
+  }
+
   return (
     <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
       <div className="divide-y divide-gray-100">
+        <label className="flex cursor-pointer items-center justify-between gap-4 px-6 py-4">
+          <span className="min-w-0 flex-1">
+            <h2 className="text-lg font-semibold uppercase text-gray-600">
+              Enable training / testing mode
+            </h2>
+            <span className="mt-1 block text-base text-neutral-500">
+              Turn on for staff to practise on the POS without affecting live
+              sales.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            className="toggle toggle-primary toggle-lg shrink-0"
+            checked={Boolean(posConfig.trainingModeEnabled)}
+            onChange={(event) => handleTrainingModeChange(event.target.checked)}
+          />
+        </label>
         <label className="flex cursor-pointer items-center justify-between gap-4 px-6 py-4">
           <span className="min-w-0 flex-1">
             <h2 className="text-lg font-semibold uppercase text-gray-600">
