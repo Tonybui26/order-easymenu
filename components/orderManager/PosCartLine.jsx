@@ -15,9 +15,11 @@ export default function PosCartLine({
   line,
   isActive = false,
   readOnly = false,
+  allowVoidSentLine = false,
   onSelect,
   onQtyClick,
   onRemoveLine,
+  onVoidSentLine,
   onRemoveVariant,
   onRemoveModifier,
 }) {
@@ -27,16 +29,21 @@ export default function PosCartLine({
   const modifiers = line.selectedModifiers || [];
   const hasChildren = variants.length > 0 || modifiers.length > 0;
   const isSentToKitchen = line.kitchenStatus === "sent";
-  const isLocked = readOnly || isSentToKitchen;
+  const isCancelled = line.kitchenStatus === "cancelled";
+  const isLocked = readOnly || isSentToKitchen || isCancelled;
+  const showVoidSentButton = allowVoidSentLine && isSentToKitchen && !isCancelled;
+  const showRemoveUnsentButton = !readOnly && !isSentToKitchen && !isCancelled;
+  const strikeClass = isCancelled ? "line-through decoration-neutral-400" : "";
 
   return (
     <li
       className={cn(
         "relative border-b border-neutral-100 transition-colors",
         isActive ? "bg-[#f4f7fb]" : "bg-white",
+        isCancelled && "bg-neutral-50/80",
       )}
     >
-      {isSentToKitchen ? (
+      {isSentToKitchen && !isCancelled ? (
         <div
           className="pointer-events-none absolute inset-0 z-[1] bg-red-100/25"
           aria-hidden
@@ -59,14 +66,23 @@ export default function PosCartLine({
         className={cn(
           "relative z-[2] flex items-center gap-2.5 px-3 py-2.5",
           !isLocked && "cursor-pointer",
-          isSentToKitchen && "text-neutral-500",
+          (isSentToKitchen || isCancelled) && "text-neutral-500",
         )}
         aria-label={
-          isSentToKitchen ? `${line.title}, sent to kitchen` : undefined
+          isCancelled
+            ? `${line.title}, voided`
+            : isSentToKitchen
+              ? `${line.title}, sent to kitchen`
+              : undefined
         }
       >
         {isLocked ? (
-          <span className="inline-flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-neutral-200 bg-neutral-50 px-2 text-sm font-bold text-neutral-800">
+          <span
+            className={cn(
+              "inline-flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-neutral-200 bg-neutral-50 px-2 text-sm font-bold text-neutral-800",
+              strikeClass,
+            )}
+          >
             {qty}
           </span>
         ) : (
@@ -83,15 +99,48 @@ export default function PosCartLine({
           </button>
         )}
 
-        <p className="min-w-0 flex-1 text-base font-medium text-neutral-800">
-          {line.title}
-        </p>
+        <div className="min-w-0 flex-1">
+          <p
+            className={cn(
+              "text-base font-medium text-neutral-800",
+              strikeClass,
+              isCancelled && "text-neutral-400",
+            )}
+          >
+            {line.title}
+          </p>
+          {isCancelled && line.cancelReason ? (
+            <p className="mt-0.5 truncate text-xs text-neutral-400">
+              Voided: {line.cancelReason}
+            </p>
+          ) : null}
+        </div>
 
-        <span className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-neutral-200 bg-white px-2 text-sm font-semibold tabular-nums text-neutral-800">
+        <span
+          className={cn(
+            "inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-neutral-200 bg-white px-2 text-sm font-semibold tabular-nums text-neutral-800",
+            strikeClass,
+            isCancelled && "text-neutral-400",
+          )}
+        >
           {formatMoney(basePrice)}
         </span>
 
-        {!isLocked ? (
+        {showVoidSentButton ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onVoidSentLine?.(line.lineId);
+            }}
+            className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
+            aria-label={`Void ${line.title}`}
+          >
+            <X size={14} strokeWidth={2.5} />
+          </button>
+        ) : null}
+
+        {showRemoveUnsentButton ? (
           <button
             type="button"
             onClick={(event) => {
@@ -110,7 +159,7 @@ export default function PosCartLine({
         <ul
           className={cn(
             "relative z-[2] pb-1",
-            isSentToKitchen && "text-neutral-500",
+            (isSentToKitchen || isCancelled) && "text-neutral-500",
           )}
         >
           {variants.map((variant) => (
@@ -118,11 +167,16 @@ export default function PosCartLine({
               key={`variant-${variant.groupName}-${variant.optionId}`}
               className="flex items-center gap-2.5 py-1.5 pl-[3.25rem] pr-3"
             >
-              <p className="min-w-0 flex-1 truncate text-sm text-neutral-500">
+              <p
+                className={cn(
+                  "min-w-0 flex-1 truncate text-sm text-neutral-500",
+                  strikeClass,
+                )}
+              >
                 {variant.optionName}
               </p>
               <span className="w-12 shrink-0" aria-hidden />
-              {!isLocked ? (
+              {showRemoveUnsentButton ? (
                 <button
                   type="button"
                   onClick={() =>
@@ -144,17 +198,27 @@ export default function PosCartLine({
                 key={`modifier-${modifier.groupName}-${modifier.optionId}`}
                 className="flex items-center gap-2.5 py-1.5 pl-[3.25rem] pr-3"
               >
-                <p className="min-w-0 flex-1 truncate text-sm text-neutral-500">
+                <p
+                  className={cn(
+                    "min-w-0 flex-1 truncate text-sm text-neutral-500",
+                    strikeClass,
+                  )}
+                >
                   {modifier.optionName}
                 </p>
                 {price > 0 ? (
-                  <span className="min-w-[3rem] shrink-0 text-right text-sm tabular-nums text-neutral-600">
+                  <span
+                    className={cn(
+                      "min-w-[3rem] shrink-0 text-right text-sm tabular-nums text-neutral-600",
+                      strikeClass,
+                    )}
+                  >
                     {formatMoney(price)}
                   </span>
                 ) : (
                   <span className="min-w-[3rem] shrink-0" aria-hidden />
                 )}
-                {!isLocked ? (
+                {showRemoveUnsentButton ? (
                   <button
                     type="button"
                     onClick={() =>

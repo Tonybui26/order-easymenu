@@ -12,6 +12,7 @@ import {
   completePosSaleBatch,
   fetchPosResumeOrders,
   sendPosOrder,
+  cancelPosOrderItem,
 } from "@/lib/api/fetchApi";
 import {
   buildDefaultModifierSelections,
@@ -33,6 +34,9 @@ import PosPaymentDrawer from "./PosPaymentDrawer";
 import PosOrderPanelFooter from "./PosOrderPanelFooter";
 import PosItemCustomizePanel from "./PosItemCustomizePanel";
 import PosCartLine from "./PosCartLine";
+import PosCancelSentLineDrawer, {
+  POS_CANCEL_SENT_LINE_DRAWER_CLOSED,
+} from "./PosCancelSentLineDrawer";
 import PosChromeHeader from "./PosChromeHeader";
 import DismissibleToast, {
   useDismissibleToast,
@@ -66,6 +70,14 @@ function appendCheckOrderId(existingIds, orderId) {
 
 function isSentCartLine(line) {
   return line?.kitchenStatus === "sent";
+}
+
+function isCancelledCartLine(line) {
+  return line?.kitchenStatus === "cancelled";
+}
+
+function isOpenCartLine(line) {
+  return !isSentCartLine(line) && !isCancelledCartLine(line);
 }
 
 function useAllMenuItems(menuContent) {
@@ -153,6 +165,10 @@ export default function PosTerminal() {
   const [selectedModifiers, setSelectedModifiers] = useState({});
   const [isOrderTypeMissing, setIsOrderTypeMissing] = useState(false);
   const [tableFieldShakeKey, setTableFieldShakeKey] = useState(0);
+  const [cancelSentLineDrawer, setCancelSentLineDrawer] = useState(
+    POS_CANCEL_SENT_LINE_DRAWER_CLOSED,
+  );
+  const [isVoidingLine, setIsVoidingLine] = useState(false);
 
   useEffect(() => {
     if (!resumeParam || !menuContent) return;
@@ -259,7 +275,7 @@ export default function PosTerminal() {
         (line) =>
           line.itemId === item.id &&
           line.configKey === configKey &&
-          line.kitchenStatus !== "sent",
+          isOpenCartLine(line),
       );
       if (existingIndex >= 0) {
         return prev.map((line, index) =>
@@ -350,7 +366,7 @@ export default function PosTerminal() {
   function syncCustomizingLine(variantMap, modifierMap) {
     if (!customizingItem || !customizingLineId) return;
     const activeLine = cartLines.find((line) => line.lineId === customizingLineId);
-    if (isSentCartLine(activeLine)) return;
+    if (isSentCartLine(activeLine) || isCancelledCartLine(activeLine)) return;
     const built = buildLineFromSelections(
       customizingItem,
       variantMap,
@@ -375,7 +391,7 @@ export default function PosTerminal() {
   function handleSelectCartLine(lineId) {
     if (isViewOnly) return;
     const line = cartLines.find((entry) => entry.lineId === lineId);
-    if (!line || isSentCartLine(line)) return;
+    if (!line || !isOpenCartLine(line)) return;
 
     const item = itemsById.get(line.itemId);
     if (!item || !itemNeedsCustomization(item)) {
@@ -443,7 +459,7 @@ export default function PosTerminal() {
   function handleQtyClick(lineId) {
     if (isViewOnly) return;
     const line = cartLines.find((entry) => entry.lineId === lineId);
-    if (!line || isSentCartLine(line)) return;
+    if (!line || !isOpenCartLine(line)) return;
     setKeypadDrawer({
       mode: "quantity",
       lineId,
@@ -453,7 +469,7 @@ export default function PosTerminal() {
 
   function handleRemoveLine(lineId) {
     const line = cartLines.find((entry) => entry.lineId === lineId);
-    if (isViewOnly || isSentCartLine(line)) return;
+    if (isViewOnly || !isOpenCartLine(line)) return;
     setCartLines((prev) => prev.filter((line) => line.lineId !== lineId));
     if (lineId === customizingLineId) closeCustomization();
   }
@@ -478,7 +494,7 @@ export default function PosTerminal() {
 
   function handleRemoveVariant(lineId, optionId) {
     const line = cartLines.find((entry) => entry.lineId === lineId);
-    if (isSentCartLine(line)) return;
+    if (!isOpenCartLine(line)) return;
     setCartLines((prev) =>
       prev.map((line) => {
         if (line.lineId !== lineId) return line;
@@ -506,7 +522,7 @@ export default function PosTerminal() {
 
   function handleRemoveModifier(lineId, optionId) {
     const line = cartLines.find((entry) => entry.lineId === lineId);
-    if (isSentCartLine(line)) return;
+    if (!isOpenCartLine(line)) return;
     setCartLines((prev) =>
       prev.map((line) => {
         if (line.lineId !== lineId) return line;
@@ -549,7 +565,7 @@ export default function PosTerminal() {
     if (!lineId) return;
 
     const line = cartLines.find((entry) => entry.lineId === lineId);
-    if (isSentCartLine(line)) return;
+    if (!isOpenCartLine(line)) return;
 
     if (!quantity || quantity <= 0) {
       setCartLines((prev) => prev.filter((line) => line.lineId !== lineId));
@@ -599,9 +615,7 @@ export default function PosTerminal() {
   async function handleSendOrder() {
     if (isViewOnly || cartLines.length === 0 || isSending) return;
 
-    const unsentLines = cartLines.filter(
-      (line) => line.kitchenStatus !== "sent",
-    );
+    const unsentLines = cartLines.filter(isOpenCartLine);
     if (unsentLines.length === 0) {
       showDismissibleToast("Nothing new to send");
       return;
@@ -639,7 +653,7 @@ export default function PosTerminal() {
       setCartLines((prev) =>
         prev.map((line) =>
           sentLineIds.has(line.lineId)
-            ? { ...line, kitchenStatus: "sent" }
+            ? { ...line, kitchenStatus: "sent", sourceOrderId: newOrderId }
             : line,
         ),
       );
@@ -718,6 +732,61 @@ export default function PosTerminal() {
     }
   }
 
+  function handleVoidSentLine(lineId) {
+    if (isViewOnly) return;
+    const line = cartLines.find((entry) => entry.lineId === lineId);
+    if (!line || !isSentCartLine(line)) return;
+    setCancelSentLineDrawer({ show: true, line });
+  }
+
+  async function handleConfirmCancelSentLine(reason) {
+    const line = cancelSentLineDrawer.line;
+    if (!line || isVoidingLine) return;
+
+    const orderId = String(line.sourceOrderId || "").trim();
+    if (!orderId) {
+      showDismissibleToast("Cannot void item — missing order reference");
+      return;
+    }
+
+    setIsVoidingLine(true);
+    try {
+      const result = await cancelPosOrderItem({
+        orderId,
+        lineId: line.lineId,
+        reason,
+      });
+      if (!result?.success) {
+        showDismissibleToast(result?.error || "Failed to void item");
+        return;
+      }
+
+      const cancelledAt =
+        result.item?.cancelledAt || new Date().toISOString();
+      setCartLines((prev) =>
+        prev.map((entry) =>
+          entry.lineId === line.lineId
+            ? {
+                ...entry,
+                kitchenStatus: "cancelled",
+                cancelReason: reason,
+                cancelledAt,
+              }
+            : entry,
+        ),
+      );
+      if (line.lineId === customizingLineId) {
+        closeCustomization();
+      }
+      setCancelSentLineDrawer(POS_CANCEL_SENT_LINE_DRAWER_CLOSED);
+      toast.success("Item voided");
+    } catch (error) {
+      showDismissibleToast(error?.message || "Failed to void item");
+    } finally {
+      setIsVoidingLine(false);
+    }
+  }
+
   function handleOpenPayment() {
     if (isViewOnly) return;
     if (checkOrderIds.length === 0) {
@@ -739,13 +808,11 @@ export default function PosTerminal() {
     ? selectionMapsFromLine(activeCartLine, customizingItem)
     : { selectedVariants, selectedModifiers };
 
-  const cartSubtotal = cartLines.reduce(
-    (sum, line) => sum + Number(line.price || 0) * (line.quantity || 1),
-    0,
-  );
-  const hasUnsentLines = cartLines.some(
-    (line) => line.kitchenStatus !== "sent",
-  );
+  const cartSubtotal = cartLines.reduce((sum, line) => {
+    if (isCancelledCartLine(line)) return sum;
+    return sum + Number(line.price || 0) * (line.quantity || 1);
+  }, 0);
+  const hasUnsentLines = cartLines.some(isOpenCartLine);
 
   return (
     <>
@@ -812,9 +879,11 @@ export default function PosTerminal() {
                     line={line}
                     isActive={line.lineId === customizingLineId}
                     readOnly={isViewOnly}
+                    allowVoidSentLine={!isViewOnly}
                     onSelect={handleSelectCartLine}
                     onQtyClick={handleQtyClick}
                     onRemoveLine={handleRemoveLine}
+                    onVoidSentLine={handleVoidSentLine}
                     onRemoveVariant={handleRemoveVariant}
                     onRemoveModifier={handleRemoveModifier}
                   />
@@ -911,7 +980,7 @@ export default function PosTerminal() {
 
           {/* Products / item customization */}
           <div className="relative z-0 min-h-0 min-w-0 flex-1 overflow-hidden bg-[#f0f0f0]">
-            {customizingItem && !isSentCartLine(activeCartLine) ? (
+            {customizingItem && isOpenCartLine(activeCartLine) ? (
               <PosItemCustomizePanel
                 item={customizingItem}
                 globalModifiers={globalModifiers || {}}
@@ -966,6 +1035,16 @@ export default function PosTerminal() {
       toast={dismissibleToast}
       onDismiss={hideDismissibleToast}
       className="right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))]"
+    />
+    <PosCancelSentLineDrawer
+      drawerState={cancelSentLineDrawer}
+      onClose={() => {
+        if (!isVoidingLine) {
+          setCancelSentLineDrawer(POS_CANCEL_SENT_LINE_DRAWER_CLOSED);
+        }
+      }}
+      onConfirm={handleConfirmCancelSentLine}
+      isSubmitting={isVoidingLine}
     />
     </>
   );
