@@ -34,6 +34,9 @@ import PosOrderPanelFooter from "./PosOrderPanelFooter";
 import PosItemCustomizePanel from "./PosItemCustomizePanel";
 import PosCartLine from "./PosCartLine";
 import PosChromeHeader from "./PosChromeHeader";
+import DismissibleToast, {
+  useDismissibleToast,
+} from "@/components/orderManager/DismissibleToast";
 import { printKitchenOrder } from "@/lib/helper/printKitchenOrder";
 
 function mapPosOrderType(orderType) {
@@ -59,6 +62,10 @@ function appendCheckOrderId(existingIds, orderId) {
   if (!id) return existingIds;
   if ((existingIds || []).includes(id)) return existingIds;
   return [...(existingIds || []), id];
+}
+
+function isSentCartLine(line) {
+  return line?.kitchenStatus === "sent";
 }
 
 function useAllMenuItems(menuContent) {
@@ -116,6 +123,11 @@ export default function PosTerminal() {
   const resumeLoadedRef = useRef(null);
   const { menuContent, posLayouts, globalModifiers, globalVariants, storeProfile, itemGroups } =
     useMenuContext();
+  const {
+    toast: dismissibleToast,
+    showToast: showDismissibleToast,
+    hideToast: hideDismissibleToast,
+  } = useDismissibleToast();
   const itemsById = useAllMenuItems(menuContent);
 
   const activeLayout = posLayouts?.[0] || null;
@@ -162,7 +174,7 @@ export default function PosTerminal() {
         if (cancelled) return;
 
         if (!result?.success || !result.orders?.length) {
-          toast.error(result?.error || "Could not load held order");
+          showDismissibleToast(result?.error || "Could not load held order");
           resumeLoadedRef.current = null;
           router.replace("/pos");
           return;
@@ -187,7 +199,7 @@ export default function PosTerminal() {
         router.replace("/pos");
       } catch (error) {
         if (!cancelled) {
-          toast.error(error?.message || "Could not load held order");
+          showDismissibleToast(error?.message || "Could not load held order");
           resumeLoadedRef.current = null;
           router.replace("/pos");
         }
@@ -244,7 +256,10 @@ export default function PosTerminal() {
     const configKey = cartConfigKey(variantsPayload, modifiersPayload);
     setCartLines((prev) => {
       const existingIndex = prev.findIndex(
-        (line) => line.itemId === item.id && line.configKey === configKey,
+        (line) =>
+          line.itemId === item.id &&
+          line.configKey === configKey &&
+          line.kitchenStatus !== "sent",
       );
       if (existingIndex >= 0) {
         return prev.map((line, index) =>
@@ -334,6 +349,8 @@ export default function PosTerminal() {
 
   function syncCustomizingLine(variantMap, modifierMap) {
     if (!customizingItem || !customizingLineId) return;
+    const activeLine = cartLines.find((line) => line.lineId === customizingLineId);
+    if (isSentCartLine(activeLine)) return;
     const built = buildLineFromSelections(
       customizingItem,
       variantMap,
@@ -358,7 +375,7 @@ export default function PosTerminal() {
   function handleSelectCartLine(lineId) {
     if (isViewOnly) return;
     const line = cartLines.find((entry) => entry.lineId === lineId);
-    if (!line) return;
+    if (!line || isSentCartLine(line)) return;
 
     const item = itemsById.get(line.itemId);
     if (!item || !itemNeedsCustomization(item)) {
@@ -426,6 +443,7 @@ export default function PosTerminal() {
   function handleQtyClick(lineId) {
     if (isViewOnly) return;
     const line = cartLines.find((entry) => entry.lineId === lineId);
+    if (!line || isSentCartLine(line)) return;
     setKeypadDrawer({
       mode: "quantity",
       lineId,
@@ -434,6 +452,8 @@ export default function PosTerminal() {
   }
 
   function handleRemoveLine(lineId) {
+    const line = cartLines.find((entry) => entry.lineId === lineId);
+    if (isViewOnly || isSentCartLine(line)) return;
     setCartLines((prev) => prev.filter((line) => line.lineId !== lineId));
     if (lineId === customizingLineId) closeCustomization();
   }
@@ -457,6 +477,8 @@ export default function PosTerminal() {
   }
 
   function handleRemoveVariant(lineId, optionId) {
+    const line = cartLines.find((entry) => entry.lineId === lineId);
+    if (isSentCartLine(line)) return;
     setCartLines((prev) =>
       prev.map((line) => {
         if (line.lineId !== lineId) return line;
@@ -483,6 +505,8 @@ export default function PosTerminal() {
   }
 
   function handleRemoveModifier(lineId, optionId) {
+    const line = cartLines.find((entry) => entry.lineId === lineId);
+    if (isSentCartLine(line)) return;
     setCartLines((prev) =>
       prev.map((line) => {
         if (line.lineId !== lineId) return line;
@@ -523,6 +547,9 @@ export default function PosTerminal() {
   function handleQuantityConfirm({ quantity }) {
     const lineId = keypadDrawer?.lineId;
     if (!lineId) return;
+
+    const line = cartLines.find((entry) => entry.lineId === lineId);
+    if (isSentCartLine(line)) return;
 
     if (!quantity || quantity <= 0) {
       setCartLines((prev) => prev.filter((line) => line.lineId !== lineId));
@@ -576,7 +603,7 @@ export default function PosTerminal() {
       (line) => line.kitchenStatus !== "sent",
     );
     if (unsentLines.length === 0) {
-      toast.error("Nothing new to send");
+      showDismissibleToast("Nothing new to send");
       return;
     }
 
@@ -597,7 +624,7 @@ export default function PosTerminal() {
 
       const result = await sendPosOrder(payload);
       if (!result?.success || !result.order?._id) {
-        toast.error(result?.error || "Failed to send order");
+        showDismissibleToast(result?.error || "Failed to send order");
         return;
       }
 
@@ -616,6 +643,9 @@ export default function PosTerminal() {
             : line,
         ),
       );
+      if (customizingLineId && sentLineIds.has(customizingLineId)) {
+        closeCustomization();
+      }
       toast.success("Order sent to kitchen");
 
       // Each Send creates one kitchen order with only this fire's items — print that ticket.
@@ -627,14 +657,14 @@ export default function PosTerminal() {
           notify: true,
           notifySuccess: false,
           silentNoPrinters: true,
-          showCustomToast: (message) => toast.error(message),
+          showCustomToast: (message) => showDismissibleToast(message),
         });
       } catch (printError) {
         console.error("POS send print error:", printError);
-        toast.error("Kitchen ticket print failed");
+        showDismissibleToast("Kitchen ticket print failed");
       }
     } catch (error) {
-      toast.error(error?.message || "Failed to send order");
+      showDismissibleToast(error?.message || "Failed to send order");
     } finally {
       setIsSending(false);
     }
@@ -649,7 +679,7 @@ export default function PosTerminal() {
           : [];
 
     if (orderIdsToComplete.length === 0) {
-      toast.error("Send the order before completing payment");
+      showDismissibleToast("Send the order before completing payment");
       return;
     }
     if (!paymentSummary?.method || isCompletingSale) return;
@@ -664,7 +694,7 @@ export default function PosTerminal() {
       });
 
       if (!result?.success) {
-        toast.error(result?.error || "Failed to complete sale");
+        showDismissibleToast(result?.error || "Failed to complete sale");
         return;
       }
 
@@ -682,7 +712,7 @@ export default function PosTerminal() {
       setIsPaymentDrawerOpen(false);
       toast.success("Sale completed");
     } catch (error) {
-      toast.error(error?.message || "Failed to complete sale");
+      showDismissibleToast(error?.message || "Failed to complete sale");
     } finally {
       setIsCompletingSale(false);
     }
@@ -691,7 +721,7 @@ export default function PosTerminal() {
   function handleOpenPayment() {
     if (isViewOnly) return;
     if (checkOrderIds.length === 0) {
-      toast.error("Send the order before payment");
+      showDismissibleToast("Send the order before payment");
       return;
     }
     setIsPaymentDrawerOpen(true);
@@ -718,6 +748,7 @@ export default function PosTerminal() {
   );
 
   return (
+    <>
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       <PosChromeHeader onLogoClick={handleLogoHome} />
 
@@ -880,7 +911,7 @@ export default function PosTerminal() {
 
           {/* Products / item customization */}
           <div className="relative z-0 min-h-0 min-w-0 flex-1 overflow-hidden bg-[#f0f0f0]">
-            {customizingItem ? (
+            {customizingItem && !isSentCartLine(activeCartLine) ? (
               <PosItemCustomizePanel
                 item={customizingItem}
                 globalModifiers={globalModifiers || {}}
@@ -931,5 +962,11 @@ export default function PosTerminal() {
         </section>
       </div>
     </div>
+    <DismissibleToast
+      toast={dismissibleToast}
+      onDismiss={hideDismissibleToast}
+      className="right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))]"
+    />
+    </>
   );
 }

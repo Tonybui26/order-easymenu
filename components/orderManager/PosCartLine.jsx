@@ -27,6 +27,7 @@ export default function PosCartLine({
   const modifiers = line.selectedModifiers || [];
   const hasChildren = variants.length > 0 || modifiers.length > 0;
   const isSentToKitchen = line.kitchenStatus === "sent";
+  const isLocked = readOnly || isSentToKitchen;
 
   return (
     <li
@@ -43,13 +44,13 @@ export default function PosCartLine({
       ) : null}
 
       <div
-        role={readOnly ? undefined : "button"}
-        tabIndex={readOnly ? undefined : 0}
+        role={isLocked ? undefined : "button"}
+        tabIndex={isLocked ? undefined : 0}
         onClick={() => {
-          if (!readOnly) onSelect?.(line.lineId);
+          if (!isLocked) onSelect?.(line.lineId);
         }}
         onKeyDown={(event) => {
-          if (readOnly) return;
+          if (isLocked) return;
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             onSelect?.(line.lineId);
@@ -57,14 +58,14 @@ export default function PosCartLine({
         }}
         className={cn(
           "relative z-[2] flex items-center gap-2.5 px-3 py-2.5",
-          !readOnly && "cursor-pointer",
+          !isLocked && "cursor-pointer",
           isSentToKitchen && "text-neutral-500",
         )}
         aria-label={
           isSentToKitchen ? `${line.title}, sent to kitchen` : undefined
         }
       >
-        {readOnly ? (
+        {isLocked ? (
           <span className="inline-flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-neutral-200 bg-neutral-50 px-2 text-sm font-bold text-neutral-800">
             {qty}
           </span>
@@ -90,7 +91,7 @@ export default function PosCartLine({
           {formatMoney(basePrice)}
         </span>
 
-        {!readOnly ? (
+        {!isLocked ? (
           <button
             type="button"
             onClick={(event) => {
@@ -121,7 +122,7 @@ export default function PosCartLine({
                 {variant.optionName}
               </p>
               <span className="w-12 shrink-0" aria-hidden />
-              {!readOnly ? (
+              {!isLocked ? (
                 <button
                   type="button"
                   onClick={() =>
@@ -153,7 +154,7 @@ export default function PosCartLine({
                 ) : (
                   <span className="min-w-[3rem] shrink-0" aria-hidden />
                 )}
-                {!readOnly ? (
+                {!isLocked ? (
                   <button
                     type="button"
                     onClick={() =>
