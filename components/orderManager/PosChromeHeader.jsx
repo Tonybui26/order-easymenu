@@ -2,13 +2,22 @@
 
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Folder, Headset, PanelBottomOpen, Printer, QrCode } from "lucide-react";
+import { Folder, PanelBottomOpen, Printer, QrCode, RefreshCw } from "lucide-react";
 import { useMenuContext } from "@/components/context/MenuContext";
 import PosHeaderNavMenu from "./PosHeaderNavMenu";
 import Logo from "../../public/images/logo.svg";
 
 const POS_HEADER_ACTIONS = [
-  { id: "support", label: "Support", Icon: Headset },
+  {
+    id: "support",
+    label: "Support",
+    hidden: true,
+  },
+  {
+    id: "sync",
+    label: "Reload app",
+    Icon: RefreshCw,
+  },
   {
     id: "held",
     label: "Held Orders",
@@ -44,7 +53,7 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
   const posEnabled = Boolean(menuConfig?.posEnabled);
 
   const headerActions = POS_HEADER_ACTIONS.filter(
-    (action) => !action.requiresPos || posEnabled,
+    (action) => !action.hidden && (!action.requiresPos || posEnabled),
   );
 
   function handleLogoClick() {
@@ -91,6 +100,10 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
               onClick={() => {
                 if (id === "cash-drawer") {
                   onOpenCashDrawer?.();
+                  return;
+                }
+                if (id === "sync") {
+                  window.location.reload();
                   return;
                 }
                 if (href) router.push(href);

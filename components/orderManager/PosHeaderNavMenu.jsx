@@ -9,6 +9,7 @@ import {
   MonitorSmartphone,
   Printer,
   QrCode,
+  Settings,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useMenuContext } from "@/components/context/MenuContext";
@@ -45,6 +46,13 @@ const NAV_ITEMS = [
     href: "/printer-management",
     Icon: Printer,
   },
+  {
+    id: "settings",
+    label: "Settings",
+    description: "App preferences",
+    href: "/settings",
+    Icon: Settings,
+  },
 ];
 
 function resolveActiveItem(pathname, items) {
@@ -57,6 +65,9 @@ function resolveActiveItem(pathname, items) {
   }
   if (pathname === "/printer-management") {
     return list.find((item) => item.id === "printers") || list[0];
+  }
+  if (pathname === "/settings" || pathname?.startsWith("/settings/")) {
+    return list.find((item) => item.id === "settings") || list[0];
   }
   if (pathname === "/") {
     return list.find((item) => item.id === "live-orders") || list[0];
