@@ -1,6 +1,7 @@
 "use client";
 
 import PosChromeHeader from "@/components/orderManager/PosChromeHeader";
+import PosPaymentSettings from "@/components/orderManager/settings/PosPaymentSettings";
 import { usePosOpenCashDrawer } from "@/components/orderManager/usePosOpenCashDrawer";
 
 export default function SettingsPage() {
@@ -11,8 +12,8 @@ export default function SettingsPage() {
       <PosChromeHeader onOpenCashDrawer={handleOpenCashDrawer} />
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-gray-50 pb-[env(safe-area-inset-bottom)]">
-        <div className="mx-auto max-w-6xl p-4 md:p-6">
-          <div className="mb-6">
+        <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
+          <div>
             <h1 className="text-xl font-bold text-neutral-900 sm:text-2xl">
               Settings
             </h1>
@@ -20,6 +21,8 @@ export default function SettingsPage() {
               App preferences and configuration
             </p>
           </div>
+
+          <PosPaymentSettings />
         </div>
       </div>
     </div>
