@@ -269,10 +269,7 @@ export default function LiveOrderTerminal() {
           dismissedMap.delete(orderId);
           continue;
         }
-        if (
-          !isNotificationWorthyOrder(order) ||
-          !isUnpreparedNewOrder(order)
-        ) {
+        if (!isNotificationWorthyOrder(order) || !isUnpreparedNewOrder(order)) {
           dismissedMap.delete(orderId);
           continue;
         }
@@ -1638,7 +1635,9 @@ export default function LiveOrderTerminal() {
     type: "error", // 'error', 'success', 'warning'
     message: "",
     id: null,
+    retry: null,
   });
+  const [isPrintToastRetrying, setIsPrintToastRetrying] = useState(false);
 
   // Item tracking state - persists across view mode changes
   const [orderItemTracking, setOrderItemTracking] = useState({});
@@ -1669,13 +1668,14 @@ export default function LiveOrderTerminal() {
     return getCompletedItems(orderId).includes(itemIndex);
   };
 
-  const showCustomToast = (message, type = "error") => {
+  const showCustomToast = (message, type = "error", retry = null) => {
     const id = Date.now() + Math.random();
     setCustomToast({
       show: true,
       type,
       message,
       id,
+      retry,
     });
   };
 
@@ -1685,7 +1685,39 @@ export default function LiveOrderTerminal() {
       type: "error",
       message: "",
       id: null,
+      retry: null,
     });
+    setIsPrintToastRetrying(false);
+  };
+
+  const handlePrintToastRetry = async () => {
+    const retry = customToast.retry;
+    if (!retry?.order || isPrintToastRetrying) return;
+
+    setIsPrintToastRetrying(true);
+
+    try {
+      const freshOrder =
+        orders.find((entry) => entry._id === retry.order._id) || retry.order;
+
+      const result = await printKitchenOrder(freshOrder, {
+        storeProfile,
+        itemGroups,
+        selectedPrinters: retry.failedPrinters?.length
+          ? retry.failedPrinters
+          : null,
+        source: "retry",
+        showCustomToast,
+      });
+
+      if (result?.success && (result.failedPrints ?? 0) === 0) {
+        hideCustomToast();
+      }
+    } catch (error) {
+      console.error("Print toast retry failed:", error);
+    } finally {
+      setIsPrintToastRetrying(false);
+    }
   };
 
   return (
@@ -2292,16 +2324,16 @@ export default function LiveOrderTerminal() {
       {customToast.show && (
         <div className="fixed right-4 top-4 z-50 animate-in slide-in-from-right-5">
           <div
-            className={`flex w-full max-w-md items-center justify-between rounded-lg border p-4 shadow-lg ${
+            className={`flex w-full max-w-md flex-col items-start justify-between gap-3 rounded-lg border p-3 shadow-lg ${
               customToast.type === "error"
-                ? "border-red-200 bg-red-50 text-red-800"
+                ? "bg-red-50 text-red-800"
                 : customToast.type === "success"
                   ? "border-green-200 bg-green-50 text-green-800"
                   : "border-yellow-200 bg-yellow-50 text-yellow-800"
             } `}
           >
-            <div className="flex items-center gap-2">
-              <span className="text-lg">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="text-sm">
                 {customToast.type === "error"
                   ? "❌"
                   : customToast.type === "success"
@@ -2310,12 +2342,26 @@ export default function LiveOrderTerminal() {
               </span>
               <span className="font-medium">{customToast.message}</span>
             </div>
-            <button
-              onClick={hideCustomToast}
-              className="ml-4 rounded bg-red-600 px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-red-700"
-            >
-              Dismiss
-            </button>
+            <div className="flex w-full shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={hideCustomToast}
+                disabled={isPrintToastRetrying}
+                className="w-28 rounded bg-[#947474] px-3 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#947474] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Dismiss
+              </button>
+              {customToast.retry?.order && (
+                <button
+                  type="button"
+                  onClick={handlePrintToastRetry}
+                  disabled={isPrintToastRetrying}
+                  className="w-full rounded bg-[#2d9453] px-3 py-3 text-sm font-semibold text-white transition-colors hover:bg-green-900 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isPrintToastRetrying ? "Retrying..." : "Print again"}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
