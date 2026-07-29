@@ -12,6 +12,7 @@ import {
   Eye,
   X,
   Receipt,
+  Type,
 } from "lucide-react";
 import PrinterSetupModal from "./PrinterSetupModal";
 import { createTestPrintJob } from "@/lib/api/fetchApi";
@@ -32,11 +33,13 @@ import {
 import { isStarPrntPrinter, isTsplPrinter } from "@/lib/constants/printerLanguages";
 import { printTsplTestLabel } from "@/lib/printers/printTsplTestLabel";
 import { printTaxInvoiceReceiptTest } from "@/lib/printers/printTaxInvoiceReceiptTest";
+import { printPrinterFontTest } from "@/lib/printers/printPrinterFontTest";
 
 export default function PrinterCard({ printer, onDelete, onUpdate }) {
   const { storeProfile } = useMenuContext();
   const [showEditModal, setShowEditModal] = useState(false);
   const [testingPrinter, setTestingPrinter] = useState(false);
+  const [testingFonts, setTestingFonts] = useState(false);
   const [testingReceipt, setTestingReceipt] = useState(false);
   const [aggressiveTestingPrinter, setAggressiveTestingPrinter] =
     useState(false);
@@ -136,6 +139,44 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
       toast.error("Failed to test printer: " + error.message);
     } finally {
       setTestingPrinter(false);
+    }
+  };
+
+  const handleTestFonts = async () => {
+    if (isTsplPrinter(printer)) {
+      toast.error("Font test is for receipt/docket printers only.");
+      return;
+    }
+
+    try {
+      setTestingFonts(true);
+      setCurrentTestType("Font Test Sheet");
+      clearLogs();
+      setShowLogsModal(true);
+
+      addLog(
+        `Starting font test for ${printer.name} (${printer.localIp}:${printer.port})`,
+        "info",
+      );
+
+      const result = await printPrinterFontTest(printer, {
+        delayAfterDisconnect: 300,
+      });
+
+      if (result.success) {
+        addLog("✅ Font test printed!", "success");
+        addLog(`Duration: ${result.duration || "N/A"}ms`, "info");
+        toast.success(result.message);
+      } else {
+        addLog(`❌ Font test failed: ${result.message}`, "error");
+        toast.error(result.message);
+      }
+    } catch (error) {
+      addLog(`💥 Unexpected error: ${error.message}`, "error");
+      console.error("Error printing font test:", error);
+      toast.error("Failed to print font test: " + error.message);
+    } finally {
+      setTestingFonts(false);
     }
   };
 
@@ -385,6 +426,27 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
                   )}
                 </button>
               </li>
+              {!isTsplPrinter(printer) ? (
+                <li>
+                  <button
+                    onClick={handleTestFonts}
+                    disabled={testingFonts}
+                    className="flex items-center gap-2"
+                  >
+                    {testingFonts ? (
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border border-indigo-300 border-t-indigo-600"></div>
+                        Printing Fonts...
+                      </>
+                    ) : (
+                      <>
+                        <Type className="h-4 w-4" />
+                        Test Fonts
+                      </>
+                    )}
+                  </button>
+                </li>
+              ) : null}
               {printer.forReceipt && !isTsplPrinter(printer) ? (
                 <li>
                   <button
