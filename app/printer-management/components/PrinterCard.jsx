@@ -216,14 +216,38 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
         `Starting TAX INVOICE receipt test for ${printer.name} (${printer.localIp}:${printer.port})`,
         "info",
       );
+      if (storeProfile?.storeLogo) {
+        addLog(
+          `Loading store logo via proxy: ${storeProfile.storeLogo.slice(0, 80)}…`,
+          "info",
+        );
+      } else {
+        addLog("No store logo set — printing receipt without logo", "warning");
+      }
 
       const result = await printTaxInvoiceReceiptTest(printer, {
         storeProfile,
         delayAfterDisconnect: 300,
+        onLogoStatus: (status) => {
+          if (status?.success) {
+            addLog(
+              `✅ Logo raster ready (${status.width}×${status.height}, ${status.bytes} bytes, ${status.blackPixels} black dots)`,
+              "success",
+            );
+          } else if (status?.attempted) {
+            addLog(`❌ Logo failed: ${status.error}`, "error");
+          }
+        },
       });
 
       if (result.success) {
         addLog("✅ Receipt test successful!", "success");
+        if (result.logoStatus?.attempted && !result.logoStatus.success) {
+          addLog(
+            `⚠️ Receipt printed without logo: ${result.logoStatus.error}`,
+            "warning",
+          );
+        }
         addLog(`Duration: ${result.duration || "N/A"}ms`, "info");
         toast.success(result.message);
       } else {
