@@ -1,6 +1,6 @@
 "use client";
 
-import { Folder, Send, Tag, X } from "lucide-react";
+import { Folder, Percent, SquareX, Printer } from "lucide-react";
 import { cn } from "@/lib/helper";
 
 const GST_RATE = 10;
@@ -48,81 +48,92 @@ export default function PosOrderPanelFooter({
 
   return (
     <div
-      className={cn("shrink-0 border-t border-neutral-300 bg-white", className)}
+      className={cn(
+        "shrink-0 border-neutral-100 bg-[#f2f2f2] p-2 pt-1",
+        className,
+      )}
     >
-      <div className="grid grid-cols-[1.15fr_1fr] border-b border-neutral-300">
-        <div className="space-y-1 border-r border-neutral-300 px-3 py-2.5 text-sm font-semibold uppercase tracking-wide text-neutral-500 xl:text-base">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-neutral-400">Discount</span>
-            <span className="tabular-nums text-neutral-600">
-              {discount == null ? "-" : `-${formatMoney(discount)}`}
-            </span>
+      <div className="overflow-hidden rounded-xl border-[#efefef] bg-white drop-shadow-md">
+        <div className="grid grid-cols-[1.15fr_1fr] border-b border-neutral-100">
+          <div className="space-y-1 border-r border-[#f2f2f2] px-3 py-2.5 text-sm font-semibold uppercase tracking-wide text-neutral-500 xl:text-base">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-neutral-400">Discount</span>
+              <span className="tabular-nums text-neutral-600">
+                {discount == null ? "-" : `-${formatMoney(discount)}`}
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-neutral-400">Subtotal</span>
+              <span className="tabular-nums text-neutral-600">
+                {formatMoney(safeSubtotal)}
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-neutral-400">Tax (GST)</span>
+              <span className="tabular-nums text-neutral-600">
+                {formatMoney(taxAmount)}
+              </span>
+            </div>
           </div>
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-neutral-400">Subtotal</span>
-            <span className="tabular-nums text-neutral-600">
-              {formatMoney(safeSubtotal)}
+
+          <div className="flex flex-col items-center justify-center px-3 py-2.5 text-center">
+            <span className="text-base font-bold uppercase tracking-wide text-neutral-900">
+              Total
             </span>
-          </div>
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-neutral-400">Tax (GST)</span>
-            <span className="tabular-nums text-neutral-600">
-              {formatMoney(taxAmount)}
+            <span className="text-2xl font-bold text-[#e72a2a]">
+              {formatMoney(total)}
             </span>
           </div>
         </div>
 
-        <div className="flex flex-col items-center justify-center px-3 py-2.5 text-center">
-          <span className="text-base font-bold uppercase tracking-wide text-neutral-900">
-            Total
-          </span>
-          <span className="text-2xl font-bold text-[#e72a2a]">
-            {formatMoney(total)}
-          </span>
+        <div className="flex bg-[#f8f9fb]">
+          <FooterAction
+            icon={SquareX}
+            label=""
+            onClick={onClear}
+            disabled={viewOnly}
+            className="border-neutral-[#e1e1e1] border-r px-6"
+          />
+          <FooterAction
+            icon={showSend ? Printer : Folder}
+            label={showSend ? "Send" : "Hold"}
+            onClick={showSend ? onSend : onHold}
+            disabled={!showSend && !viewOnly && !onHold}
+            className="border-neutral-[#e1e1e1] flex-1 border-r"
+          />
+          <FooterAction
+            icon={Percent}
+            label="Discount"
+            onClick={onDiscount}
+            disabled={viewOnly}
+          />
         </div>
-      </div>
-
-      <div className="grid grid-cols-3 bg-[#f3f3f3]">
-        <FooterAction
-          icon={X}
-          label="Clear"
-          onClick={onClear}
-          disabled={viewOnly}
-          className="border-r border-neutral-300"
-        />
-        <FooterAction
-          icon={showSend ? Send : Folder}
-          label={showSend ? "Send" : "Hold"}
-          onClick={showSend ? onSend : onHold}
-          disabled={!showSend && !viewOnly && !onHold}
-          className="border-r border-neutral-300"
-        />
-        <FooterAction
-          icon={Tag}
-          label="Discount"
-          onClick={onDiscount}
-          disabled={viewOnly}
-        />
       </div>
     </div>
   );
 }
 
-function FooterAction({ icon: Icon, label, onClick, disabled = false, className }) {
+function FooterAction({
+  icon: Icon,
+  label,
+  onClick,
+  disabled = false,
+  className,
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "flex min-h-[4.25rem] items-center justify-center gap-1.5 px-2 text-sm font-semibold uppercase tracking-wide text-neutral-900 transition-colors",
+        "flex min-h-[4.25rem] items-center justify-center gap-2 px-2 text-sm font-semibold uppercase tracking-wide text-neutral-900 transition-colors",
         disabled
           ? "cursor-not-allowed opacity-40"
           : "hover:bg-neutral-200/80 active:bg-neutral-300/70",
         className,
       )}
     >
-      <Icon size={16} strokeWidth={2.25} className="shrink-0" />
+      <Icon size={22} strokeWidth={1.5} className="shrink-0" />
       {label}
     </button>
   );

@@ -1019,7 +1019,7 @@ export default function PosTerminal() {
               onTrainingDone={handleTrainingPaymentDone}
             />
 
-            <div className="min-h-0 flex-1 overflow-y-auto bg-white">
+            <div className="min-h-0 flex-1 overflow-y-auto bg-[#f2f2f2]">
               {isResumingOrder ? (
                 <div className="flex h-full items-center justify-center px-6 text-center text-sm text-neutral-400">
                   Loading held order…

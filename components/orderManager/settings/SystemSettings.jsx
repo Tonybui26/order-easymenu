@@ -26,6 +26,16 @@ export default function SystemSettings({ draftPosConfig, onDraftChange }) {
         ) : (
           <div className="divide-y divide-gray-100/80">
             <SettingsToggleRow
+              title="Mark all dockets served when paid"
+              description="For pay-at-counter stores: when the customer pays, every kitchen docket on the check is marked delivered. Leave off for pay-first stores where food is served after payment."
+              checked={Boolean(
+                draftPosConfig?.markAllTicketsDeliveredOnPayment,
+              )}
+              onChange={(checked) =>
+                updatePosDraft({ markAllTicketsDeliveredOnPayment: checked })
+              }
+            />
+            <SettingsToggleRow
               title="Enable training / testing mode"
               description={
                 <>
@@ -37,16 +47,6 @@ export default function SystemSettings({ draftPosConfig, onDraftChange }) {
               checked={Boolean(draftPosConfig?.trainingModeEnabled)}
               onChange={(checked) =>
                 updatePosDraft({ trainingModeEnabled: checked })
-              }
-            />
-            <SettingsToggleRow
-              title="Mark all dockets served when paid"
-              description="For pay-at-counter stores: when the customer pays, every kitchen docket on the check is marked delivered. Leave off for pay-first stores where food is served after payment."
-              checked={Boolean(
-                draftPosConfig?.markAllTicketsDeliveredOnPayment,
-              )}
-              onChange={(checked) =>
-                updatePosDraft({ markAllTicketsDeliveredOnPayment: checked })
               }
             />
           </div>

@@ -31,15 +31,16 @@ export default function PosCartLine({
   const isSentToKitchen = line.kitchenStatus === "sent";
   const isCancelled = line.kitchenStatus === "cancelled";
   const isLocked = readOnly || isSentToKitchen || isCancelled;
-  const showVoidSentButton = allowVoidSentLine && isSentToKitchen && !isCancelled;
+  const showVoidSentButton =
+    allowVoidSentLine && isSentToKitchen && !isCancelled;
   const showRemoveUnsentButton = !readOnly && !isSentToKitchen && !isCancelled;
   const strikeClass = isCancelled ? "line-through decoration-neutral-400" : "";
 
   return (
     <li
       className={cn(
-        "relative border-b border-neutral-100 transition-colors",
-        isActive ? "bg-[#f4f7fb]" : "bg-white",
+        "relative m-2 my-1 rounded-xl border-2 border-[#f2f2f2] bg-white transition-colors",
+        isActive ? "border-[#dcdcdc] drop-shadow-md" : "",
         isCancelled && "bg-neutral-50/80",
       )}
     >
@@ -118,7 +119,7 @@ export default function PosCartLine({
 
         <span
           className={cn(
-            "inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-neutral-200 bg-white px-2 text-sm font-semibold tabular-nums text-neutral-800",
+            "inline-flex h-8 shrink-0 items-center justify-center rounded-md border-neutral-200 bg-white px-2 text-sm font-semibold tabular-nums text-neutral-800",
             strikeClass,
             isCancelled && "text-neutral-400",
           )}
@@ -133,7 +134,7 @@ export default function PosCartLine({
               event.stopPropagation();
               onVoidSentLine?.(line.lineId);
             }}
-            className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
+            className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
             aria-label={`Void ${line.title}`}
           >
             <X size={14} strokeWidth={2.5} />
@@ -147,7 +148,7 @@ export default function PosCartLine({
               event.stopPropagation();
               onRemoveLine?.(line.lineId);
             }}
-            className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
+            className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
             aria-label={`Remove ${line.title}`}
           >
             <X size={14} strokeWidth={2.5} />
@@ -182,7 +183,7 @@ export default function PosCartLine({
                   onClick={() =>
                     onRemoveVariant?.(line.lineId, variant.optionId)
                   }
-                  className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
+                  className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
                   aria-label={`Remove ${variant.optionName}`}
                 >
                   <X size={14} strokeWidth={2.5} />
@@ -224,7 +225,7 @@ export default function PosCartLine({
                     onClick={() =>
                       onRemoveModifier?.(line.lineId, modifier.optionId)
                     }
-                    className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
+                    className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
                     aria-label={`Remove ${modifier.optionName}`}
                   >
                     <X size={14} strokeWidth={2.5} />
