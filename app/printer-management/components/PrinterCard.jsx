@@ -108,6 +108,11 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
         `Starting ${isTspl ? "TSPL label" : isStarPrnt ? "StarPRNT receipt" : "receipt"} test for ${printer.name} (${printer.localIp}:${printer.port})`,
         "info",
       );
+      if (!isTspl && storeProfile?.storeLogo) {
+        addLog("Including store logo at top of test print", "info");
+      } else if (!isTspl) {
+        addLog("No store logo set — printing test content only", "warning");
+      }
 
       let result;
       if (isTspl) {
@@ -122,6 +127,7 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
           delayAfterDisconnect: 300,
           testing: true,
           onlyConnectionTest: false,
+          logoUrl: storeProfile?.storeLogo || null,
         });
       }
 
