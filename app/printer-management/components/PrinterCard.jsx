@@ -109,7 +109,10 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
         "info",
       );
       if (!isTspl && storeProfile?.storeLogo) {
-        addLog("Including store logo at top of test print", "info");
+        addLog(
+          `Loading store logo via proxy: ${storeProfile.storeLogo.slice(0, 80)}…`,
+          "info",
+        );
       } else if (!isTspl) {
         addLog("No store logo set — printing test content only", "warning");
       }
@@ -128,11 +131,27 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
           testing: true,
           onlyConnectionTest: false,
           logoUrl: storeProfile?.storeLogo || null,
+          onLogoStatus: (status) => {
+            if (status?.success) {
+              addLog(
+                `✅ Logo raster ready (${status.width}×${status.height}, ${status.bytes} bytes, ${status.blackPixels} black dots)`,
+                "success",
+              );
+            } else if (status?.attempted) {
+              addLog(`❌ Logo failed: ${status.error}`, "error");
+            }
+          },
         });
       }
 
       if (result.success) {
         addLog(`✅ Connection successful!`, "success");
+        if (result.logoStatus?.attempted && !result.logoStatus.success) {
+          addLog(
+            `⚠️ Test printed without logo: ${result.logoStatus.error}`,
+            "warning",
+          );
+        }
         addLog(`Duration: ${result.duration || "N/A"}ms`, "info");
         toast.success(result.message);
       } else {
