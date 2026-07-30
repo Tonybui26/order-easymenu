@@ -13,6 +13,7 @@ import {
   X,
   Receipt,
   Type,
+  FileText,
 } from "lucide-react";
 import PrinterSetupModal from "./PrinterSetupModal";
 import { createTestPrintJob } from "@/lib/api/fetchApi";
@@ -33,6 +34,7 @@ import {
 import { isStarPrntPrinter, isTsplPrinter } from "@/lib/constants/printerLanguages";
 import { printTsplTestLabel } from "@/lib/printers/printTsplTestLabel";
 import { printTaxInvoiceReceiptTest } from "@/lib/printers/printTaxInvoiceReceiptTest";
+import { printBillReceiptTest } from "@/lib/printers/printBillReceiptTest";
 import { printPrinterFontTest } from "@/lib/printers/printPrinterFontTest";
 
 export default function PrinterCard({ printer, onDelete, onUpdate }) {
@@ -41,6 +43,7 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
   const [testingPrinter, setTestingPrinter] = useState(false);
   const [testingFonts, setTestingFonts] = useState(false);
   const [testingReceipt, setTestingReceipt] = useState(false);
+  const [testingBill, setTestingBill] = useState(false);
   const [aggressiveTestingPrinter, setAggressiveTestingPrinter] =
     useState(false);
   const [resettingPrinter, setResettingPrinter] = useState(false);
@@ -260,6 +263,64 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
       toast.error("Failed to test receipt: " + error.message);
     } finally {
       setTestingReceipt(false);
+    }
+  };
+
+  const handleTestBillPrinter = async () => {
+    try {
+      setTestingBill(true);
+      setCurrentTestType("BILL Receipt Test");
+      clearLogs();
+      setShowLogsModal(true);
+
+      addLog(
+        `Starting BILL receipt test for ${printer.name} (${printer.localIp}:${printer.port})`,
+        "info",
+      );
+      if (storeProfile?.storeLogo) {
+        addLog(
+          `Loading store logo via proxy: ${storeProfile.storeLogo.slice(0, 80)}…`,
+          "info",
+        );
+      } else {
+        addLog("No store logo set — printing receipt without logo", "warning");
+      }
+
+      const result = await printBillReceiptTest(printer, {
+        storeProfile,
+        delayAfterDisconnect: 300,
+        onLogoStatus: (status) => {
+          if (status?.success) {
+            addLog(
+              `✅ Logo raster ready (${status.width}×${status.height}, ${status.bytes} bytes, ${status.blackPixels} black dots)`,
+              "success",
+            );
+          } else if (status?.attempted) {
+            addLog(`❌ Logo failed: ${status.error}`, "error");
+          }
+        },
+      });
+
+      if (result.success) {
+        addLog("✅ Bill test successful!", "success");
+        if (result.logoStatus?.attempted && !result.logoStatus.success) {
+          addLog(
+            `⚠️ Bill printed without logo: ${result.logoStatus.error}`,
+            "warning",
+          );
+        }
+        addLog(`Duration: ${result.duration || "N/A"}ms`, "info");
+        toast.success(result.message);
+      } else {
+        addLog(`❌ Bill test failed: ${result.message}`, "error");
+        toast.error(result.message);
+      }
+    } catch (error) {
+      addLog(`💥 Unexpected error: ${error.message}`, "error");
+      console.error("Error testing bill printer:", error);
+      toast.error("Failed to test bill: " + error.message);
+    } finally {
+      setTestingBill(false);
     }
   };
 
@@ -497,25 +558,46 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
                 </li>
               ) : null}
               {printer.forReceipt && !isTsplPrinter(printer) ? (
-                <li>
-                  <button
-                    onClick={handleTestReceiptPrinter}
-                    disabled={testingReceipt}
-                    className="flex items-center gap-2"
-                  >
-                    {testingReceipt ? (
-                      <>
-                        <div className="h-4 w-4 animate-spin rounded-full border border-teal-300 border-t-teal-600"></div>
-                        Printing Receipt...
-                      </>
-                    ) : (
-                      <>
-                        <Receipt className="h-4 w-4" />
-                        Test Receipt
-                      </>
-                    )}
-                  </button>
-                </li>
+                <>
+                  <li>
+                    <button
+                      onClick={handleTestReceiptPrinter}
+                      disabled={testingReceipt}
+                      className="flex items-center gap-2"
+                    >
+                      {testingReceipt ? (
+                        <>
+                          <div className="h-4 w-4 animate-spin rounded-full border border-teal-300 border-t-teal-600"></div>
+                          Printing Receipt...
+                        </>
+                      ) : (
+                        <>
+                          <Receipt className="h-4 w-4" />
+                          Test Receipt
+                        </>
+                      )}
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={handleTestBillPrinter}
+                      disabled={testingBill}
+                      className="flex items-center gap-2"
+                    >
+                      {testingBill ? (
+                        <>
+                          <div className="h-4 w-4 animate-spin rounded-full border border-teal-300 border-t-teal-600"></div>
+                          Printing Bill...
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="h-4 w-4" />
+                          Test Bill
+                        </>
+                      )}
+                    </button>
+                  </li>
+                </>
               ) : null}
               <li>
                 <button
