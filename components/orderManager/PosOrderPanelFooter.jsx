@@ -2,20 +2,10 @@
 
 import { Folder, Percent, SquareX, Printer } from "lucide-react";
 import { cn } from "@/lib/helper";
-
-const GST_RATE = 10;
-
-/**
- * Tax/GST dollar amount embedded in tax-inclusive prices.
- * inclusiveTotal × (rate / (100 + rate))
- */
-function computeIncludedTax(inclusiveTotal, taxPercentage = GST_RATE) {
-  const total = Number(inclusiveTotal);
-  const rate = Number(taxPercentage);
-  if (!Number.isFinite(total) || total <= 0) return 0;
-  if (!Number.isFinite(rate) || rate <= 0) return 0;
-  return Math.round(((total * rate) / (100 + rate)) * 100) / 100;
-}
+import {
+  computeIncludedTaxFromInclusiveTotal,
+  DEFAULT_TAX_PERCENTAGE,
+} from "@/lib/helper/includedTax";
 
 function formatMoney(amount) {
   return `$${Number(amount || 0).toFixed(2)}`;
@@ -28,7 +18,7 @@ function formatMoney(amount) {
 export default function PosOrderPanelFooter({
   subtotal = 0,
   discountAmount = null,
-  taxPercentage = GST_RATE,
+  taxPercentage = DEFAULT_TAX_PERCENTAGE,
   hasUnsentItems = false,
   viewOnly = false,
   onClear,
@@ -43,7 +33,7 @@ export default function PosOrderPanelFooter({
       ? null
       : Number(discountAmount);
   const total = Math.max(0, safeSubtotal - (discount || 0));
-  const taxAmount = computeIncludedTax(total, taxPercentage);
+  const taxAmount = computeIncludedTaxFromInclusiveTotal(total, taxPercentage);
   const showSend = Boolean(hasUnsentItems) && !viewOnly;
 
   return (

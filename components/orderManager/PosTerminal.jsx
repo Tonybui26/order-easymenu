@@ -1051,6 +1051,7 @@ export default function PosTerminal() {
 
             <PosOrderPanelFooter
               subtotal={cartSubtotal}
+              taxPercentage={storeProfile.taxPercentage}
               hasUnsentItems={hasUnsentLines}
               viewOnly={isViewOnly}
               onClear={handleClearOrder}

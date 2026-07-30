@@ -55,6 +55,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
     menuLink: (menuData && menuData.menuLink) || "",
     storeAddress: (menuData && menuData.storeAddress) || "",
     storeABN: (menuData && menuData.storeABN) || "",
+    taxPercentage: menuData?.taxPercentage ?? 10,
     stripeConfig: (menuData && menuData.stripeConfig) || {},
     paymentMethods: (menuData && menuData.paymentMethods) || {
       stripe: { enabled: false, isDefault: false },
@@ -89,6 +90,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
             menuLink: data.menuLink || "",
             storeAddress: data.storeAddress || "",
             storeABN: data.storeABN || "",
+            taxPercentage: data.taxPercentage ?? 10,
             stripeConfig: data.stripeConfig || {},
             paymentMethods: data.paymentMethods || {
               stripe: { enabled: false, isDefault: false },
@@ -165,6 +167,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
           menuLink: data.menuLink || "",
           storeAddress: data.storeAddress || "",
           storeABN: data.storeABN || "",
+          taxPercentage: data.taxPercentage ?? 10,
           stripeConfig: data.stripeConfig || {},
           paymentMethods: data.paymentMethods || {
             stripe: { enabled: false, isDefault: false },
