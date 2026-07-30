@@ -58,17 +58,41 @@ function OrderCardFooterTrigger({ title, isOpen, onClick, className = "" }) {
           type="button"
           onClick={onClick}
           aria-expanded={isOpen}
-          className="flex w-full items-center justify-between py-2.5 text-left text-sm font-medium text-gray-700 transition-colors hover:text-gray-800"
+          aria-label={isOpen ? `Close ${title.toLowerCase()}` : title}
+          className={cn(
+            "flex w-full items-center justify-between py-2.5 text-left text-sm font-medium transition-colors",
+            isOpen
+              ? "text-gray-900 hover:text-gray-950"
+              : "text-gray-700 hover:text-gray-800",
+          )}
         >
-          <span>{title}</span>
-          <motion.span
-            animate={{ rotate: isOpen ? 180 : 0 }}
-            transition={{ duration: 0.2, ease: "easeInOut" }}
-            className="inline-flex shrink-0"
-            aria-hidden
+          <span
+            className={cn(
+              "inline-flex items-center gap-2",
+              isOpen && "font-semibold",
+            )}
           >
-            <ChevronDown className="h-4 w-4 text-gray-500" />
-          </motion.span>
+            {isOpen ? (
+              <>
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-gray-900 text-white">
+                  <X className="h-3 w-3" strokeWidth={2.5} aria-hidden />
+                </span>
+                Close
+              </>
+            ) : (
+              title
+            )}
+          </span>
+          {!isOpen ? (
+            <motion.span
+              animate={{ rotate: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+              className="inline-flex shrink-0"
+              aria-hidden
+            >
+              <ChevronDown className="h-4 w-4 text-gray-500" />
+            </motion.span>
+          ) : null}
         </button>
       </div>
     </div>
@@ -539,7 +563,7 @@ export default function OrderCard({
   };
 
   return (
-    <div className="relative flex w-full flex-col self-start rounded-lg border border-gray-100 bg-white transition-all duration-200 hover:border-gray-200">
+    <div className="relative flex w-full flex-col self-start overflow-hidden rounded-2xl border border-gray-100 bg-white transition-all duration-200 hover:border-gray-200">
       <div className="relative shrink-0 overflow-hidden">
         <motion.div
           animate={{
