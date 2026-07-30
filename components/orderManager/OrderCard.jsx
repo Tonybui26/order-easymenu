@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { formatDistanceToNow } from "date-fns";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Clock,
   Check,
@@ -13,12 +14,11 @@ import {
   Package,
   CreditCard,
   AlertTriangle,
-  DollarSign,
   Banknote,
   Eye,
   EyeOff,
   Users,
-  Printer,
+  ChevronDown,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { sendOrderReceiptEmail } from "@/lib/api/fetchApi";
@@ -30,8 +30,8 @@ import {
 } from "@/lib/helper/pickupTimeDisplay";
 import { ModifierChoicesGrouped } from "@/lib/utils/modifierDisplay";
 import { getCustomerDisplayName } from "@/lib/helper/printNameAlias";
+import { cn } from "@/lib/helper";
 import { isOrderPaidForFulfillment } from "@/lib/helper/orderPaymentStatus";
-import OrderCardAccordion from "./OrderCardAccordion";
 import OrderCardMoreInfo from "./OrderCardMoreInfo";
 import RefundModal from "./RefundModal";
 import SendRefundConfirmationModal from "./SendRefundConfirmationModal";
@@ -42,6 +42,45 @@ function getOrderTableNumber(table) {
   const normalized = value.toLowerCase();
   if (normalized === "takeaway" || normalized === "pickup") return null;
   return value;
+}
+
+const ORDER_CARD_SLIDE_TRANSITION = {
+  type: "spring",
+  damping: 28,
+  stiffness: 320,
+};
+
+function OrderCardFooterTrigger({ title, isOpen, onClick, className = "" }) {
+  return (
+    <div className={className}>
+      <div className="px-4 py-1 xl:px-6">
+        <button
+          type="button"
+          onClick={onClick}
+          aria-expanded={isOpen}
+          className="flex w-full items-center justify-between py-2.5 text-left text-sm font-medium text-gray-700 transition-colors hover:text-gray-800"
+        >
+          <span>{title}</span>
+          <motion.span
+            animate={{ rotate: isOpen ? 180 : 0 }}
+            transition={{ duration: 0.2, ease: "easeInOut" }}
+            className="inline-flex shrink-0"
+            aria-hidden
+          >
+            <ChevronDown className="h-4 w-4 text-gray-500" />
+          </motion.span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function orderSlideActionButtonClass(colorClass, disabled = false) {
+  return cn(
+    "flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold uppercase tracking-wide transition-colors",
+    colorClass,
+    disabled && "cursor-not-allowed opacity-50",
+  );
 }
 
 export default function OrderCard({
@@ -71,6 +110,18 @@ export default function OrderCard({
   const [refundModalOpen, setRefundModalOpen] = useState(false);
   const [refundConfirmationModalOpen, setRefundConfirmationModalOpen] =
     useState(false);
+
+  const slidePanelOpen = moreInfoOpen || moreActionsOpen;
+
+  function toggleMoreInfo() {
+    setMoreActionsOpen(false);
+    setMoreInfoOpen((open) => !open);
+  }
+
+  function toggleMoreActions() {
+    setMoreInfoOpen(false);
+    setMoreActionsOpen((open) => !open);
+  }
 
   const isFulfillmentTimelineView = ["scheduled", "preparing", "ready"].includes(
     viewMode,
@@ -488,7 +539,16 @@ export default function OrderCard({
   };
 
   return (
-    <div className="flex flex-col justify-between overflow-hidden rounded-lg border border-gray-100 bg-white transition-all duration-200 hover:border-gray-200">
+    <div className="relative flex w-full flex-col self-start rounded-lg border border-gray-100 bg-white transition-all duration-200 hover:border-gray-200">
+      <div className="relative shrink-0 overflow-hidden">
+        <motion.div
+          animate={{
+            opacity: slidePanelOpen ? 0.35 : 1,
+            scale: slidePanelOpen ? 0.98 : 1,
+          }}
+          transition={{ duration: 0.22, ease: "easeOut" }}
+          className={slidePanelOpen ? "pointer-events-none" : undefined}
+        >
       <div>
         {/* Header */}
         <div className="p-4 pb-4 xl:p-6">
@@ -930,87 +990,119 @@ export default function OrderCard({
           )}
         </div>
       </div>
-      <div className="border-t border-[#eee] bg-[#f6f6f6]">
-        <OrderCardAccordion
+        </motion.div>
+
+        <AnimatePresence>
+          {moreInfoOpen ? (
+            <motion.div
+              key="order-more-info"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={ORDER_CARD_SLIDE_TRANSITION}
+              className="absolute inset-x-0 bottom-0 z-20 max-h-[min(70vh,85%)] overflow-y-auto border-t border-neutral-100 bg-white px-4 py-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] xl:px-6"
+            >
+              <OrderCardMoreInfo
+                order={order}
+                isDineIn={isDineIn}
+                isDelivery={isDelivery}
+                isPickUp={isPickUp}
+                payLaterEnabled={payLaterEnabled}
+              />
+            </motion.div>
+          ) : null}
+          {moreActionsOpen ? (
+            <motion.div
+              key="order-more-actions"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={ORDER_CARD_SLIDE_TRANSITION}
+              className="absolute inset-x-0 bottom-0 z-20 flex flex-col gap-2 border-t border-neutral-100 bg-white p-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]"
+            >
+              {showEmailReceipt && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReceiptEmailInput(String(order.customerEmail || "").trim());
+                    setReceiptModalOpen(true);
+                  }}
+                  className={orderSlideActionButtonClass(
+                    "bg-teal-600 text-white hover:bg-teal-700 active:bg-teal-800",
+                  )}
+                >
+                  Receipt
+                </button>
+              )}
+              {showIssueRefund && (
+                <button
+                  type="button"
+                  onClick={() => setRefundModalOpen(true)}
+                  disabled={isProcessing}
+                  className={orderSlideActionButtonClass(
+                    "bg-amber-500 text-white hover:bg-amber-600 active:bg-amber-700",
+                    isProcessing,
+                  )}
+                >
+                  Refund
+                </button>
+              )}
+              {showSendRefundConfirmation && (
+                <button
+                  type="button"
+                  onClick={() => setRefundConfirmationModalOpen(true)}
+                  disabled={isProcessing}
+                  className={orderSlideActionButtonClass(
+                    "bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800",
+                    isProcessing,
+                  )}
+                >
+                  Send refund confirmation
+                </button>
+              )}
+              {showPrintOrder && (
+                <button
+                  type="button"
+                  onClick={() => onPrint(order)}
+                  disabled={isProcessing}
+                  className={orderSlideActionButtonClass(
+                    "bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800",
+                    isProcessing,
+                  )}
+                >
+                  Print order
+                </button>
+              )}
+              {showCancelOrder && (
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  disabled={isProcessing}
+                  className={orderSlideActionButtonClass(
+                    "bg-red-600 text-white hover:bg-red-700 active:bg-red-800",
+                    isProcessing,
+                  )}
+                >
+                  Cancel
+                </button>
+              )}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </div>
+
+      <div className="relative z-30 shrink-0 border-t border-[#eee] bg-[#f6f6f6]">
+        <OrderCardFooterTrigger
           title="More info"
           isOpen={moreInfoOpen}
-          onToggle={() => setMoreInfoOpen((open) => !open)}
-        >
-          <OrderCardMoreInfo
-            order={order}
-            isDineIn={isDineIn}
-            isDelivery={isDelivery}
-            isPickUp={isPickUp}
-            payLaterEnabled={payLaterEnabled}
-          />
-        </OrderCardAccordion>
-
-        <OrderCardAccordion
+          onClick={toggleMoreInfo}
+        />
+        <OrderCardFooterTrigger
           title="More actions"
           isOpen={moreActionsOpen}
-          onToggle={() => setMoreActionsOpen((open) => !open)}
+          onClick={toggleMoreActions}
           className="border-t border-[#eeeeee]"
-          contentClassName="flex flex-col gap-2 border-t border-[#d9d9d9] py-3"
-        >
-          {showEmailReceipt && (
-            <button
-              type="button"
-              onClick={() => {
-                setReceiptEmailInput(String(order.customerEmail || "").trim());
-                setReceiptModalOpen(true);
-              }}
-              className="btn-primary btn btn-sm"
-            >
-              Email receipt
-            </button>
-          )}
-          {showIssueRefund && (
-            <button
-              type="button"
-              onClick={() => setRefundModalOpen(true)}
-              disabled={isProcessing}
-              className="btn btn-outline btn-sm w-full justify-center border-red-300 text-red-700 hover:bg-red-50"
-            >
-              Issue refund
-            </button>
-          )}
-          {showSendRefundConfirmation && (
-            <button
-              type="button"
-              onClick={() => setRefundConfirmationModalOpen(true)}
-              disabled={isProcessing}
-              className="btn btn-outline btn-sm w-full justify-center border-gray-300 text-gray-800 hover:bg-gray-100"
-            >
-              Send refund confirmation
-            </button>
-          )}
-          {showPrintOrder && (
-            <button
-              type="button"
-              onClick={() => onPrint(order)}
-              disabled={isProcessing}
-              className={`btn btn-outline btn-sm w-full justify-center gap-2 border-gray-300 text-gray-700 ${
-                isProcessing ? "btn-disabled" : "hover:bg-gray-100"
-              }`}
-            >
-              <Printer className="h-4 w-4 text-brand_accent" strokeWidth={2} />
-              Print order
-            </button>
-          )}
-          {showCancelOrder && (
-            <button
-              type="button"
-              onClick={handleCancel}
-              disabled={isProcessing}
-              className={`btn btn-outline btn-sm w-full justify-center gap-2 border-gray-300 text-red-700 ${
-                isProcessing ? "btn-disabled" : ""
-              }`}
-            >
-              <X className="h-4 w-4" strokeWidth={1.5} />
-              Cancel order
-            </button>
-          )}
-        </OrderCardAccordion>
+        />
       </div>
 
       {/* DaisyUI modal (same pattern as MoreMenuButton): dialog + modal-open + modal-box + modal-backdrop. */}

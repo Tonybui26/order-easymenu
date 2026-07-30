@@ -2187,7 +2187,7 @@ export default function LiveOrderTerminal() {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:gap-6">
+              <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 lg:grid-cols-3 xl:gap-6">
                 {completedOrders.map((order) => (
                   <OrderCard
                     key={order._id}
@@ -2256,7 +2256,7 @@ export default function LiveOrderTerminal() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:gap-6">
+          <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 lg:grid-cols-3 xl:gap-6">
             {filteredOrders.map((order) => (
               <OrderCard
                 key={order._id}
