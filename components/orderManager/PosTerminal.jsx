@@ -1115,9 +1115,7 @@ export default function PosTerminal() {
                             isAboveSelected && "rounded-br-2xl",
                             isBelowSelected && "rounded-tr-2xl",
                             isSelected || customizingItem ? "z-20" : undefined,
-                            customizingItem &&
-                              isSelected &&
-                              "ring-2 ring-inset ring-black/10",
+                            customizingItem && isSelected && "",
                           )}
                           style={{
                             borderLeftColor: tab.backgroundColor || "#d9d9d9",
