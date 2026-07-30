@@ -264,6 +264,7 @@ export default function PosTerminal() {
   }, [tabs, selectedTabId]);
 
   const selectedTab = tabs.find((tab) => tab.id === selectedTabId) || null;
+  const selectedTabIndex = tabs.findIndex((tab) => tab.id === selectedTabId);
   const selectedRows = selectedTab?.rows || [];
   const isViewOnly = isCheckPaid;
   const isTableFieldLocked = isViewOnly || isResumedCheck;
@@ -1070,37 +1071,53 @@ export default function PosTerminal() {
                     No POS tabs yet. Configure Menu layout in admin.
                   </div>
                 ) : (
-                  tabs.map((tab) => {
-                    const isSelected = tab.id === selectedTabId;
-                    return (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => handleTabClick(tab.id)}
-                        className={cn(
-                          "relative flex min-h-[72px] w-full items-center justify-start px-3 py-6 text-left text-base font-semibold text-neutral-900 transition-opacity xl:text-lg",
-                          isSelected || customizingItem
-                            ? "z-20"
-                            : "hover:opacity-90",
-                          customizingItem &&
-                            isSelected &&
-                            "ring-2 ring-inset ring-black/10",
-                        )}
-                        style={{
-                          backgroundColor: tab.backgroundColor || "#d9d9d9",
-                        }}
-                      >
-                        <span className="line-clamp-2 pr-5 leading-tight">
-                          {tab.name}
-                        </span>
-                        {isSelected ? (
-                          <span className="pointer-events-none absolute right-0 top-1/2 z-40 flex size-6 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full bg-red-500 text-white shadow-md ring-2 ring-white">
-                            <Check size={14} strokeWidth={3} />
+                  <div className="flex min-h-full flex-col">
+                    {tabs.map((tab, index) => {
+                      const isSelected = tab.id === selectedTabId;
+                      const isAboveSelected =
+                        selectedTabIndex >= 0 && index === selectedTabIndex - 1;
+                      const isBelowSelected =
+                        selectedTabIndex >= 0 && index === selectedTabIndex + 1;
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => handleTabClick(tab.id)}
+                          className={cn(
+                            "relative flex min-h-[72px] w-full shrink-0 items-center justify-start border-l-[7px] px-3 py-6 text-left text-base font-semibold text-neutral-900 transition-colors xl:text-lg",
+                            isSelected ? "bg-[#f0f0f0]" : "bg-white hover:bg-neutral-50",
+                            isAboveSelected && "rounded-br-3xl",
+                            isBelowSelected && "rounded-tr-3xl",
+                            isSelected || customizingItem
+                              ? "z-20"
+                              : undefined,
+                            customizingItem &&
+                              isSelected &&
+                              "ring-2 ring-inset ring-black/10",
+                          )}
+                          style={{
+                            borderLeftColor: tab.backgroundColor || "#d9d9d9",
+                          }}
+                        >
+                          <span className="line-clamp-2 pr-5 leading-tight">
+                            {tab.name}
                           </span>
-                        ) : null}
-                      </button>
-                    );
-                  })
+                          {isSelected ? (
+                            <span className="pointer-events-none absolute right-0 top-1/2 z-40 flex size-6 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full bg-red-500 text-white shadow-md ring-2 ring-white">
+                              <Check size={14} strokeWidth={3} />
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                    <div
+                      aria-hidden="true"
+                      className={cn(
+                        "min-h-0 flex-1 border-l-[7px] border-l-transparent bg-white",
+                        selectedTabIndex === tabs.length - 1 && "rounded-tr-3xl",
+                      )}
+                    />
+                  </div>
                 )}
               </div>
 
