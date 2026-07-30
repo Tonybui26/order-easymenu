@@ -5,8 +5,14 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import {
   fetchPosHeldOrders,
+  fetchPosResumeOrders,
   updatePosHeldCheckStatus,
 } from "@/lib/api/fetchApi";
+import { useMenuContext } from "@/components/context/MenuContext";
+import {
+  printBillForHeldCheck,
+  reprintHeldCheckKitchen,
+} from "@/lib/pos/posHeldOrderPrint";
 import {
   getAllTicketIds,
   getTicketIdsNotDelivered,
@@ -33,6 +39,7 @@ export default function PosHeldOrders() {
     hideToast: hideDismissibleToast,
   } = useDismissibleToast();
   const { handleOpenCashDrawer } = usePosOpenCashDrawer(showDismissibleToast);
+  const { storeProfile, itemGroups } = useMenuContext();
   const [heldOrders, setHeldOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [processingCheckId, setProcessingCheckId] = useState(null);
@@ -144,6 +151,73 @@ export default function PosHeldOrders() {
     await markTicketsDelivered(order, ticketIds, "Order completed");
   }
 
+  async function loadHeldCheckOrders(heldEntry) {
+    const orderIds = heldEntry?.orderIds || [];
+    if (orderIds.length === 0) {
+      showDismissibleToast("No tickets on this check");
+      return null;
+    }
+
+    const result = await fetchPosResumeOrders(orderIds);
+    if (!result?.success || !result.orders?.length) {
+      showDismissibleToast(result?.error || "Could not load check");
+      return null;
+    }
+
+    return result.orders;
+  }
+
+  async function handlePrintBillHeldOrder(heldEntry) {
+    if (processingCheckId) return;
+
+    setProcessingCheckId(heldEntry.id);
+    try {
+      const orders = await loadHeldCheckOrders(heldEntry);
+      if (!orders) return;
+
+      const result = await printBillForHeldCheck(orders, {
+        storeProfile,
+        heldEntry,
+      });
+
+      if (result.success) {
+        toast.success(result.message || "Bill printed");
+      } else {
+        showDismissibleToast(result.message || "Failed to print bill");
+      }
+    } catch (error) {
+      showDismissibleToast(error?.message || "Failed to print bill");
+    } finally {
+      setProcessingCheckId(null);
+    }
+  }
+
+  async function handleReprintHeldOrder(heldEntry) {
+    if (processingCheckId) return;
+
+    setProcessingCheckId(heldEntry.id);
+    try {
+      const orders = await loadHeldCheckOrders(heldEntry);
+      if (!orders) return;
+
+      const result = await reprintHeldCheckKitchen(orders, {
+        storeProfile,
+        itemGroups,
+        showCustomToast: showDismissibleToast,
+      });
+
+      if (result.success) {
+        toast.success(result.message || "Kitchen ticket reprinted");
+      } else {
+        showDismissibleToast(result.message || "Failed to reprint order");
+      }
+    } catch (error) {
+      showDismissibleToast(error?.message || "Failed to reprint order");
+    } finally {
+      setProcessingCheckId(null);
+    }
+  }
+
   return (
     <>
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
@@ -187,6 +261,8 @@ export default function PosHeldOrders() {
                     onReady={handleReadyHeldOrder}
                     onAllItemsServed={handleAllItemsServedHeldOrder}
                     onComplete={handleCompleteHeldOrder}
+                    onPrintBill={handlePrintBillHeldOrder}
+                    onReprintOrder={handleReprintHeldOrder}
                     isProcessing={processingCheckId === order.id}
                   />
                 </li>
