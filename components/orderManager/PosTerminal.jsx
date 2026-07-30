@@ -973,7 +973,7 @@ export default function PosTerminal() {
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {/* Left: current order */}
-          <section className="flex w-[34%] min-w-[280px] max-w-[440px] shrink-0 flex-col border-r border-neutral-300 bg-white pb-[env(safe-area-inset-bottom)]">
+          <section className="flex w-[34%] min-w-[280px] max-w-[440px] shrink-0 flex-col bg-white pb-[env(safe-area-inset-bottom)]">
             <div className="flex shrink-0 items-stretch border-b border-neutral-200 bg-[#ececec] p-2">
               <motion.button
                 key={tableFieldShakeKey}
@@ -1064,7 +1064,7 @@ export default function PosTerminal() {
           {/* Right: POS menu layout (tabs + products) */}
           <section className="flex min-w-0 flex-1">
             {/* Tabs column — z-30 + overhang so selected indicator sits on top of products */}
-            <aside className="relative z-30 flex w-[120px] shrink-0 flex-col bg-[#e0e0e0] pb-[env(safe-area-inset-bottom)] sm:w-[150px]">
+            <aside className="relative z-30 flex w-[120px] shrink-0 flex-col bg-[#f0f0f0] pb-[env(safe-area-inset-bottom)] sm:w-[150px]">
               <div className="-mr-3 min-h-0 flex-1 overflow-y-auto pr-3">
                 {tabs.length === 0 ? (
                   <div className="p-3 text-center text-xs text-neutral-500">
@@ -1085,12 +1085,12 @@ export default function PosTerminal() {
                           onClick={() => handleTabClick(tab.id)}
                           className={cn(
                             "relative flex min-h-[72px] w-full shrink-0 items-center justify-start border-l-[7px] px-3 py-6 text-left text-base font-semibold text-neutral-900 transition-colors xl:text-lg",
-                            isSelected ? "bg-[#f0f0f0]" : "bg-white hover:bg-neutral-50",
-                            isAboveSelected && "rounded-br-3xl",
-                            isBelowSelected && "rounded-tr-3xl",
-                            isSelected || customizingItem
-                              ? "z-20"
-                              : undefined,
+                            isSelected
+                              ? "bg-[#f0f0f0]"
+                              : "bg-white hover:bg-neutral-50",
+                            isAboveSelected && "rounded-br-2xl",
+                            isBelowSelected && "rounded-tr-2xl",
+                            isSelected || customizingItem ? "z-20" : undefined,
                             customizingItem &&
                               isSelected &&
                               "ring-2 ring-inset ring-black/10",
@@ -1113,8 +1113,9 @@ export default function PosTerminal() {
                     <div
                       aria-hidden="true"
                       className={cn(
-                        "min-h-0 flex-1 border-l-[7px] border-l-transparent bg-white",
-                        selectedTabIndex === tabs.length - 1 && "rounded-tr-3xl",
+                        "min-h-0 flex-1 border-l-[7px] border-l-gray-200 bg-white",
+                        selectedTabIndex === tabs.length - 1 &&
+                          "rounded-tr-2xl",
                       )}
                     />
                   </div>
