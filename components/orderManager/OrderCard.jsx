@@ -147,9 +147,11 @@ export default function OrderCard({
     setMoreActionsOpen((open) => !open);
   }
 
-  const isFulfillmentTimelineView = ["scheduled", "preparing", "ready"].includes(
-    viewMode,
-  );
+  const isFulfillmentTimelineView = [
+    "scheduled",
+    "preparing",
+    "ready",
+  ].includes(viewMode);
   const [fulfillmentNow, setFulfillmentNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -241,17 +243,16 @@ export default function OrderCard({
   const isPreorder = Boolean(order.isPreorder);
 
   const showFulfillmentExpectedLabel =
-    !isTableOrder &&
-    ["scheduled", "preparing", "ready"].includes(viewMode);
+    !isTableOrder && ["scheduled", "preparing", "ready"].includes(viewMode);
 
   const fulfillmentNowDate = new Date(fulfillmentNow);
 
   const scheduledExpectedLabel = showFulfillmentExpectedLabel
-      ? formatScheduledExpectedLabel(order, {
-          isDelivery,
-          now: fulfillmentNowDate,
-        })
-      : null;
+    ? formatScheduledExpectedLabel(order, {
+        isDelivery,
+        now: fulfillmentNowDate,
+      })
+    : null;
 
   const isScheduledOverdue =
     Boolean(scheduledExpectedLabel) &&
@@ -541,8 +542,7 @@ export default function OrderCard({
 
   const showEmailReceipt =
     order.status !== "cancelled" && order.paymentStatus === "paid";
-  const showIssueRefund =
-    order.paymentStatus === "paid" && viewMode !== "new";
+  const showIssueRefund = order.paymentStatus === "paid" && viewMode !== "new";
   const showSendRefundConfirmation =
     (order.paymentStatus === "refunded" ||
       order.paymentStatus === "partially_refunded") &&
@@ -573,447 +573,457 @@ export default function OrderCard({
           transition={{ duration: 0.22, ease: "easeOut" }}
           className={slidePanelOpen ? "pointer-events-none" : undefined}
         >
-      <div>
-        {/* Header */}
-        <div className="p-4 pb-4 xl:p-6">
-          {/* show me a order status banner here and it only visible in order completed mode */}
-          {viewMode === "completed" && (
-            <div
-              className={`mb-1 inline-block rounded-md border p-2 ${
-                order.status === "delivered"
-                  ? "border-green-300 bg-gradient-to-r from-green-50 to-emerald-50"
-                  : "border-red-300 bg-gradient-to-r from-red-50 to-pink-50"
-              }`}
-            >
-              <div className="flex items-center justify-center">
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`text-sm font-semibold capitalize ${
-                      order.status === "delivered"
-                        ? "text-green-800"
-                        : "text-red-800"
-                    }`}
+          <div>
+            {/* Header */}
+            <div className="p-4 pb-4 xl:p-6">
+              {/* show me a order status banner here and it only visible in order completed mode */}
+              {viewMode === "completed" && (
+                <div
+                  className={`mb-1 inline-block rounded-md border p-2 ${
+                    order.status === "delivered"
+                      ? "border-green-300 bg-gradient-to-r from-green-50 to-emerald-50"
+                      : "border-red-300 bg-gradient-to-r from-red-50 to-pink-50"
+                  }`}
+                >
+                  <div className="flex items-center justify-center">
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`text-sm font-semibold capitalize ${
+                          order.status === "delivered"
+                            ? "text-green-800"
+                            : "text-red-800"
+                        }`}
+                      >
+                        {order.status === "delivered"
+                          ? "Completed"
+                          : "Cancelled"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-start justify-between">
+                {/* Payment Status - temporarily hidden */}
+                <div className="hidden">
+                  <div
+                    className={`inline-flex items-center gap-1.5 rounded-full border ${getPaymentStatusStyle(order.paymentStatus).border} px-2 py-1 text-xs font-semibold ${getPaymentStatusStyle(order.paymentStatus).background}`}
                   >
-                    {order.status === "delivered" ? "Completed" : "Cancelled"}
-                  </span>
+                    {order.paymentMethod === "counter-cash" ||
+                    order.paymentMethod === "cash" ? (
+                      <Banknote
+                        className={`size-4 ${getPaymentStatusStyle(order.paymentStatus).text}`}
+                        strokeWidth={2}
+                      />
+                    ) : order.paymentMethod === "counter-card" ? (
+                      <CreditCard
+                        className={`size-4 ${getPaymentStatusStyle(order.paymentStatus).text}`}
+                        strokeWidth={2}
+                      />
+                    ) : (
+                      <CreditCard
+                        className={`size-4 ${getPaymentStatusStyle(order.paymentStatus).text}`}
+                        strokeWidth={2}
+                      />
+                    )}
+                    <span
+                      className={`text-xs font-medium ${getPaymentStatusStyle(order.paymentStatus).text}`}
+                    >
+                      {getPaymentStatusText(order.paymentStatus)}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-          <div className="flex items-start justify-between">
-            {/* Payment Status - temporarily hidden */}
-            <div className="hidden">
-              <div
-                className={`inline-flex items-center gap-1.5 rounded-full border ${getPaymentStatusStyle(order.paymentStatus).border} px-2 py-1 text-xs font-semibold ${getPaymentStatusStyle(order.paymentStatus).background}`}
-              >
-                {order.paymentMethod === "counter-cash" ||
-                order.paymentMethod === "cash" ? (
-                  <Banknote
-                    className={`size-4 ${getPaymentStatusStyle(order.paymentStatus).text}`}
-                    strokeWidth={2}
-                  />
-                ) : order.paymentMethod === "counter-card" ? (
-                  <CreditCard
-                    className={`size-4 ${getPaymentStatusStyle(order.paymentStatus).text}`}
-                    strokeWidth={2}
-                  />
-                ) : (
-                  <CreditCard
-                    className={`size-4 ${getPaymentStatusStyle(order.paymentStatus).text}`}
-                    strokeWidth={2}
-                  />
-                )}
-                <span
-                  className={`text-xs font-medium ${getPaymentStatusStyle(order.paymentStatus).text}`}
-                >
-                  {getPaymentStatusText(order.paymentStatus)}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-start justify-between">
-            <div className="flex items-center">
-              {/* temp hide */}
-              <div className="hidden h-12 w-12 items-center justify-center rounded-2xl bg-gray-50">
-                {isTableOrder ? (
-                  <MapPin className="h-5 w-5 text-gray-600" strokeWidth={1.5} />
-                ) : (
-                  <Package
-                    className="h-5 w-5 text-gray-600"
-                    strokeWidth={1.5}
-                  />
-                )}
-              </div>
-              <div>
-                <h3 className="text-2xl font-extrabold leading-tight text-gray-800">
-                  {orderTitle}
-                  {isPreorder ? (
-                    <span className="mb-1 ml-2 inline-block rounded-full bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-800">
-                      Pre-order
-                    </span>
-                  ) : null}
-                </h3>
-                <p className="mt-0.5 text-sm font-medium text-gray-500">
-                  #{order._id.slice(-6).toUpperCase()}
-                </p>
-                <div className="mt-1 flex flex-col items-start gap-1">
-                  {/* Pickup / delivery expected time */}
-                  {!isTableOrder && (
-                    <div className="text-xs text-gray-600">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center">
+                  {/* temp hide */}
+                  <div className="hidden h-12 w-12 items-center justify-center rounded-2xl bg-gray-50">
+                    {isTableOrder ? (
+                      <MapPin
+                        className="h-5 w-5 text-gray-600"
+                        strokeWidth={1.5}
+                      />
+                    ) : (
+                      <Package
+                        className="h-5 w-5 text-gray-600"
+                        strokeWidth={1.5}
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-extrabold leading-tight text-gray-800">
+                      {orderTitle}
                       {isPreorder ? (
-                        <span className="mb-1 hidden rounded-full bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-800">
+                        <span className="mb-1 ml-2 inline-block rounded-full bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-800">
                           Pre-order
                         </span>
                       ) : null}
-                      <div
-                        className={`flex items-center gap-1 rounded-md px-2 py-1 ${
-                          isScheduledOverdue
-                            ? "bg-red-100 text-red-800"
-                            : isScheduledInGrace
-                              ? "bg-yellow-100 text-yellow-800"
-                              : "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        <Clock className="size-4" strokeWidth={2} />
-                        <span className="text-xs font-semibold">
-                          {scheduledExpectedLabel ??
-                            `${formatPickupTimeShort(order.pickupTime)}`}
-                        </span>
-                      </div>
+                    </h3>
+                    <p className="mt-0.5 text-sm font-medium text-gray-500">
+                      #{order._id.slice(-6).toUpperCase()}
+                    </p>
+                    <div className="mt-1 flex flex-col items-start gap-1">
+                      {/* Pickup / delivery expected time */}
+                      {!isTableOrder && (
+                        <div className="text-xs text-gray-600">
+                          {isPreorder ? (
+                            <span className="mb-1 hidden rounded-full bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-800">
+                              Pre-order
+                            </span>
+                          ) : null}
+                          <div
+                            className={`flex items-center gap-1 rounded-md px-2 py-1 ${
+                              isScheduledOverdue
+                                ? "bg-red-100 text-red-800"
+                                : isScheduledInGrace
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            <Clock className="size-4" strokeWidth={2} />
+                            <span className="text-xs font-semibold">
+                              {scheduledExpectedLabel ??
+                                `${formatPickupTimeShort(order.pickupTime)}`}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      {/* Time Ago — hidden when showing fulfilment expected time */}
+                      {!scheduledExpectedLabel && (
+                        <div className="inline-flex items-center justify-end text-xs text-gray-500">
+                          Placed {timeAgo}
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {/* Time Ago — hidden when showing fulfilment expected time */}
-                  {!scheduledExpectedLabel && (
-                    <div className="inline-flex items-center justify-end text-xs text-gray-500">
-                      Placed {timeAgo}
+                    {/* Total + optional surcharge breakdown for pay-at-counter hidden temporarily */}
+                    {isCounterPayment(order.paymentMethod) && (
+                      <div className="hidden rounded-lg bg-gray-100 text-sm text-gray-600">
+                        <p className="text-lg font-medium text-gray-800">
+                          Total: ${Number(order.total ?? 0).toFixed(2)}
+                        </p>
+                        {Number(order.surchargeTotal ?? 0) > 0 && (
+                          <p className="mt-0.5 text-xs text-gray-500">
+                            Incl. surcharge $
+                            {Number(order.surchargeTotal).toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  {/* Order Status - Temporary hidden - list status include: pending, confirmed, preparing, ready, delivered, cancelled */}
+                  <div
+                    className={`hidden items-center gap-1.5 rounded-full border ${getStatusStyle(order.status).border} px-2 py-1 text-xs font-semibold ${getStatusStyle(order.status).background}`}
+                  >
+                    <div
+                      className={`h-2 w-2 rounded-full ${getStatusStyle(order.status).dot}`}
+                    ></div>
+                    <span
+                      className={`text-sm font-medium ${getStatusStyle(order.status).text}`}
+                    >
+                      {getStatusText(order.status)}
+                    </span>
+                  </div>
+                  {/* Customer info */}
+                  {order.customerName && (
+                    <div className="rounded-xl">
+                      <div className="flex items-center justify-between">
+                        <div className="flex min-w-0 flex-1 flex-col items-end">
+                          <p className="truncate text-2xl font-extrabold text-gray-800">
+                            {order.customerName}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Hidden customer info that appears when toggled */}
+                      {showCustomerInfo && (
+                        <div className="mt-3 space-y-2 rounded-lg bg-gray-50 p-3">
+                          {order.customerPhone && (
+                            <div className="flex items-center">
+                              <Phone
+                                className="mr-2 h-3.5 w-3.5 text-gray-500"
+                                strokeWidth={1.5}
+                              />
+                              <p className="text-sm text-gray-700">
+                                {order.customerPhone}
+                              </p>
+                            </div>
+                          )}
+                          {order.customerEmail && (
+                            <div className="flex items-center">
+                              <Mail
+                                className="mr-2 h-3.5 w-3.5 text-gray-500"
+                                strokeWidth={1.5}
+                              />
+                              <p className="text-sm text-gray-700">
+                                {order.customerEmail}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-                {/* Total + optional surcharge breakdown for pay-at-counter hidden temporarily */}
-                {isCounterPayment(order.paymentMethod) && (
-                  <div className="hidden rounded-lg bg-gray-100 text-sm text-gray-600">
-                    <p className="text-lg font-medium text-gray-800">
-                      Total: ${Number(order.total ?? 0).toFixed(2)}
-                    </p>
-                    {Number(order.surchargeTotal ?? 0) > 0 && (
-                      <p className="mt-0.5 text-xs text-gray-500">
-                        Incl. surcharge $
-                        {Number(order.surchargeTotal).toFixed(2)}
-                      </p>
-                    )}
-                  </div>
-                )}
               </div>
-            </div>
-
-            <div className="text-right">
-              {/* Order Status - Temporary hidden - list status include: pending, confirmed, preparing, ready, delivered, cancelled */}
-              <div
-                className={`hidden items-center gap-1.5 rounded-full border ${getStatusStyle(order.status).border} px-2 py-1 text-xs font-semibold ${getStatusStyle(order.status).background}`}
-              >
+              {/* Payment Warning for Failed/Pending- hidden temporarily */}
+              {(isPending || isFailed) && (
                 <div
-                  className={`h-2 w-2 rounded-full ${getStatusStyle(order.status).dot}`}
-                ></div>
-                <span
-                  className={`text-sm font-medium ${getStatusStyle(order.status).text}`}
+                  className={`mb-4 hidden rounded-xl border p-3 ${
+                    isFailed
+                      ? "border-red-200 bg-red-50"
+                      : "border-yellow-200 bg-yellow-50"
+                  }`}
                 >
-                  {getStatusText(order.status)}
-                </span>
-              </div>
-              {/* Customer info */}
-              {order.customerName && (
-                <div className="rounded-xl">
-                  <div className="flex items-center justify-between">
-                    <div className="flex min-w-0 flex-1 flex-col items-end">
-                      <p className="truncate text-2xl font-extrabold text-gray-800">
-                        {order.customerName}
-                      </p>
-                    </div>
+                  <div className="flex items-center space-x-2">
+                    <AlertTriangle
+                      className={`h-4 w-4 ${
+                        isFailed ? "text-red-600" : "text-yellow-600"
+                      }`}
+                      strokeWidth={1.5}
+                    />
+                    <p
+                      className={`text-sm font-medium ${
+                        isFailed ? "text-red-800" : "text-yellow-800"
+                      }`}
+                    >
+                      {isFailed
+                        ? "Payment failed - Customer needs to retry payment"
+                        : isCounterPayment(order.paymentMethod)
+                          ? "Counter payment pending"
+                          : "Payment pending - Waiting for customer payment"}
+                    </p>
                   </div>
-
-                  {/* Hidden customer info that appears when toggled */}
-                  {showCustomerInfo && (
-                    <div className="mt-3 space-y-2 rounded-lg bg-gray-50 p-3">
-                      {order.customerPhone && (
-                        <div className="flex items-center">
-                          <Phone
-                            className="mr-2 h-3.5 w-3.5 text-gray-500"
-                            strokeWidth={1.5}
-                          />
-                          <p className="text-sm text-gray-700">
-                            {order.customerPhone}
-                          </p>
-                        </div>
-                      )}
-                      {order.customerEmail && (
-                        <div className="flex items-center">
-                          <Mail
-                            className="mr-2 h-3.5 w-3.5 text-gray-500"
-                            strokeWidth={1.5}
-                          />
-                          <p className="text-sm text-gray-700">
-                            {order.customerEmail}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               )}
             </div>
-          </div>
-          {/* Payment Warning for Failed/Pending- hidden temporarily */}
-          {(isPending || isFailed) && (
-            <div
-              className={`mb-4 hidden rounded-xl border p-3 ${
-                isFailed
-                  ? "border-red-200 bg-red-50"
-                  : "border-yellow-200 bg-yellow-50"
-              }`}
-            >
-              <div className="flex items-center space-x-2">
-                <AlertTriangle
-                  className={`h-4 w-4 ${
-                    isFailed ? "text-red-600" : "text-yellow-600"
-                  }`}
-                  strokeWidth={1.5}
-                />
-                <p
-                  className={`text-sm font-medium ${
-                    isFailed ? "text-red-800" : "text-yellow-800"
-                  }`}
-                >
-                  {isFailed
-                    ? "Payment failed - Customer needs to retry payment"
-                    : isCounterPayment(order.paymentMethod)
-                      ? "Counter payment pending"
-                      : "Payment pending - Waiting for customer payment"}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-        {/* Actions */}
-        <div className="p-4 pt-0 xl:p-6">
-          <div className="flex space-x-3">
-            {showConfirmButton && (
-              <button
-                onClick={onPrepare}
-                className="flex flex-1 items-center justify-center space-x-2 rounded-lg bg-blue-600 px-4 py-4 font-medium text-white transition-colors duration-200 hover:bg-blue-700"
-              >
-                <ChefHat className="h-4 w-4" strokeWidth={1.5} />
-                <span>Prepare</span>
-              </button>
-            )}
+            {/* Actions */}
+            <div className="p-4 pt-0 xl:p-6">
+              <div className="flex space-x-3">
+                {showConfirmButton && (
+                  <button
+                    onClick={onPrepare}
+                    className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-blue-600 px-4 py-4 font-medium uppercase text-white transition-colors duration-200 hover:bg-blue-700"
+                  >
+                    <ChefHat className="h-4 w-4" strokeWidth={1.5} />
+                    <span>Prepare</span>
+                  </button>
+                )}
 
-            {showAcceptButton && typeof onAccept === "function" && (
-              <button
-                type="button"
-                onClick={onAccept}
-                disabled={isProcessing}
-                className={`flex flex-1 items-center justify-center space-x-2 rounded-lg bg-teal-600 px-4 py-4 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
-                  isProcessing
-                    ? "cursor-not-allowed opacity-50"
-                    : "hover:bg-teal-700"
-                }`}
-              >
-                <span>{isProcessing ? "Processing..." : "Accept"}</span>
-              </button>
-            )}
-
-            {showPrepareButton && (
-              <button
-                onClick={onPrepare}
-                disabled={isProcessing}
-                className={`flex flex-1 items-center justify-center space-x-2 rounded-lg bg-blue-600 px-4 py-4 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
-                  isProcessing
-                    ? "cursor-not-allowed opacity-50"
-                    : "hover:bg-blue-700"
-                }`}
-              >
-                <span>{isProcessing ? "Processing..." : "Prepare"}</span>
-              </button>
-            )}
-
-            {showReadyButton && (
-              <button
-                onClick={onReady}
-                disabled={isProcessing}
-                className={`flex flex-1 items-center justify-center space-x-2 rounded-lg bg-green-600 px-4 py-4 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
-                  isProcessing
-                    ? "cursor-not-allowed opacity-50"
-                    : "hover:bg-green-700"
-                }`}
-              >
-                <span>{isProcessing ? "Processing..." : "Ready"}</span>
-              </button>
-            )}
-
-            {showDeliverButton && (
-              <button
-                onClick={onDeliver}
-                disabled={isProcessing}
-                className={`flex flex-1 items-center justify-center space-x-2 rounded-lg bg-purple-600 px-4 py-4 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
-                  isProcessing
-                    ? "cursor-not-allowed opacity-50"
-                    : "hover:bg-purple-700"
-                }`}
-              >
-                <span>{isProcessing ? "Processing..." : "Complete"}</span>
-              </button>
-            )}
-
-            {showMarkAsPaidButton && (
-              <button
-                onClick={() => onMarkAsPaid(order._id)}
-                disabled={isProcessing}
-                className={`flex flex-1 items-center justify-center space-x-2 rounded-lg bg-green-600 px-4 py-4 text-sm font-medium text-white transition-colors duration-200 xl:text-base ${
-                  isProcessing
-                    ? "cursor-not-allowed opacity-50"
-                    : "hover:bg-green-700"
-                }`}
-              >
-                <span>{isProcessing ? "Processing..." : "Mark as Paid"}</span>
-              </button>
-            )}
-          </div>
-        </div>
-        {/* Divider */}
-        <div className="h-px bg-gray-300"></div>
-
-        {/* Order Items */}
-        <div className="p-4 pb-6 pt-2 xl:p-6">
-          {/* Progress indicator - only show when order is preparing */}
-          {order.status === "preparing" ? (
-            <div className="mb-4">
-              <div className="mb-2 flex items-center justify-between text-sm text-gray-600">
-                <span>Kitchen Progress</span>
-                <span>
-                  {completedItems.length}/{order.items.length} completed
-                </span>
-              </div>
-              <div className="h-2 w-full rounded-full bg-gray-200">
-                <div
-                  className="h-2 rounded-full bg-green-500 transition-all duration-300"
-                  style={{
-                    width: `${(completedItems.length / order.items.length) * 100}%`,
-                  }}
-                ></div>
-              </div>
-            </div>
-          ) : (
-            <div className="mb-4 hidden items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <h4 className="font-medium text-gray-800">Items</h4>
-                <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
-                  {order.items.length}
-                </span>
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-0 xl:space-y-1">
-            {order.items.map((item, index) => (
-              <div
-                key={index}
-                className={`flex items-start justify-between py-1 transition-all duration-200 xl:py-2 ${
-                  isItemCompleted(index) && order.status === "preparing"
-                    ? "opacity-60"
-                    : ""
-                }`}
-              >
-                <div
-                  className={`flex flex-1 items-start ${order.status !== "preparing" ? "space-x-5" : "space-x-2"}`}
-                >
-                  {/* Completion checkbox - only show when order is preparing */}
-                  {order.status === "preparing" && (
-                    <button
-                      onClick={() => toggleItemCompletion(index)}
-                      className={`mt-0.5 flex size-5 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors xl:size-6 ${
-                        isItemCompleted(index)
-                          ? "border-green-500 bg-green-500 text-white"
-                          : "border-gray-300 hover:border-green-400"
-                      }`}
-                    >
-                      {isItemCompleted(index) && (
-                        <Check className="h-3 w-3" strokeWidth={2} />
-                      )}
-                    </button>
-                  )}
-
-                  {/* Quantity badge - always show, gray out if completed */}
-                  <span
-                    className={`text-base font-bold ${
-                      isItemCompleted(index) && order.status === "preparing"
-                        ? "text-gray-400"
-                        : "text-gray-800"
+                {showAcceptButton && typeof onAccept === "function" && (
+                  <button
+                    type="button"
+                    onClick={onAccept}
+                    disabled={isProcessing}
+                    className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-teal-600 px-4 py-4 text-sm font-medium uppercase text-white transition-colors duration-200 xl:text-base ${
+                      isProcessing
+                        ? "cursor-not-allowed opacity-50"
+                        : "hover:bg-teal-700"
                     }`}
                   >
-                    {item.quantity}
-                  </span>
+                    <span>{isProcessing ? "Processing..." : "Accept"}</span>
+                  </button>
+                )}
 
-                  <div className="min-w-0 flex-1">
+                {showPrepareButton && (
+                  <button
+                    onClick={onPrepare}
+                    disabled={isProcessing}
+                    className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-blue-600 px-4 py-4 text-sm font-medium uppercase text-white transition-colors duration-200 xl:text-base ${
+                      isProcessing
+                        ? "cursor-not-allowed opacity-50"
+                        : "hover:bg-blue-700"
+                    }`}
+                  >
+                    <span>{isProcessing ? "Processing..." : "Prepare"}</span>
+                  </button>
+                )}
+
+                {showReadyButton && (
+                  <button
+                    onClick={onReady}
+                    disabled={isProcessing}
+                    className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-green-600 px-4 py-4 text-sm font-medium uppercase text-white transition-colors duration-200 xl:text-base ${
+                      isProcessing
+                        ? "cursor-not-allowed opacity-50"
+                        : "hover:bg-green-700"
+                    }`}
+                  >
+                    <span>{isProcessing ? "Processing..." : "Ready"}</span>
+                  </button>
+                )}
+
+                {showDeliverButton && (
+                  <button
+                    onClick={onDeliver}
+                    disabled={isProcessing}
+                    className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-purple-600 px-4 py-4 text-sm font-medium uppercase text-white transition-colors duration-200 xl:text-base ${
+                      isProcessing
+                        ? "cursor-not-allowed opacity-50"
+                        : "hover:bg-purple-700"
+                    }`}
+                  >
+                    <span>{isProcessing ? "Processing..." : "Complete"}</span>
+                  </button>
+                )}
+
+                {showMarkAsPaidButton && (
+                  <button
+                    onClick={() => onMarkAsPaid(order._id)}
+                    disabled={isProcessing}
+                    className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-green-600 px-4 py-4 text-sm font-medium uppercase text-white transition-colors duration-200 xl:text-base ${
+                      isProcessing
+                        ? "cursor-not-allowed opacity-50"
+                        : "hover:bg-green-700"
+                    }`}
+                  >
+                    <span>
+                      {isProcessing ? "Processing..." : "Mark as Paid"}
+                    </span>
+                  </button>
+                )}
+              </div>
+            </div>
+            {/* Divider */}
+            <div className="h-px bg-gray-300"></div>
+
+            {/* Order Items */}
+            <div className="p-4 pb-6 pt-2 xl:p-6">
+              {/* Progress indicator - only show when order is preparing */}
+              {order.status === "preparing" ? (
+                <div className="mb-4">
+                  <div className="mb-2 flex items-center justify-between text-sm text-gray-600">
+                    <span>Kitchen Progress</span>
+                    <span>
+                      {completedItems.length}/{order.items.length} completed
+                    </span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-gray-200">
+                    <div
+                      className="h-2 rounded-full bg-green-500 transition-all duration-300"
+                      style={{
+                        width: `${(completedItems.length / order.items.length) * 100}%`,
+                      }}
+                    ></div>
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-4 hidden items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <h4 className="font-medium text-gray-800">Items</h4>
+                    <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
+                      {order.items.length}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-0 xl:space-y-1">
+                {order.items.map((item, index) => (
+                  <div
+                    key={index}
+                    className={`flex items-start justify-between py-1 transition-all duration-200 xl:py-2 ${
+                      isItemCompleted(index) && order.status === "preparing"
+                        ? "opacity-60"
+                        : ""
+                    }`}
+                  >
+                    <div
+                      className={`flex flex-1 items-start ${order.status !== "preparing" ? "space-x-5" : "space-x-2"}`}
+                    >
+                      {/* Completion checkbox - only show when order is preparing */}
+                      {order.status === "preparing" && (
+                        <button
+                          onClick={() => toggleItemCompletion(index)}
+                          className={`mt-0.5 flex size-5 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors xl:size-6 ${
+                            isItemCompleted(index)
+                              ? "border-green-500 bg-green-500 text-white"
+                              : "border-gray-300 hover:border-green-400"
+                          }`}
+                        >
+                          {isItemCompleted(index) && (
+                            <Check className="h-3 w-3" strokeWidth={2} />
+                          )}
+                        </button>
+                      )}
+
+                      {/* Quantity badge - always show, gray out if completed */}
+                      <span
+                        className={`text-base font-bold ${
+                          isItemCompleted(index) && order.status === "preparing"
+                            ? "text-gray-400"
+                            : "text-gray-800"
+                        }`}
+                      >
+                        {item.quantity}
+                      </span>
+
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className={`text-base font-bold xl:text-base ${
+                            isItemCompleted(index) &&
+                            order.status === "preparing"
+                              ? "text-gray-500 line-through"
+                              : "text-gray-800"
+                          }`}
+                        >
+                          {getCustomerDisplayName(item.name)}
+                        </p>
+                        {item.selectedVariants &&
+                          item.selectedVariants.length > 0 && (
+                            <p className="text-sm font-medium text-gray-700">
+                              {item.selectedVariants
+                                .map(
+                                  (variant) =>
+                                    `${getCustomerDisplayName(variant.groupName)}: ${getCustomerDisplayName(variant.optionName)}`,
+                                )
+                                .join(", ")}
+                            </p>
+                          )}
+                        <ModifierChoicesGrouped
+                          modifiers={item.selectedModifiers}
+                          className="text-sm text-gray-700"
+                        />
+                        {item.notes && (
+                          <div className="mt-2 rounded-lg border border-yellow-100 bg-yellow-50 p-2">
+                            <p className="mb-1 text-xs font-medium text-yellow-800">
+                              Note
+                            </p>
+                            <p className="text-xs text-yellow-700">
+                              {item.notes}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {/* Line total: visible on all view modes (unpaid tab used separate markup with price always shown). */}
                     <p
-                      className={`text-base font-bold xl:text-base ${
+                      className={`ml-4 shrink-0 text-sm font-semibold xl:text-base ${
                         isItemCompleted(index) && order.status === "preparing"
                           ? "text-gray-500 line-through"
                           : "text-gray-800"
                       }`}
                     >
-                      {getCustomerDisplayName(item.name)}
+                      ${(item.price * item.quantity).toFixed(2)}
                     </p>
-                    {item.selectedVariants &&
-                      item.selectedVariants.length > 0 && (
-                        <p className="text-sm font-medium text-gray-700">
-                          {item.selectedVariants
-                            .map(
-                              (variant) =>
-                                `${getCustomerDisplayName(variant.groupName)}: ${getCustomerDisplayName(variant.optionName)}`,
-                            )
-                            .join(", ")}
-                        </p>
-                      )}
-                    <ModifierChoicesGrouped
-                      modifiers={item.selectedModifiers}
-                      className="text-sm text-gray-700"
-                    />
-                    {item.notes && (
-                      <div className="mt-2 rounded-lg border border-yellow-100 bg-yellow-50 p-2">
-                        <p className="mb-1 text-xs font-medium text-yellow-800">
-                          Note
-                        </p>
-                        <p className="text-xs text-yellow-700">{item.notes}</p>
-                      </div>
-                    )}
                   </div>
-                </div>
-                {/* Line total: visible on all view modes (unpaid tab used separate markup with price always shown). */}
-                <p
-                  className={`ml-4 shrink-0 text-sm font-semibold xl:text-base ${
-                    isItemCompleted(index) && order.status === "preparing"
-                      ? "text-gray-500 line-through"
-                      : "text-gray-800"
-                  }`}
-                >
-                  ${(item.price * item.quantity).toFixed(2)}
-                </p>
+                ))}
               </div>
-            ))}
-          </div>
 
-          {/* Special Instructions */}
-          {order.specialInstructions && (
-            <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
-              <p className="mb-1 text-sm font-medium text-blue-900">
-                Instructions
-              </p>
-              <p className="text-sm text-blue-800">
-                {order.specialInstructions}
-              </p>
+              {/* Special Instructions */}
+              {order.specialInstructions && (
+                <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
+                  <p className="mb-1 text-sm font-medium text-blue-900">
+                    Instructions
+                  </p>
+                  <p className="text-sm text-blue-800">
+                    {order.specialInstructions}
+                  </p>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
         </motion.div>
 
         <AnimatePresence>
@@ -1048,7 +1058,9 @@ export default function OrderCard({
                 <button
                   type="button"
                   onClick={() => {
-                    setReceiptEmailInput(String(order.customerEmail || "").trim());
+                    setReceiptEmailInput(
+                      String(order.customerEmail || "").trim(),
+                    );
                     setReceiptModalOpen(true);
                   }}
                   className={orderSlideActionButtonClass(
