@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Plus } from "lucide-react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { cn } from "@/lib/helper";
@@ -85,6 +85,14 @@ function isOpenCartLine(line) {
   return !isSentCartLine(line) && !isCancelledCartLine(line);
 }
 
+const POS_TAB_CHECK_TRANSITION = {
+  type: "spring",
+  stiffness: 500,
+  damping: 35,
+};
+
+const POS_TAB_PANEL_TRANSITION = { duration: 0.18, ease: "easeOut" };
+
 function useAllMenuItems(menuContent) {
   return useMemo(() => {
     const map = new Map();
@@ -158,6 +166,8 @@ export default function PosTerminal() {
   const tabs = activeLayout?.tabs || [];
 
   const [selectedTabId, setSelectedTabId] = useState(null);
+  const [tabTransitionDirection, setTabTransitionDirection] = useState(0);
+  const prevSelectedTabIndexRef = useRef(-1);
   const [cartLines, setCartLines] = useState([]);
   const [activeOrderId, setActiveOrderId] = useState(null);
   const [checkOrderIds, setCheckOrderIds] = useState([]);
@@ -262,6 +272,20 @@ export default function PosTerminal() {
       setSelectedTabId(tabs[0].id);
     }
   }, [tabs, selectedTabId]);
+
+  useEffect(() => {
+    const nextIndex = tabs.findIndex((tab) => tab.id === selectedTabId);
+    if (nextIndex < 0) return;
+
+    const prevIndex = prevSelectedTabIndexRef.current;
+    if (prevIndex >= 0 && nextIndex !== prevIndex) {
+      setTabTransitionDirection(nextIndex > prevIndex ? 1 : -1);
+    } else {
+      setTabTransitionDirection(0);
+    }
+
+    prevSelectedTabIndexRef.current = nextIndex;
+  }, [selectedTabId, tabs]);
 
   const selectedTab = tabs.find((tab) => tab.id === selectedTabId) || null;
   const selectedTabIndex = tabs.findIndex((tab) => tab.id === selectedTabId);
@@ -1084,7 +1108,7 @@ export default function PosTerminal() {
                           type="button"
                           onClick={() => handleTabClick(tab.id)}
                           className={cn(
-                            "relative flex min-h-[72px] w-full shrink-0 items-center justify-start border-l-[7px] px-3 py-6 text-left text-base font-semibold text-neutral-900 transition-colors xl:text-lg",
+                            "relative flex min-h-[72px] w-full shrink-0 items-center justify-start overflow-hidden border-l-[7px] px-3 py-6 text-left text-base font-semibold text-neutral-900 xl:text-lg",
                             isSelected
                               ? "bg-[#f0f0f0]"
                               : "bg-white hover:bg-neutral-50",
@@ -1103,9 +1127,15 @@ export default function PosTerminal() {
                             {tab.name}
                           </span>
                           {isSelected ? (
-                            <span className="pointer-events-none absolute right-0 top-1/2 z-40 flex size-6 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full bg-red-500 text-white shadow-md ring-2 ring-white">
+                            <motion.span
+                              layoutId="pos-tab-check"
+                              initial={{ scale: 0.6, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              transition={POS_TAB_CHECK_TRANSITION}
+                              className="pointer-events-none absolute right-0 top-1/2 z-20 flex size-6 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full bg-red-500 text-white shadow-md ring-2 ring-white"
+                            >
                               <Check size={14} strokeWidth={3} />
-                            </span>
+                            </motion.span>
                           ) : null}
                         </button>
                       );
@@ -1155,42 +1185,67 @@ export default function PosTerminal() {
                   onSelectVariant={handleSelectVariant}
                   onToggleModifier={handleToggleModifier}
                 />
-              ) : !selectedTab ? (
-                <div className="flex h-full items-center justify-center text-sm text-neutral-500">
-                  Select a tab
-                </div>
-              ) : selectedRows.length === 0 ? (
-                <div className="flex h-full items-center justify-center text-sm text-neutral-500">
-                  This tab has no products yet
-                </div>
               ) : (
-                <div className="h-full overflow-y-auto">
-                  <div className="flex flex-col gap-4 p-4">
-                    {selectedRows.map((row) => {
-                      const rowItems = (row.itemIds || [])
-                        .map((id) => itemsById.get(id))
-                        .filter(Boolean);
+                <AnimatePresence mode="wait" initial={false}>
+                  {!selectedTab ? (
+                    <motion.div
+                      key="pos-tab-empty"
+                      initial={{ opacity: 0, y: tabTransitionDirection * 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: tabTransitionDirection * -12 }}
+                      transition={POS_TAB_PANEL_TRANSITION}
+                      className="flex h-full items-center justify-center text-sm text-neutral-500"
+                    >
+                      Select a tab
+                    </motion.div>
+                  ) : selectedRows.length === 0 ? (
+                    <motion.div
+                      key={`${selectedTabId}-empty`}
+                      initial={{ opacity: 0, y: tabTransitionDirection * 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: tabTransitionDirection * -12 }}
+                      transition={POS_TAB_PANEL_TRANSITION}
+                      className="flex h-full items-center justify-center text-sm text-neutral-500"
+                    >
+                      This tab has no products yet
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key={selectedTabId}
+                      initial={{ opacity: 0, y: tabTransitionDirection * 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: tabTransitionDirection * -12 }}
+                      transition={POS_TAB_PANEL_TRANSITION}
+                      className="h-full overflow-y-auto"
+                    >
+                      <div className="flex flex-col gap-4 p-4">
+                        {selectedRows.map((row) => {
+                          const rowItems = (row.itemIds || [])
+                            .map((id) => itemsById.get(id))
+                            .filter(Boolean);
 
-                      if (rowItems.length === 0) return null;
+                          if (rowItems.length === 0) return null;
 
-                      return (
-                        <div
-                          key={row.id}
-                          className="grid grid-cols-4 gap-1 xl:grid-cols-5"
-                        >
-                          {rowItems.map((item) => (
-                            <PosProductCard
-                              key={`${row.id}-${item.id}`}
-                              item={item}
-                              onAdd={handleAddItem}
-                              disabled={isViewOnly}
-                            />
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                          return (
+                            <div
+                              key={row.id}
+                              className="grid grid-cols-4 gap-1 xl:grid-cols-5"
+                            >
+                              {rowItems.map((item) => (
+                                <PosProductCard
+                                  key={`${row.id}-${item.id}`}
+                                  item={item}
+                                  onAdd={handleAddItem}
+                                  disabled={isViewOnly}
+                                />
+                              ))}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               )}
             </div>
           </section>
