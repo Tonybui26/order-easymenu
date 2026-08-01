@@ -18,10 +18,12 @@ export default function PrinterSetupModal({
   mode = "add",
   printer = null,
 }) {
+  const DEFAULT_PRINTER_PORT = 9100;
+
   const [formData, setFormData] = useState({
     name: "",
     localIp: "",
-    port: "9100",
+    port: "",
     forTakeaway: false,
     forDineIn: false,
     forReceipt: false,
@@ -43,7 +45,7 @@ export default function PrinterSetupModal({
       setFormData({
         name: printer.name || "",
         localIp: printer.localIp || "",
-        port: printer.port || "9100",
+        port: printer.port ? String(printer.port) : "",
         forTakeaway: printer.forTakeaway || false,
         forDineIn: printer.forDineIn || false,
         forReceipt: printer.forReceipt || false,
@@ -85,12 +87,13 @@ export default function PrinterSetupModal({
       newErrors.localIp = "Please enter a valid IP address";
     }
 
-    // Port validation
-    const port = parseInt(formData.port);
-    if (!formData.port || formData.port === "") {
-      newErrors.port = "Port number is required";
-    } else if (isNaN(port) || port < 1 || port > 65535) {
-      newErrors.port = "Port must be between 1 and 65535";
+    // Port validation (optional — blank uses default 9100)
+    const portStr = String(formData.port ?? "").trim();
+    if (portStr !== "") {
+      const port = parseInt(portStr, 10);
+      if (isNaN(port) || port < 1 || port > 65535) {
+        newErrors.port = "Port must be between 1 and 65535";
+      }
     }
 
     // At least one order type must be selected
@@ -127,8 +130,13 @@ export default function PrinterSetupModal({
 
     setIsSaving(true);
     try {
+      const portStr = String(formData.port ?? "").trim();
+      const port =
+        portStr === "" ? DEFAULT_PRINTER_PORT : parseInt(portStr, 10);
+
       const printerData = {
         ...formData,
+        port,
         status: "unknown", // Default status for simple management
       };
 
@@ -156,7 +164,7 @@ export default function PrinterSetupModal({
     setFormData({
       name: "",
       localIp: "",
-      port: "9100",
+      port: "",
       forTakeaway: false,
       forDineIn: false,
       forReceipt: false,
@@ -259,9 +267,9 @@ export default function PrinterSetupModal({
                 )}
               </div>
 
-              <div className="form-control hidden">
+              <div className="form-control">
                 <label className="label">
-                  <span className="label-text">Port *</span>
+                  <span className="label-text">Port</span>
                 </label>
                 <input
                   type="number"
@@ -270,14 +278,20 @@ export default function PrinterSetupModal({
                   className={`input input-bordered w-full ${
                     errors.port ? "input-error" : ""
                   }`}
-                  placeholder="9100"
+                  placeholder={`${DEFAULT_PRINTER_PORT} (default)`}
                   min="1"
                   max="65535"
                 />
-                {errors.port && (
+                {errors.port ? (
                   <label className="label">
                     <span className="label-text-alt text-error">
                       {errors.port}
+                    </span>
+                  </label>
+                ) : (
+                  <label className="label">
+                    <span className="label-text-alt text-gray-500">
+                      Leave blank for default port {DEFAULT_PRINTER_PORT}
                     </span>
                   </label>
                 )}
