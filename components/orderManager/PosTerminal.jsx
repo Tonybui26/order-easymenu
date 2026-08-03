@@ -181,6 +181,7 @@ export default function PosTerminal() {
   const [activeOrderId, setActiveOrderId] = useState(null);
   const [checkOrderIds, setCheckOrderIds] = useState([]);
   const [posCheckId, setPosCheckId] = useState(null);
+  const [taxInvoiceNo, setTaxInvoiceNo] = useState("");
   const [isCheckPaid, setIsCheckPaid] = useState(false);
   const [isResumedCheck, setIsResumedCheck] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -249,6 +250,7 @@ export default function PosTerminal() {
         setCheckOrderIds(resumeState.orderIds);
         setActiveOrderId(resumeState.activeOrderId);
         setPosCheckId(resumeState.posCheckId);
+        setTaxInvoiceNo(resumeState.taxInvoiceNo || "");
         setTableNumber(resumeState.tableNumber);
         setOrderType(resumeState.orderType);
         setIsCheckPaid(resumeState.isCheckPaid);
@@ -666,6 +668,7 @@ export default function PosTerminal() {
     setActiveOrderId(null);
     setCheckOrderIds([]);
     setPosCheckId(null);
+    setTaxInvoiceNo("");
     setIsCheckPaid(false);
     setIsResumedCheck(false);
     setIsOrderTypeMissing(false);
@@ -786,6 +789,8 @@ export default function PosTerminal() {
 
       setActiveOrderId(newOrderId);
       if (nextCheckId) setPosCheckId(nextCheckId);
+      const nextTaxInvoiceNo = String(result.order?.taxInvoiceNo || "").trim();
+      if (nextTaxInvoiceNo) setTaxInvoiceNo(nextTaxInvoiceNo);
       setCheckOrderIds((prev) => appendCheckOrderId(prev, newOrderId));
       setCartLines((prev) =>
         prev.map((line) =>
@@ -840,8 +845,7 @@ export default function PosTerminal() {
         orderType,
         tableNumber,
         paymentSummary,
-        invoiceNo: posCheckId || checkOrderIds[0] || activeOrderId || "",
-        posCheckId,
+        taxInvoiceNo,
       });
 
       const result = await printTaxInvoiceReceipt(payload);
@@ -892,6 +896,7 @@ export default function PosTerminal() {
       setActiveOrderId(null);
       setCheckOrderIds([]);
       setPosCheckId(null);
+      setTaxInvoiceNo("");
       setIsCheckPaid(false);
       setIsResumedCheck(false);
       setTableNumber("");
