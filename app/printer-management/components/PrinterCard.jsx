@@ -44,6 +44,7 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
   const [testingFonts, setTestingFonts] = useState(false);
   const [testingReceipt, setTestingReceipt] = useState(false);
   const [testingBill, setTestingBill] = useState(false);
+  const [testingPrinterNoLogo, setTestingPrinterNoLogo] = useState(false);
   const [aggressiveTestingPrinter, setAggressiveTestingPrinter] =
     useState(false);
   const [resettingPrinter, setResettingPrinter] = useState(false);
@@ -87,22 +88,27 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
     }
   };
 
-  const handleTestPrinter = async () => {
+  const runPrintTest = async (includeLogo = true) => {
+    const setLoading = includeLogo ? setTestingPrinter : setTestingPrinterNoLogo;
+
     try {
-      setTestingPrinter(true);
+      setLoading(true);
       const isTspl = isTsplPrinter(printer);
       const isStarPrnt = isStarPrntPrinter(printer);
       setCurrentTestType(
         isTspl
           ? "TSPL Label Test"
           : isStarPrnt
-            ? "StarPRNT Receipt Test"
-            : "Connection Test",
+            ? includeLogo
+              ? "StarPRNT Receipt Test"
+              : "StarPRNT Receipt Test (no logo)"
+            : includeLogo
+              ? "Connection Test"
+              : "Connection Test (no logo)",
       );
       clearLogs();
       setShowLogsModal(true);
 
-      // ✅ Set up queue logging (ESC/POS path only; TSPL uses direct logs below)
       if (!isTspl) {
         setupQueueLogging();
       }
@@ -111,13 +117,13 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
         `Starting ${isTspl ? "TSPL label" : isStarPrnt ? "StarPRNT receipt" : "receipt"} test for ${printer.name} (${printer.localIp}:${printer.port})`,
         "info",
       );
-      if (!isTspl && storeProfile?.storeLogo) {
+      if (!isTspl && includeLogo && storeProfile?.storeLogo) {
         addLog(
           `Loading store logo via proxy: ${storeProfile.storeLogo.slice(0, 80)}…`,
           "info",
         );
       } else if (!isTspl) {
-        addLog("No store logo set — printing test content only", "warning");
+        addLog("Printing test content without logo", "info");
       }
 
       let result;
@@ -133,7 +139,7 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
           delayAfterDisconnect: 300,
           testing: true,
           onlyConnectionTest: false,
-          logoUrl: storeProfile?.storeLogo || null,
+          logoUrl: includeLogo ? storeProfile?.storeLogo || null : null,
           onLogoStatus: (status) => {
             if (status?.success) {
               addLog(
@@ -166,9 +172,13 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
       console.error("Error testing printer:", error);
       toast.error("Failed to test printer: " + error.message);
     } finally {
-      setTestingPrinter(false);
+      setLoading(false);
     }
   };
+
+  const handleTestPrinter = () => runPrintTest(true);
+
+  const handleTestPrinterNoLogo = () => runPrintTest(false);
 
   const handleTestFonts = async () => {
     if (isTsplPrinter(printer)) {
@@ -520,7 +530,7 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
               <li>
                 <button
                   onClick={handleTestPrinter}
-                  disabled={testingPrinter}
+                  disabled={testingPrinter || testingPrinterNoLogo}
                   className="flex items-center gap-2"
                 >
                   {testingPrinter ? (
@@ -536,6 +546,27 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
                   )}
                 </button>
               </li>
+              {!isTsplPrinter(printer) ? (
+                <li>
+                  <button
+                    onClick={handleTestPrinterNoLogo}
+                    disabled={testingPrinter || testingPrinterNoLogo}
+                    className="flex items-center gap-2"
+                  >
+                    {testingPrinterNoLogo ? (
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border border-blue-300 border-t-blue-600"></div>
+                        Printing...
+                      </>
+                    ) : (
+                      <>
+                        <Settings className="h-4 w-4" />
+                        Print Test (no logo)
+                      </>
+                    )}
+                  </button>
+                </li>
+              ) : null}
               {!isTsplPrinter(printer) ? (
                 <li>
                   <button
