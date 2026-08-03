@@ -55,6 +55,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
     menuLink: (menuData && menuData.menuLink) || "",
     storeAddress: (menuData && menuData.storeAddress) || "",
     storeABN: (menuData && menuData.storeABN) || "",
+    timezone: menuData?.timezone || "Australia/Melbourne",
     taxPercentage: menuData?.taxPercentage ?? 10,
     stripeConfig: (menuData && menuData.stripeConfig) || {},
     paymentMethods: (menuData && menuData.paymentMethods) || {
@@ -90,6 +91,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
             menuLink: data.menuLink || "",
             storeAddress: data.storeAddress || "",
             storeABN: data.storeABN || "",
+            timezone: data.timezone || "Australia/Melbourne",
             taxPercentage: data.taxPercentage ?? 10,
             stripeConfig: data.stripeConfig || {},
             paymentMethods: data.paymentMethods || {
@@ -167,6 +169,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
           menuLink: data.menuLink || "",
           storeAddress: data.storeAddress || "",
           storeABN: data.storeABN || "",
+          timezone: data.timezone || "Australia/Melbourne",
           taxPercentage: data.taxPercentage ?? 10,
           stripeConfig: data.stripeConfig || {},
           paymentMethods: data.paymentMethods || {

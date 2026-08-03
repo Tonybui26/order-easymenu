@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   Folder,
+  History,
   MonitorSmartphone,
   Printer,
   QrCode,
@@ -40,6 +41,13 @@ const NAV_ITEMS = [
     Icon: QrCode,
   },
   {
+    id: "order-history",
+    label: "Order History",
+    description: "Completed orders by date",
+    href: "/order-history",
+    Icon: History,
+  },
+  {
     id: "printers",
     label: "Printers",
     description: "Receipt printer setup",
@@ -71,6 +79,12 @@ function resolveActiveItem(pathname, items) {
   }
   if (pathname === "/") {
     return list.find((item) => item.id === "live-orders") || list[0];
+  }
+  if (
+    pathname === "/order-history" ||
+    pathname?.startsWith("/order-history/")
+  ) {
+    return list.find((item) => item.id === "order-history") || list[0];
   }
   return list[0];
 }
