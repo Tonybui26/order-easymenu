@@ -22,6 +22,7 @@ import {
 import PosChromeHeader from "./PosChromeHeader";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 import PosHeldOrderCard from "./PosHeldOrderCard";
+import DeleteOrderDrawer from "./DeleteOrderDrawer";
 import DismissibleToast, {
   useDismissibleToast,
 } from "@/components/orderManager/DismissibleToast";
@@ -43,6 +44,9 @@ export default function PosHeldOrders() {
   const [heldOrders, setHeldOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [processingCheckId, setProcessingCheckId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteDrawerOpen, setDeleteDrawerOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadHeldOrders = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setIsLoading(true);
@@ -218,8 +222,35 @@ export default function PosHeldOrders() {
     }
   }
 
-  async function handleDeleteHeldOrder(order) {
-    if (!order?.id || processingCheckId) return;
+  function buildHeldDeleteTarget(order) {
+    const ticketIds = getAllTicketIds(order);
+    const table = String(order?.table || "").trim();
+    const taxInvoiceNo = String(order?.taxInvoiceNo || "").trim();
+    const title = table
+      ? `Delete Table ${table}`
+      : taxInvoiceNo
+        ? `Delete invoice ${taxInvoiceNo}`
+        : "Delete held check";
+
+    const subtitleParts = [];
+    if (ticketIds.length > 1) {
+      subtitleParts.push(`${ticketIds.length} tickets`);
+    }
+    if (order?.total != null) {
+      subtitleParts.push(`$${Number(order.total).toFixed(2)} unpaid`);
+    }
+
+    return {
+      id: order.id,
+      title,
+      subtitle: subtitleParts.join(" · ") || "This will cancel the open check.",
+      orderIds: ticketIds,
+      ticketCount: ticketIds.length,
+    };
+  }
+
+  function handleDeleteHeldOrder(order) {
+    if (!order?.id || processingCheckId || isDeleting) return;
 
     if (order.allPaid) {
       showDismissibleToast("Paid checks cannot be deleted");
@@ -232,18 +263,21 @@ export default function PosHeldOrders() {
       return;
     }
 
-    const ticketLabel =
-      ticketIds.length === 1 ? "this ticket" : `these ${ticketIds.length} tickets`;
-    const confirmed = window.confirm(
-      `Delete ${ticketLabel} from held orders? This will cancel the check.`,
-    );
-    if (!confirmed) return;
+    setDeleteTarget(buildHeldDeleteTarget(order));
+    setDeleteDrawerOpen(true);
+  }
 
-    setProcessingCheckId(order.id);
+  async function handleConfirmDeleteHeldOrder(cancelReason) {
+    if (!deleteTarget?.orderIds?.length || isDeleting) return;
+
+    setIsDeleting(true);
+    setProcessingCheckId(deleteTarget.id);
     try {
       const result = await updatePosHeldCheckStatus({
-        orderIds: ticketIds,
+        orderIds: deleteTarget.orderIds,
         status: "cancelled",
+        cancelReason,
+        requireCancelReason: true,
       });
       if (!result?.success) {
         showDismissibleToast(result?.error || "Failed to delete check");
@@ -251,12 +285,17 @@ export default function PosHeldOrders() {
       }
 
       toast.success(
-        ticketIds.length === 1 ? "Held order deleted" : "Held check deleted",
+        deleteTarget.orderIds.length === 1
+          ? "Held order deleted"
+          : "Held check deleted",
       );
+      setDeleteDrawerOpen(false);
+      setDeleteTarget(null);
       await loadHeldOrders({ silent: true });
     } catch (error) {
       showDismissibleToast(error?.message || "Failed to delete check");
     } finally {
+      setIsDeleting(false);
       setProcessingCheckId(null);
     }
   }
@@ -320,6 +359,18 @@ export default function PosHeldOrders() {
       toast={dismissibleToast}
       onDismiss={hideDismissibleToast}
       className="right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))]"
+    />
+
+    <DeleteOrderDrawer
+      isOpen={deleteDrawerOpen}
+      onClose={() => {
+        if (isDeleting) return;
+        setDeleteDrawerOpen(false);
+        setDeleteTarget(null);
+      }}
+      target={deleteTarget}
+      onConfirm={handleConfirmDeleteHeldOrder}
+      isProcessing={isDeleting}
     />
     </>
   );

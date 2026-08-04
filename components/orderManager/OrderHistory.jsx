@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import PosChromeHeader from "./PosChromeHeader";
 import OrderHistoryActionsPanel from "./OrderHistoryActionsPanel";
 import RefundModal from "./RefundModal";
+import DeleteOrderDrawer from "./DeleteOrderDrawer";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { fetchCompletedOrders, updateOrderStatus } from "@/lib/api/fetchApi";
@@ -41,6 +42,8 @@ export default function OrderHistory() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [refundOrder, setRefundOrder] = useState(null);
   const [refundModalOpen, setRefundModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteDrawerOpen, setDeleteDrawerOpen] = useState(false);
 
   const loadOrders = useCallback(async () => {
     setIsLoading(true);
@@ -135,25 +138,38 @@ export default function OrderHistory() {
     closeActionsPanel();
   }
 
-  async function handleDelete(row) {
+  function handleDelete(row) {
     if (isProcessing || !row?.orderIds?.length) return;
 
-    const confirmed = window.confirm(
-      `Delete ${row.orderIds.length === 1 ? "this order" : "these tickets"} from order history? This will cancel the ${row.orderIds.length === 1 ? "order" : "tickets"}.`,
-    );
-    if (!confirmed) return;
+    setDeleteTarget({
+      id: row.id,
+      title: `Delete order ${row.invoice}`,
+      subtitle: row.drawerSubtitle,
+      orderIds: row.orderIds,
+      ticketCount: row.orderIds.length,
+    });
+    setDeleteDrawerOpen(true);
+    closeActionsPanel();
+  }
+
+  async function handleConfirmDelete(cancelReason) {
+    if (isProcessing || !deleteTarget?.orderIds?.length) return;
 
     setIsProcessing(true);
     try {
-      for (const orderId of row.orderIds) {
-        await updateOrderStatus(orderId, "cancelled");
+      for (const orderId of deleteTarget.orderIds) {
+        await updateOrderStatus(orderId, "cancelled", {
+          cancelReason,
+          requireCancelReason: true,
+        });
       }
       toast.success(
-        row.orderIds.length === 1
+        deleteTarget.orderIds.length === 1
           ? "Order deleted"
-          : `${row.orderIds.length} tickets deleted`,
+          : `${deleteTarget.orderIds.length} tickets deleted`,
       );
-      closeActionsPanel();
+      setDeleteDrawerOpen(false);
+      setDeleteTarget(null);
       await loadOrders();
     } catch (error) {
       toast.error(error?.message || "Failed to delete order");
@@ -281,6 +297,18 @@ export default function OrderHistory() {
         }}
         order={refundOrder}
         onRefundSuccess={handleRefundSuccess}
+      />
+
+      <DeleteOrderDrawer
+        isOpen={deleteDrawerOpen}
+        onClose={() => {
+          if (isProcessing) return;
+          setDeleteDrawerOpen(false);
+          setDeleteTarget(null);
+        }}
+        target={deleteTarget}
+        onConfirm={handleConfirmDelete}
+        isProcessing={isProcessing}
       />
     </div>
   );
