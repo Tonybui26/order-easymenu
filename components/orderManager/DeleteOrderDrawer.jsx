@@ -45,6 +45,19 @@ export default function DeleteOrderDrawer({
     if (!isProcessing) onClose();
   };
 
+  const keepLabel = target.keepLabel || "Keep order";
+  const confirmLabel = target.confirmLabel || "Confirm delete";
+  const processingLabel = target.processingLabel || "Deleting…";
+  const otherPlaceholder =
+    target.otherPlaceholder || "Describe why this order is being deleted";
+  const warningMessage =
+    target.warningMessage ||
+    `This will cancel ${
+      target.ticketCount === 1
+        ? "this order"
+        : `these ${target.ticketCount} tickets`
+    }. This action cannot be undone.`;
+
   return createPortal(
     <AnimatePresence>
       {isOpen ? (
@@ -129,17 +142,13 @@ export default function DeleteOrderDrawer({
                 onChange={(event) => setOtherReason(event.target.value)}
                 disabled={isProcessing}
                 rows={4}
-                placeholder="Describe why this order is being deleted"
+                  placeholder={otherPlaceholder}
                 className="mt-4 w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm text-neutral-800 outline-none ring-0 focus:border-neutral-500"
               />
             ) : null}
 
             <div className="mt-6 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-xs text-yellow-900">
-              This will cancel{" "}
-              {target.ticketCount === 1
-                ? "this order"
-                : `these ${target.ticketCount} tickets`}
-              . This action cannot be undone.
+              {warningMessage}
             </div>
           </div>
 
@@ -150,7 +159,7 @@ export default function DeleteOrderDrawer({
               disabled={isProcessing}
               className="flex-1 rounded-xl border border-neutral-300 px-4 py-3 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-50"
             >
-              Keep order
+              {keepLabel}
             </button>
             <button
               type="button"
@@ -158,7 +167,7 @@ export default function DeleteOrderDrawer({
               onClick={() => onConfirm(resolvedReason)}
               className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-neutral-300"
             >
-              {isProcessing ? "Deleting…" : "Confirm delete"}
+              {isProcessing ? processingLabel : confirmLabel}
             </button>
           </div>
         </motion.aside>

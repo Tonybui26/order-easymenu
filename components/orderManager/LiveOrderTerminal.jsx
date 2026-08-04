@@ -51,6 +51,7 @@ import UnpaidTablesView from "./UnpaidTablesView";
 import PrinterSelectionModal, {
   PRINTER_SELECTION_MODAL_CLOSED,
 } from "./PrinterSelectionModal";
+import DeleteOrderDrawer from "./DeleteOrderDrawer";
 import PanelProductAvailability from "./PanelProductAvailability";
 import { useMenuContext } from "../context/MenuContext";
 import { useSession } from "next-auth/react";
@@ -505,6 +506,8 @@ export default function LiveOrderTerminal() {
   );
   const [availablePrinters, setAvailablePrinters] = useState([]);
   const [loadingPrinters, setLoadingPrinters] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelDrawerOpen, setCancelDrawerOpen] = useState(false);
 
   // Helper function to format date for display in user's local timezone
   const formatDateForDisplay = (date) => {
@@ -1140,17 +1143,17 @@ export default function LiveOrderTerminal() {
 
   // Handle order status updates and control printing
   // only printing docket when order status is changed to "preparing" and auto-printing is disabled
-  const handleStatusUpdate = async (orderId, newStatus) => {
+  const handleStatusUpdate = async (orderId, newStatus, options = {}) => {
     // Prevent double-clicks by checking if order is already being processed
     if (processingOrders.has(orderId)) {
-      return;
+      return false;
     }
 
     // Mark order as processing
     setProcessingOrders((prev) => new Set(prev).add(orderId));
 
     try {
-      const updatedOrder = await updateOrderStatus(orderId, newStatus);
+      const updatedOrder = await updateOrderStatus(orderId, newStatus, options);
 
       // Update local state
       setOrders((prevOrders) =>
@@ -1274,11 +1277,14 @@ export default function LiveOrderTerminal() {
           }, 5000);
         }
       }
+
+      return true;
     } catch (error) {
       console.error(
         `Failed to update order ${orderId} to ${newStatus}:`,
         error,
       );
+      return false;
     } finally {
       // Remove order from processing set when operation completes
       setProcessingOrders((prev) => {
@@ -1289,22 +1295,56 @@ export default function LiveOrderTerminal() {
     }
   };
 
-  // Handle order cancellation with confirmation
-  const handleCancelOrder = (order) => {
+  function buildLiveCancelTarget(order) {
+    const orderIdShort = order._id?.slice(-6).toUpperCase();
     const isPaid = order.paymentStatus === "paid";
+    const customerName = String(order.customerName || "").trim();
+    const table = String(order.table || "").trim();
 
-    let confirmMessage;
-    if (isPaid) {
-      confirmMessage =
-        "This order is already paid. You'll need to process a refund manually. Are you sure you want to cancel?";
-    } else {
-      confirmMessage = "Are you sure you want to cancel this order?";
+    const subtitleParts = [];
+    if (customerName) subtitleParts.push(customerName);
+    if (table && table !== "takeaway") subtitleParts.push(`Table ${table}`);
+    if (isPaid) subtitleParts.push("Paid — refund manually if needed");
+
+    return {
+      id: order._id,
+      orderId: order._id,
+      title: `Cancel order #${orderIdShort}`,
+      subtitle: subtitleParts.join(" · ") || undefined,
+      ticketCount: 1,
+      confirmLabel: "Confirm cancel",
+      processingLabel: "Cancelling…",
+      otherPlaceholder: "Describe why this order is being cancelled",
+      warningMessage: isPaid
+        ? "This order is already paid. You'll need to process a refund manually. This will cancel the order and cannot be undone."
+        : "This will cancel this order. This action cannot be undone.",
+    };
+  }
+
+  function handleCancelOrder(order) {
+    if (!order?._id || processingOrders.has(order._id)) return;
+    setCancelTarget(buildLiveCancelTarget(order));
+    setCancelDrawerOpen(true);
+  }
+
+  async function handleConfirmCancel(cancelReason) {
+    if (!cancelTarget?.orderId || processingOrders.has(cancelTarget.orderId)) {
+      return;
     }
 
-    if (window.confirm(confirmMessage)) {
-      handleStatusUpdate(order._id, "cancelled");
+    const success = await handleStatusUpdate(cancelTarget.orderId, "cancelled", {
+      cancelReason,
+      requireCancelReason: true,
+    });
+
+    if (success) {
+      setCancelDrawerOpen(false);
+      setCancelTarget(null);
+      return;
     }
-  };
+
+    toast.error("Failed to cancel order");
+  }
   // Handle marking counter order as paid with payment method selection
   const handleMarkAsPaid = async (orderId, paymentMethod = null) => {
     // If no payment method specified, show selection modal
@@ -2318,6 +2358,24 @@ export default function LiveOrderTerminal() {
           onClose={closePrinterSelectionModal}
           onSelectPrinter={handlePrinterSelectAndPrint}
           onSelectAllPrinters={handlePrintToAllPrinters}
+        />
+
+        <DeleteOrderDrawer
+          isOpen={cancelDrawerOpen}
+          onClose={() => {
+            if (cancelTarget?.orderId && processingOrders.has(cancelTarget.orderId)) {
+              return;
+            }
+            setCancelDrawerOpen(false);
+            setCancelTarget(null);
+          }}
+          target={cancelTarget}
+          onConfirm={handleConfirmCancel}
+          isProcessing={
+            Boolean(
+              cancelTarget?.orderId && processingOrders.has(cancelTarget.orderId),
+            )
+          }
         />
       </div>
       {/* Custom Toast Component */}
