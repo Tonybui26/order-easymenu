@@ -1762,46 +1762,175 @@ export default function LiveOrderTerminal() {
 
   return (
     <>
-      <div className="min-h-screen bg-[#1a1a1a] p-3">
+      <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#1a1a1a] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
         {/* Audio element for notifications */}
         <audio
           ref={audioRef}
           src={getNotificationSoundUrl(notificationSoundId)}
         />
 
-        {/* Audio Permission Prompt - Web Only */}
-        {showAudioPrompt && !isNative && (
-          <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <Bell className="mr-2 h-5 w-5 text-yellow-600" />
-                <div>
-                  <h3 className="text-sm font-medium text-yellow-800">
-                    Enable Sound Notifications
-                  </h3>
-                  <p className="text-sm text-yellow-700">
-                    Click &quot;Enable Sound&quot; to hear audio alerts for new
-                    orders.
-                  </p>
+        {/* Top chrome: audio prompt + header (single safe-area top inset) */}
+        <div className="shrink-0 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+          {/* Audio Permission Prompt - Web Only */}
+          {showAudioPrompt && !isNative && (
+            <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <Bell className="mr-2 h-5 w-5 text-yellow-600" />
+                  <div>
+                    <h3 className="text-sm font-medium text-yellow-800">
+                      Enable Sound Notifications
+                    </h3>
+                    <p className="text-sm text-yellow-700">
+                      Click &quot;Enable Sound&quot; to hear audio alerts for new
+                      orders.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={initializeAudio}
+                    className="rounded-md bg-yellow-600 px-3 py-2 text-sm font-medium text-white hover:bg-yellow-700"
+                  >
+                    Enable Sound
+                  </button>
+                  <button
+                    onClick={() => setShowAudioPrompt(false)}
+                    className="rounded-md bg-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-400"
+                  >
+                    Dismiss
+                  </button>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={initializeAudio}
-                  className="rounded-md bg-yellow-600 px-3 py-2 text-sm font-medium text-white hover:bg-yellow-700"
-                >
-                  Enable Sound
-                </button>
-                <button
-                  onClick={() => setShowAudioPrompt(false)}
-                  className="rounded-md bg-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-400"
-                >
-                  Dismiss
-                </button>
-              </div>
             </div>
+          )}
+
+          <div className="flex items-start justify-between">
+          {/* quick settings */}
+          <div className="mb-3 flex gap-4 rounded-3xl bg-[#0000003d] p-3 ring-2 ring-[#222222]">
+            {/* logo */}
+            <div className="hidden h-auto flex-col items-center justify-center gap-0 rounded-lg bg-gray-100 px-4 py-1 text-left transition-colors hover:bg-gray-200">
+              <Image
+                src={Logo}
+                alt="GoEasyMenu"
+                auto="true"
+                className="mx-auto w-[24px]"
+                priority
+              />
+              {/* <h1 className="font-bold">
+                {storeProfile?.storeName || "Store Name"}
+              </h1> */}
+            </div>
+            {/* Polling Status Indicator */}
+            <div
+              className={`hidden h-auto items-center gap-2 rounded-lg px-3 py-1 text-sm font-medium transition-colors lg:flex ${
+                isPollingActive && isOnline
+                  ? "bg-neutral-700 text-green-500"
+                  : !isOnline || consecutiveErrors > 0
+                    ? "bg-red-100 text-red-800"
+                    : "bg-yellow-100 text-yellow-800"
+              }`}
+            >
+              <div
+                className={`h-3 w-3 rounded-full ${
+                  isPollingActive && isOnline
+                    ? "animate-pulse bg-green-500"
+                    : !isOnline || consecutiveErrors > 0
+                      ? "bg-red-500"
+                      : "bg-yellow-500"
+                }`}
+              ></div>
+              <span>
+                {!isOnline
+                  ? "OFFLINE"
+                  : consecutiveErrors > 0
+                    ? "CONNECTING"
+                    : isPollingActive
+                      ? "LIVE"
+                      : "OFFLINE"}
+              </span>
+            </div>
+            {/* Button for controlling online orders */}
+            <OnlineOrderControlButton />
+            {/* Button for controlling prep time */}
+            <PrepTimeControlButton />
+            {/* Button for refreshing app data - temporary disabled as not working properly */}
+            {/* <button
+              onClick={handleFullRefresh}
+              className="btn flex h-auto flex-col items-center gap-0 rounded-xl px-4 py-1 text-center transition-colors hover:bg-gray-200"
+              title={isNative ? "Refresh app data" : "Refresh page"}
+            >
+              <RefreshCw className="size-5 text-gray-600" />
+            </button> */}
           </div>
-        )}
+
+          {/* View Mode Tabs */}
+          <div className="mb-6 flex flex-wrap gap-3">
+            <div className="hidden flex-wrap gap-1 rounded-3xl bg-[#0000003d] p-3 ring-2 ring-[#222222] md:flex lg:gap-3">
+              <ViewModeTab
+                icon={Bell}
+                label="New"
+                count={newOrdersCount}
+                isActive={viewMode === "new"}
+                onClick={() => setViewMode("new")}
+              />
+              {hasPreorderEnabled ? (
+                <ViewModeTab
+                  icon={CalendarClock}
+                  label="Scheduled"
+                  count={scheduledCount}
+                  isActive={viewMode === "scheduled"}
+                  onClick={() => setViewMode("scheduled")}
+                />
+              ) : null}
+              <ViewModeTab
+                icon={ChefHat}
+                label="Preparing"
+                count={preparingCount}
+                isActive={viewMode === "preparing"}
+                onClick={() => setViewMode("preparing")}
+              />
+              <ViewModeTab
+                icon={Check}
+                label="Ready"
+                count={readyCount}
+                isActive={viewMode === "ready"}
+                onClick={() => setViewMode("ready")}
+              />
+              {/* Only show Unpaid tab if Pay at Counter payment method is enabled */}
+              {storeProfile?.paymentMethods?.cash?.enabled && (
+                <ViewModeTab
+                  icon={Banknote}
+                  label="Unpaid"
+                  count={unpaidTablesBadgeCount}
+                  isActive={viewMode === "unpaid"}
+                  onClick={() => setViewMode("unpaid")}
+                />
+              )}
+              <ViewModeTab
+                icon={Radio}
+                label="Active"
+                count={allActiveCount}
+                isActive={viewMode === "all"}
+                onClick={() => setViewMode("all")}
+              />
+            </div>
+            {/* Add new tab here as a more menu button */}
+            <MoreMenuButton
+              setViewMode={setViewMode}
+              viewMode={viewMode}
+              newOrdersCount={newOrdersCount}
+              scheduledCount={scheduledCount}
+              hasPreorderEnabled={hasPreorderEnabled}
+              preparingCount={preparingCount}
+              readyCount={readyCount}
+              allActiveCount={allActiveCount}
+              unpaidTablesBadgeCount={unpaidTablesBadgeCount}
+              storeProfile={storeProfile}
+            />
+          </div>
+          </div>
+        </div>
 
         {/* Notification Overlay */}
         {showNotification && !newOrderAlertsMuted && (
@@ -1956,132 +2085,7 @@ export default function LiveOrderTerminal() {
           </div>
         )}
 
-        {/* header */}
-        <div className="mt-8 flex items-start justify-between lg:mt-2">
-          {/* quick settings */}
-          <div className="mb-3 flex gap-4 rounded-3xl bg-[#0000003d] p-3 ring-2 ring-[#222222]">
-            {/* logo */}
-            <div className="hidden h-auto flex-col items-center justify-center gap-0 rounded-lg bg-gray-100 px-4 py-1 text-left transition-colors hover:bg-gray-200">
-              <Image
-                src={Logo}
-                alt="GoEasyMenu"
-                auto="true"
-                className="mx-auto w-[24px]"
-                priority
-              />
-              {/* <h1 className="font-bold">
-                {storeProfile?.storeName || "Store Name"}
-              </h1> */}
-            </div>
-            {/* Polling Status Indicator */}
-            <div
-              className={`hidden h-auto items-center gap-2 rounded-lg px-3 py-1 text-sm font-medium transition-colors lg:flex ${
-                isPollingActive && isOnline
-                  ? "bg-neutral-700 text-green-500"
-                  : !isOnline || consecutiveErrors > 0
-                    ? "bg-red-100 text-red-800"
-                    : "bg-yellow-100 text-yellow-800"
-              }`}
-            >
-              <div
-                className={`h-3 w-3 rounded-full ${
-                  isPollingActive && isOnline
-                    ? "animate-pulse bg-green-500"
-                    : !isOnline || consecutiveErrors > 0
-                      ? "bg-red-500"
-                      : "bg-yellow-500"
-                }`}
-              ></div>
-              <span>
-                {!isOnline
-                  ? "OFFLINE"
-                  : consecutiveErrors > 0
-                    ? "CONNECTING"
-                    : isPollingActive
-                      ? "LIVE"
-                      : "OFFLINE"}
-              </span>
-            </div>
-            {/* Button for controlling online orders */}
-            <OnlineOrderControlButton />
-            {/* Button for controlling prep time */}
-            <PrepTimeControlButton />
-            {/* Button for refreshing app data - temporary disabled as not working properly */}
-            {/* <button
-              onClick={handleFullRefresh}
-              className="btn flex h-auto flex-col items-center gap-0 rounded-xl px-4 py-1 text-center transition-colors hover:bg-gray-200"
-              title={isNative ? "Refresh app data" : "Refresh page"}
-            >
-              <RefreshCw className="size-5 text-gray-600" />
-            </button> */}
-          </div>
-
-          {/* View Mode Tabs */}
-          <div className="mb-6 flex flex-wrap gap-3">
-            <div className="hidden flex-wrap gap-1 rounded-3xl bg-[#0000003d] p-3 ring-2 ring-[#222222] md:flex lg:gap-3">
-              <ViewModeTab
-                icon={Bell}
-                label="New"
-                count={newOrdersCount}
-                isActive={viewMode === "new"}
-                onClick={() => setViewMode("new")}
-              />
-              {hasPreorderEnabled ? (
-                <ViewModeTab
-                  icon={CalendarClock}
-                  label="Scheduled"
-                  count={scheduledCount}
-                  isActive={viewMode === "scheduled"}
-                  onClick={() => setViewMode("scheduled")}
-                />
-              ) : null}
-              <ViewModeTab
-                icon={ChefHat}
-                label="Preparing"
-                count={preparingCount}
-                isActive={viewMode === "preparing"}
-                onClick={() => setViewMode("preparing")}
-              />
-              <ViewModeTab
-                icon={Check}
-                label="Ready"
-                count={readyCount}
-                isActive={viewMode === "ready"}
-                onClick={() => setViewMode("ready")}
-              />
-              {/* Only show Unpaid tab if Pay at Counter payment method is enabled */}
-              {storeProfile?.paymentMethods?.cash?.enabled && (
-                <ViewModeTab
-                  icon={Banknote}
-                  label="Unpaid"
-                  count={unpaidTablesBadgeCount}
-                  isActive={viewMode === "unpaid"}
-                  onClick={() => setViewMode("unpaid")}
-                />
-              )}
-              <ViewModeTab
-                icon={Radio}
-                label="Active"
-                count={allActiveCount}
-                isActive={viewMode === "all"}
-                onClick={() => setViewMode("all")}
-              />
-            </div>
-            {/* Add new tab here as a more menu button */}
-            <MoreMenuButton
-              setViewMode={setViewMode}
-              viewMode={viewMode}
-              newOrdersCount={newOrdersCount}
-              scheduledCount={scheduledCount}
-              hasPreorderEnabled={hasPreorderEnabled}
-              preparingCount={preparingCount}
-              readyCount={readyCount}
-              allActiveCount={allActiveCount}
-              unpaidTablesBadgeCount={unpaidTablesBadgeCount}
-              storeProfile={storeProfile}
-            />
-          </div>
-        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         {loading ? (
           <div className="hidden min-h-[200px] items-center justify-center">
             <div className="text-center">
@@ -2328,6 +2332,8 @@ export default function LiveOrderTerminal() {
             ))}
           </div>
         )}
+        </div>
+
         <PaymentMethodModal
           isOpen={showPaymentMethodModal.show}
           isBulk={showPaymentMethodModal.isBulk}
@@ -2380,7 +2386,7 @@ export default function LiveOrderTerminal() {
       </div>
       {/* Custom Toast Component */}
       {customToast.show && (
-        <div className="fixed right-4 top-4 z-50 animate-in slide-in-from-right-5">
+        <div className="fixed right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))] z-50 animate-in slide-in-from-right-5">
           <div
             className={`flex w-full max-w-md flex-col items-start justify-between gap-3 rounded-lg border p-3 shadow-lg ${
               customToast.type === "error"
