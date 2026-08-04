@@ -58,6 +58,16 @@ export default function OrderHistoryActionsPanel({
 
   const displayRow = row ?? lastRowRef.current;
 
+  const visibleActions = HISTORY_ACTIONS.filter((action) => {
+    if (action.id === "refund") {
+      return displayRow?.primaryAction === "refund";
+    }
+    if (action.id === "delete") {
+      return displayRow?.primaryAction === "delete";
+    }
+    return true;
+  });
+
   return (
     <AnimatePresence onExitComplete={onExitComplete}>
       {isOpen && displayRow ? (
@@ -112,7 +122,7 @@ export default function OrderHistoryActionsPanel({
             </div>
 
             <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-neutral-200 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-              {HISTORY_ACTIONS.map((action) => {
+              {visibleActions.map((action) => {
                 const Icon = action.icon;
                 const disabled =
                   isProcessing &&
@@ -133,6 +143,8 @@ export default function OrderHistoryActionsPanel({
                     className={cn(
                       "flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-base font-semibold tracking-wide transition-colors",
                       action.className,
+                      (action.id === "refund" || action.id === "delete") &&
+                        "col-span-2",
                       disabled && "cursor-not-allowed opacity-50",
                     )}
                   >

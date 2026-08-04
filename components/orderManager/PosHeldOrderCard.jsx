@@ -171,6 +171,10 @@ export default function PosHeldOrderCard({
   const heldMs = heldAt ? now - new Date(heldAt).getTime() : 0;
   const holdLabel = formatHoldDuration(Number.isFinite(heldMs) ? heldMs : 0);
   const isLongHold = heldMs >= 15 * 60 * 1000;
+  const visibleMoreActions = HELD_MORE_ACTIONS.filter((action) => {
+    if (action.id === "delete") return !order?.allPaid;
+    return true;
+  });
 
   return (
     <div
@@ -394,7 +398,7 @@ export default function PosHeldOrderCard({
               transition={{ type: "spring", damping: 28, stiffness: 320 }}
               className="absolute inset-x-0 bottom-0 z-20 flex flex-col gap-2 rounded-b-2xl border-t border-neutral-100 bg-white p-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]"
             >
-              {HELD_MORE_ACTIONS.map((action) => {
+              {visibleMoreActions.map((action) => {
                 const Icon = action.icon;
                 return (
                   <button
@@ -403,7 +407,8 @@ export default function PosHeldOrderCard({
                     disabled={
                       isProcessing &&
                       (action.id === "print-bill" ||
-                        action.id === "reprint-order")
+                        action.id === "reprint-order" ||
+                        action.id === "delete")
                     }
                     onClick={(event) => {
                       event.stopPropagation();
@@ -418,7 +423,8 @@ export default function PosHeldOrderCard({
                       action.className,
                       isProcessing &&
                         (action.id === "print-bill" ||
-                          action.id === "reprint-order") &&
+                          action.id === "reprint-order" ||
+                          action.id === "delete") &&
                         "cursor-not-allowed opacity-50",
                     )}
                   >

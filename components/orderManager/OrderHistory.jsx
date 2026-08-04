@@ -11,7 +11,7 @@ import { useMenuContext } from "@/components/context/MenuContext";
 import { fetchCompletedOrders, updateOrderStatus } from "@/lib/api/fetchApi";
 import {
   buildOrderHistoryRows,
-  isPaidDeliveredHistoryOrder,
+  isPosDeliveredHistoryOrder,
 } from "@/lib/helper/orderHistoryDisplay";
 import {
   buildHistoryRefundOrder,
@@ -46,7 +46,7 @@ export default function OrderHistory() {
     setIsLoading(true);
     try {
       const data = await fetchCompletedOrders();
-      const rows = (data.orders || []).filter(isPaidDeliveredHistoryOrder);
+      const rows = (data.orders || []).filter(isPosDeliveredHistoryOrder);
       setOrders(rows);
     } catch (error) {
       console.error("Error fetching order history:", error);
@@ -211,7 +211,7 @@ export default function OrderHistory() {
                         colSpan={TABLE_COLUMNS.length}
                         className="px-4 py-12 text-center text-gray-500"
                       >
-                        No paid and delivered POS orders yet
+                        No delivered POS orders yet
                       </td>
                     </tr>
                   ) : (

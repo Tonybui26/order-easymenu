@@ -218,6 +218,49 @@ export default function PosHeldOrders() {
     }
   }
 
+  async function handleDeleteHeldOrder(order) {
+    if (!order?.id || processingCheckId) return;
+
+    if (order.allPaid) {
+      showDismissibleToast("Paid checks cannot be deleted");
+      return;
+    }
+
+    const ticketIds = getAllTicketIds(order);
+    if (ticketIds.length === 0) {
+      showDismissibleToast("No tickets on this check");
+      return;
+    }
+
+    const ticketLabel =
+      ticketIds.length === 1 ? "this ticket" : `these ${ticketIds.length} tickets`;
+    const confirmed = window.confirm(
+      `Delete ${ticketLabel} from held orders? This will cancel the check.`,
+    );
+    if (!confirmed) return;
+
+    setProcessingCheckId(order.id);
+    try {
+      const result = await updatePosHeldCheckStatus({
+        orderIds: ticketIds,
+        status: "cancelled",
+      });
+      if (!result?.success) {
+        showDismissibleToast(result?.error || "Failed to delete check");
+        return;
+      }
+
+      toast.success(
+        ticketIds.length === 1 ? "Held order deleted" : "Held check deleted",
+      );
+      await loadHeldOrders({ silent: true });
+    } catch (error) {
+      showDismissibleToast(error?.message || "Failed to delete check");
+    } finally {
+      setProcessingCheckId(null);
+    }
+  }
+
   return (
     <>
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
@@ -263,6 +306,7 @@ export default function PosHeldOrders() {
                     onComplete={handleCompleteHeldOrder}
                     onPrintBill={handlePrintBillHeldOrder}
                     onReprintOrder={handleReprintHeldOrder}
+                    onDelete={handleDeleteHeldOrder}
                     isProcessing={processingCheckId === order.id}
                   />
                 </li>
