@@ -341,45 +341,49 @@ export default function PosHeldOrders() {
             </div>
           ) : (
             <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-6">
-              <div className="mb-4">
-                <h1 className="text-xl font-bold text-neutral-900">
-                  Held Orders
-                </h1>
-                <p className="mt-0.5 text-sm text-neutral-500">
-                  {tabCount} open {tabCount === 1 ? "check" : "checks"}
-                  {activeTab === "self-ordering" ? " · Self Ordering" : " · POS"}
-                </p>
-              </div>
+              <div className="mb-7 flex flex-wrap items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <h1 className="text-xl font-bold text-neutral-900">
+                    Held Orders
+                  </h1>
+                  <p className="mt-0.5 text-neutral-500">
+                    {tabCount} open {tabCount === 1 ? "check" : "checks"}
+                    {activeTab === "self-ordering"
+                      ? " · Self Ordering"
+                      : " · POS"}
+                  </p>
+                </div>
 
-              <div className="mb-4 flex max-w-[500px] space-x-1 rounded-xl bg-white p-1 shadow-sm">
-                {HELD_TABS.map((tab) => {
-                  const count =
-                    tab.id === "pos"
-                      ? posHeldOrders.length
-                      : selfOrderingHeldOrders.length;
-                  const isActive = activeTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
-                        isActive
-                          ? "bg-brand_accent text-white shadow-sm"
-                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-800"
-                      }`}
-                    >
-                      {tab.label}
-                      <span
-                        className={`ml-1.5 tabular-nums ${
-                          isActive ? "text-white/80" : "text-gray-400"
+                <div className="flex shrink-0 space-x-1 rounded-xl bg-white p-1 shadow-sm">
+                  {HELD_TABS.map((tab) => {
+                    const count =
+                      tab.id === "pos"
+                        ? posHeldOrders.length
+                        : selfOrderingHeldOrders.length;
+                    const isActive = activeTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`rounded-lg px-4 py-2.5 text-base font-medium transition-all duration-200 ${
+                          isActive
+                            ? "bg-brand_accent text-white shadow-sm"
+                            : "text-gray-600 hover:bg-gray-50 hover:text-gray-800"
                         }`}
                       >
-                        ({count})
-                      </span>
-                    </button>
-                  );
-                })}
+                        {tab.label}
+                        <span
+                          className={`ml-1.5 tabular-nums ${
+                            isActive ? "text-white/80" : "text-gray-400"
+                          }`}
+                        >
+                          ({count})
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="duration-200 animate-in fade-in">
@@ -399,29 +403,29 @@ export default function PosHeldOrders() {
                     </div>
                   </div>
                 ) : (
-                <ul className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                  {visibleHeldOrders.map((order) => {
-                    const HeldCard =
-                      activeTab === "pos"
-                        ? PosHeldOrderCard
-                        : SelfOrderingHeldOrderCard;
-                    return (
-                      <li key={order.id} className="min-w-0">
-                        <HeldCard
-                          order={order}
-                          onSelect={handleSelectHeldOrder}
-                          onReady={handleReadyHeldOrder}
-                          onAllItemsServed={handleAllItemsServedHeldOrder}
-                          onComplete={handleCompleteHeldOrder}
-                          onPrintBill={handlePrintBillHeldOrder}
-                          onReprintOrder={handleReprintHeldOrder}
-                          onDelete={handleDeleteHeldOrder}
-                          isProcessing={processingCheckId === order.id}
-                        />
-                      </li>
-                    );
-                  })}
-                </ul>
+                  <ul className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                    {visibleHeldOrders.map((order) => {
+                      const HeldCard =
+                        activeTab === "pos"
+                          ? PosHeldOrderCard
+                          : SelfOrderingHeldOrderCard;
+                      return (
+                        <li key={order.id} className="min-w-0">
+                          <HeldCard
+                            order={order}
+                            onSelect={handleSelectHeldOrder}
+                            onReady={handleReadyHeldOrder}
+                            onAllItemsServed={handleAllItemsServedHeldOrder}
+                            onComplete={handleCompleteHeldOrder}
+                            onPrintBill={handlePrintBillHeldOrder}
+                            onReprintOrder={handleReprintHeldOrder}
+                            onDelete={handleDeleteHeldOrder}
+                            isProcessing={processingCheckId === order.id}
+                          />
+                        </li>
+                      );
+                    })}
+                  </ul>
                 )}
               </div>
             </div>
