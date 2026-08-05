@@ -1513,20 +1513,28 @@ export default function LiveOrderTerminal() {
 
   // Filter orders based on view mode
   const getFilteredOrders = () => {
+    function sortOldestFirst(list) {
+      return [...list].sort(
+        (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
+      );
+    }
+
     if (viewMode === "all") {
-      return orders.filter((order) => {
-        // For pending orders, only show counter payments
-        if (order.status === "pending") {
-          return isCounterPayment(order.paymentMethod);
-        }
-        // For other statuses, show all orders including delivered with pending payment
-        return (
-          ["confirmed", "accepted", "preparing", "ready"].includes(
-            order.status,
-          ) ||
-          (order.status === "delivered" && order.paymentStatus === "pending")
-        );
-      });
+      return sortOldestFirst(
+        orders.filter((order) => {
+          // For pending orders, only show counter payments
+          if (order.status === "pending") {
+            return isCounterPayment(order.paymentMethod);
+          }
+          // For other statuses, show all orders including delivered with pending payment
+          return (
+            ["confirmed", "accepted", "preparing", "ready"].includes(
+              order.status,
+            ) ||
+            (order.status === "delivered" && order.paymentStatus === "pending")
+          );
+        }),
+      );
     } else if (viewMode === "unpaid") {
       return orders.filter(isUnpaidCounterDineInOrder);
     } else if (viewMode === "scheduled") {
@@ -1543,23 +1551,29 @@ export default function LiveOrderTerminal() {
       // - confirmed + paid for non-counter (card) orders
       // - pending + unpaid for counter orders
       // - confirmed + paid for counter orders (so staff can prepare them)
-      return orders.filter(
-        (order) =>
-          (order.status === "confirmed" &&
-            isOrderPaidForFulfillment(order.paymentStatus) &&
-            !isCounterPayment(order.paymentMethod)) ||
-          (order.status === "pending" &&
-            order.paymentStatus === "pending" &&
-            isCounterPayment(order.paymentMethod)) ||
-          (order.status === "confirmed" &&
-            isOrderPaidForFulfillment(order.paymentStatus) &&
-            isCounterPayment(order.paymentMethod)) ||
-          isPayLaterOrderInNewTab(order, menuConfig),
+      return sortOldestFirst(
+        orders.filter(
+          (order) =>
+            (order.status === "confirmed" &&
+              isOrderPaidForFulfillment(order.paymentStatus) &&
+              !isCounterPayment(order.paymentMethod)) ||
+            (order.status === "pending" &&
+              order.paymentStatus === "pending" &&
+              isCounterPayment(order.paymentMethod)) ||
+            (order.status === "confirmed" &&
+              isOrderPaidForFulfillment(order.paymentStatus) &&
+              isCounterPayment(order.paymentMethod)) ||
+            isPayLaterOrderInNewTab(order, menuConfig),
+        ),
       );
     } else if (viewMode === "preparing") {
-      return orders.filter((order) => order.status === "preparing");
+      return sortOldestFirst(
+        orders.filter((order) => order.status === "preparing"),
+      );
     } else if (viewMode === "ready") {
-      return orders.filter((order) => order.status === "ready");
+      return sortOldestFirst(
+        orders.filter((order) => order.status === "ready"),
+      );
     } else if (viewMode === "completed") {
       return orders.filter((order) => order.status === "delivered");
     } else if (viewMode === "productAvailability") {
