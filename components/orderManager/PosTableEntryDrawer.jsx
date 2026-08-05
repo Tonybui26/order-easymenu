@@ -36,6 +36,8 @@ export default function PosTableEntryDrawer({
   onConfirm,
 }) {
   const [digits, setDigits] = useState("");
+  const [isNumberMissing, setIsNumberMissing] = useState(false);
+  const [numberFieldShakeKey, setNumberFieldShakeKey] = useState(0);
   const [portalReady, setPortalReady] = useState(false);
   const isQuantityMode = mode === "quantity";
   const title = MODE_TITLES[mode] || MODE_TITLES.table;
@@ -48,9 +50,11 @@ export default function PosTableEntryDrawer({
     if (!isOpen) return;
     // Start blank so the current value is only a placeholder; typing replaces it.
     setDigits("");
+    setIsNumberMissing(false);
   }, [isOpen, initialNumber]);
 
   function appendDigit(digit) {
+    setIsNumberMissing(false);
     setDigits((prev) => {
       if (digit === ".") {
         if (prev.includes(".")) return prev;
@@ -74,7 +78,23 @@ export default function PosTableEntryDrawer({
     return digits === "" ? String(initialNumber || "") : digits;
   }
 
+  function hasEnteredNumber() {
+    return String(resolvedDigits()).trim() !== "";
+  }
+
+  function nudgeMissingNumber() {
+    setIsNumberMissing(true);
+    setNumberFieldShakeKey((key) => key + 1);
+  }
+
   function handleSelectOrderType(orderTypeId) {
+    const requiresNumber =
+      orderTypeId === "dine-in" || orderTypeId === "buzzer";
+    if (requiresNumber && !hasEnteredNumber()) {
+      nudgeMissingNumber();
+      return;
+    }
+
     onConfirm?.({
       number: resolvedDigits(),
       orderType: orderTypeId,
@@ -125,7 +145,21 @@ export default function PosTableEntryDrawer({
               {title}
             </p>
 
-            <div className="mb-3 flex min-h-[3.25rem] items-center justify-center rounded-lg bg-white px-4 text-3xl font-bold tabular-nums text-neutral-900">
+            <motion.div
+              key={numberFieldShakeKey}
+              initial={{ x: 0 }}
+              animate={
+                numberFieldShakeKey > 0
+                  ? { x: [0, -6, 6, -4, 4, 0] }
+                  : { x: 0 }
+              }
+              transition={{ duration: 0.35, ease: "easeInOut" }}
+              className={`mb-3 flex min-h-[3.25rem] items-center justify-center rounded-lg bg-white px-4 text-3xl font-bold tabular-nums text-neutral-900 ${
+                isNumberMissing
+                  ? "bg-red-50 text-red-700 shadow-[0_0_0_2px_#ef4444]"
+                  : ""
+              }`}
+            >
               {digits ? (
                 digits
               ) : initialNumber ? (
@@ -133,9 +167,15 @@ export default function PosTableEntryDrawer({
                   {String(initialNumber)}
                 </span>
               ) : (
-                <span className="text-neutral-300">&nbsp;</span>
+                <span
+                  className={
+                    isNumberMissing ? "text-red-400 text-lg font-semibold" : "text-neutral-300"
+                  }
+                >
+                  {isNumberMissing ? "Enter table number" : "\u00A0"}
+                </span>
               )}
-            </div>
+            </motion.div>
 
             {!isQuantityMode ? (
               <div className="mb-3 grid grid-cols-2 gap-1.5">
