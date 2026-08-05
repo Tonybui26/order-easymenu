@@ -239,6 +239,16 @@ export default function PosTerminal() {
           return;
         }
 
+        const hasNonPos = result.orders.some(
+          (order) => String(order?.source || "").trim() !== "pos",
+        );
+        if (hasNonPos) {
+          showDismissibleToast("Only POS checks can be resumed on the terminal");
+          resumeLoadedRef.current = null;
+          router.replace("/pos/held");
+          return;
+        }
+
         const resumeState = buildPosResumeState(result.orders);
         const lines = buildCartLinesFromResumeOrders(result.orders);
 
