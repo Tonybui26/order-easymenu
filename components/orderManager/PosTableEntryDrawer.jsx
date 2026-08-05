@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Delete } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { cn } from "@/lib/helper";
 
 const KEYPAD_ROWS = [
   ["1", "2", "3"],
@@ -138,6 +137,21 @@ export default function PosTableEntryDrawer({
               )}
             </div>
 
+            {!isQuantityMode ? (
+              <div className="mb-3 grid grid-cols-2 gap-1.5">
+                {ORDER_TYPES.map((type) => (
+                  <button
+                    key={type.id}
+                    type="button"
+                    onClick={() => handleSelectOrderType(type.id)}
+                    className="min-h-[3.25rem] rounded-lg bg-[#301C0F] px-2 text-sm font-bold tracking-wide text-white transition-colors hover:bg-[#3d2618] active:bg-[#24150b]"
+                  >
+                    {type.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
             <div className="mb-3 grid grid-cols-3 gap-1.5">
               {KEYPAD_ROWS.flat().map((key) => {
                 if (key === "backspace") {
@@ -174,24 +188,7 @@ export default function PosTableEntryDrawer({
               >
                 DONE
               </button>
-            ) : (
-              <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/40">
-                {ORDER_TYPES.map((type, index) => (
-                  <button
-                    key={type.id}
-                    type="button"
-                    onClick={() => handleSelectOrderType(type.id)}
-                    className={cn(
-                      "min-h-[3.25rem] px-2 text-sm font-bold tracking-wide text-white transition-colors hover:bg-white/10 active:bg-white/20",
-                      index % 2 === 0 && "border-r border-white/40",
-                      index < 2 && "border-b border-white/40",
-                    )}
-                  >
-                    {type.label}
-                  </button>
-                ))}
-              </div>
-            )}
+            ) : null}
           </div>
         </motion.aside>
       ) : null}
