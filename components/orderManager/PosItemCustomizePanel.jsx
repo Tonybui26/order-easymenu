@@ -2,6 +2,10 @@
 
 import { cn } from "@/lib/helper";
 import {
+  formatPosGroupDisplayName,
+  formatPosItemDisplayName,
+} from "@/lib/helper/printNameAlias";
+import {
   getEnabledModifierOptions,
   isVariantOptionInStock,
   modifierLimits,
@@ -22,6 +26,8 @@ export default function PosItemCustomizePanel({
 }) {
   if (!item) return null;
 
+  const itemDisplayTitle = formatPosItemDisplayName(item.title) || "Customize";
+
   const variantGroups = (item.variants || []).filter(
     (group) => item.hasVariants && (group.options || []).length > 0,
   );
@@ -35,7 +41,7 @@ export default function PosItemCustomizePanel({
     <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-[#f0f0f0] p-5 sm:p-6">
       <div className="mb-5">
         <h2 className="text-xl font-bold text-neutral-900">
-          {item.title || "Customize"}
+          {itemDisplayTitle}
         </h2>
         <p className="mt-1 text-sm text-neutral-500">
           Edit options, or tap a tab to go back
@@ -49,11 +55,15 @@ export default function PosItemCustomizePanel({
           );
           if (options.length === 0) return null;
 
+          const groupLabel = formatPosGroupDisplayName(variant.groupName);
+
           return (
             <section key={variant.groupId || variant.groupName}>
-              <h3 className="mb-3 text-sm font-medium text-neutral-500">
-                {variant.groupName}
-              </h3>
+              {groupLabel ? (
+                <h3 className="mb-3 text-sm font-medium text-neutral-500">
+                  {groupLabel}
+                </h3>
+              ) : null}
               <div className="flex flex-wrap gap-3">
                 {options.map((option) => {
                   const isSelected =
@@ -61,7 +71,9 @@ export default function PosItemCustomizePanel({
                   return (
                     <OptionTile
                       key={option.id}
-                      label={option.name}
+                      label={
+                        formatPosItemDisplayName(option.name) || option.name
+                      }
                       isSelected={isSelected}
                       onClick={() =>
                         onSelectVariant?.(variant.groupId, option.id)
@@ -83,18 +95,26 @@ export default function PosItemCustomizePanel({
           const selectedIds =
             selectedModifiers[modifierGroup.useGlobal] || [];
 
+          const groupLabel = formatPosGroupDisplayName(
+            modifierGroup.groupName || globalGroup?.groupName,
+          );
+
           return (
             <section key={modifierGroup.useGlobal || modifierGroup.groupName}>
-              <h3 className="mb-3 text-sm font-medium text-neutral-500">
-                {modifierGroup.groupName || globalGroup?.groupName}
-              </h3>
+              {groupLabel ? (
+                <h3 className="mb-3 text-sm font-medium text-neutral-500">
+                  {groupLabel}
+                </h3>
+              ) : null}
               <div className="flex flex-wrap gap-3">
                 {options.map((option) => {
                   const isSelected = selectedIds.includes(option.id);
                   return (
                     <OptionTile
                       key={option.id}
-                      label={option.name}
+                      label={
+                        formatPosItemDisplayName(option.name) || option.name
+                      }
                       isSelected={isSelected}
                       onClick={() =>
                         onToggleModifier?.(

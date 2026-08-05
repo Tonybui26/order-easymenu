@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/helper";
+import { formatPosItemDisplayName } from "@/lib/helper/printNameAlias";
 import {
   POS_CANCEL_LINE_REASONS,
   POS_CANCEL_OTHER_REASON,
@@ -23,6 +24,9 @@ export default function PosCancelSentLineDrawer({
 }) {
   const line = drawerState?.line;
   const isOpen = Boolean(drawerState?.show && line);
+  const lineDisplayTitle = line
+    ? formatPosItemDisplayName(line.title) || line.title
+    : "";
   const [portalReady, setPortalReady] = useState(false);
   const [selectedReason, setSelectedReason] = useState("");
   const [otherReason, setOtherReason] = useState("");
@@ -85,7 +89,7 @@ export default function PosCancelSentLineDrawer({
                 Void sent item
               </h2>
               <p className="mt-1 text-sm text-neutral-500">
-                {line.title} stays on the ticket crossed out for the record.
+                {lineDisplayTitle} stays on the ticket crossed out for the record.
               </p>
             </div>
             <button

@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 import { cn } from "@/lib/helper";
+import { formatPosItemDisplayName } from "@/lib/helper/printNameAlias";
 
 function formatMoney(amount) {
   return `$${Number(amount || 0).toFixed(2)}`;
@@ -35,6 +36,7 @@ export default function PosCartLine({
     allowVoidSentLine && isSentToKitchen && !isCancelled;
   const showRemoveUnsentButton = !readOnly && !isSentToKitchen && !isCancelled;
   const strikeClass = isCancelled ? "line-through decoration-neutral-400" : "";
+  const displayTitle = formatPosItemDisplayName(line.title) || "Untitled";
 
   return (
     <li
@@ -71,9 +73,9 @@ export default function PosCartLine({
         )}
         aria-label={
           isCancelled
-            ? `${line.title}, voided`
+            ? `${displayTitle}, voided`
             : isSentToKitchen
-              ? `${line.title}, sent to kitchen`
+              ? `${displayTitle}, sent to kitchen`
               : undefined
         }
       >
@@ -94,7 +96,7 @@ export default function PosCartLine({
               onQtyClick?.(line.lineId);
             }}
             className="inline-flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-neutral-200 bg-white px-2 text-sm font-bold text-neutral-800 shadow-sm transition-colors hover:bg-neutral-50 active:bg-neutral-100"
-            aria-label={`Edit quantity of ${line.title}`}
+            aria-label={`Edit quantity of ${displayTitle}`}
           >
             {qty}
           </button>
@@ -108,7 +110,7 @@ export default function PosCartLine({
               isCancelled && "text-neutral-400",
             )}
           >
-            {line.title}
+            {displayTitle}
           </p>
           {isCancelled && line.cancelReason ? (
             <p className="mt-0.5 truncate text-xs text-neutral-400">
@@ -135,7 +137,7 @@ export default function PosCartLine({
               onVoidSentLine?.(line.lineId);
             }}
             className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
-            aria-label={`Void ${line.title}`}
+            aria-label={`Void ${displayTitle}`}
           >
             <X size={14} strokeWidth={2.5} />
           </button>
@@ -149,7 +151,7 @@ export default function PosCartLine({
               onRemoveLine?.(line.lineId);
             }}
             className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
-            aria-label={`Remove ${line.title}`}
+            aria-label={`Remove ${displayTitle}`}
           >
             <X size={14} strokeWidth={2.5} />
           </button>
@@ -163,7 +165,10 @@ export default function PosCartLine({
             (isSentToKitchen || isCancelled) && "text-neutral-500",
           )}
         >
-          {variants.map((variant) => (
+          {variants.map((variant) => {
+            const optionLabel =
+              formatPosItemDisplayName(variant.optionName) || variant.optionName;
+            return (
             <li
               key={`variant-${variant.groupName}-${variant.optionId}`}
               className="flex items-center gap-2.5 py-1.5 pl-[3.25rem] pr-3"
@@ -174,7 +179,7 @@ export default function PosCartLine({
                   strikeClass,
                 )}
               >
-                {variant.optionName}
+                {optionLabel}
               </p>
               <span className="w-12 shrink-0" aria-hidden />
               {showRemoveUnsentButton ? (
@@ -184,16 +189,20 @@ export default function PosCartLine({
                     onRemoveVariant?.(line.lineId, variant.optionId)
                   }
                   className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
-                  aria-label={`Remove ${variant.optionName}`}
+                  aria-label={`Remove ${optionLabel}`}
                 >
                   <X size={14} strokeWidth={2.5} />
                 </button>
               ) : null}
             </li>
-          ))}
+            );
+          })}
 
           {modifiers.map((modifier) => {
             const price = Number(modifier.priceModifier || 0);
+            const optionLabel =
+              formatPosItemDisplayName(modifier.optionName) ||
+              modifier.optionName;
             return (
               <li
                 key={`modifier-${modifier.groupName}-${modifier.optionId}`}
@@ -205,7 +214,7 @@ export default function PosCartLine({
                     strikeClass,
                   )}
                 >
-                  {modifier.optionName}
+                  {optionLabel}
                 </p>
                 {price > 0 ? (
                   <span
@@ -226,7 +235,7 @@ export default function PosCartLine({
                       onRemoveModifier?.(line.lineId, modifier.optionId)
                     }
                     className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-[#ef3636] text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
-                    aria-label={`Remove ${modifier.optionName}`}
+                    aria-label={`Remove ${optionLabel}`}
                   >
                     <X size={14} strokeWidth={2.5} />
                   </button>

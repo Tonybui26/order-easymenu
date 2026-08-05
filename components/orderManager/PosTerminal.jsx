@@ -47,6 +47,7 @@ import { buildTaxInvoiceReceiptFromPosCheck } from "@/lib/printers/receipt/build
 import { printTaxInvoiceReceipt } from "@/lib/printers/printTaxInvoiceReceipt";
 import { resolvePosConfig } from "@/lib/pos/posConfig";
 import { buildTrainingKitchenOrder } from "@/lib/pos/buildTrainingKitchenOrder";
+import { formatPosItemDisplayName } from "@/lib/helper/printNameAlias";
 
 function mapPosOrderType(orderType) {
   if (orderType === "dine-in") return "dine-in";
@@ -118,6 +119,7 @@ function useAllMenuItems(menuContent) {
 }
 
 function PosProductCard({ item, onAdd, disabled = false }) {
+  const displayTitle = formatPosItemDisplayName(item.title) || "Untitled";
   return (
     <button
       type="button"
@@ -132,7 +134,7 @@ function PosProductCard({ item, onAdd, disabled = false }) {
         {item.PhotoSrc ? (
           <Image
             src={item.PhotoSrc}
-            alt={item.title || "Product"}
+            alt={displayTitle}
             fill
             sizes="20vw"
             className="object-cover"
@@ -144,7 +146,7 @@ function PosProductCard({ item, onAdd, disabled = false }) {
         )}
       </div>
       <div className="px-2 py-2.5 text-center text-base font-semibold leading-snug text-neutral-900 xl:text-lg">
-        {item.title || "Untitled"}
+        {displayTitle}
       </div>
     </button>
   );
