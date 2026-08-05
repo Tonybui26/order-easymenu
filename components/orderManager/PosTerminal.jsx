@@ -317,7 +317,7 @@ export default function PosTerminal() {
   const tableLabel = (() => {
     if (!orderType) {
       if (isOrderTypeMissing) return "SELECT ORDER TYPE";
-      return "TABLE: --";
+      return "DINE IN or TAKE AWAY";
     }
     if (orderType === "dine-in") return `TABLE: ${tableNumber || "--"}`;
     if (orderType === "buzzer") return `BUZZER: ${tableNumber || "--"}`;
