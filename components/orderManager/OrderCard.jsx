@@ -44,6 +44,18 @@ function getOrderTableNumber(table) {
   return value;
 }
 
+/** Elapsed prepare time as H:MM:SS or M:SS with leading zeros on minutes/seconds. */
+function formatPrepareDuration(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const mm = String(minutes).padStart(2, "0");
+  const ss = String(seconds).padStart(2, "0");
+  if (hours > 0) return `${hours}:${mm}:${ss}`;
+  return `${mm}:${ss}`;
+}
+
 const ORDER_CARD_SLIDE_TRANSITION = {
   type: "spring",
   damping: 28,
@@ -153,6 +165,7 @@ export default function OrderCard({
     "ready",
   ].includes(viewMode);
   const [fulfillmentNow, setFulfillmentNow] = useState(() => Date.now());
+  const [prepareNow, setPrepareNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (!isFulfillmentTimelineView) return undefined;
@@ -160,10 +173,24 @@ export default function OrderCard({
     return () => clearInterval(id);
   }, [isFulfillmentTimelineView]);
 
+  useEffect(() => {
+    if (viewMode !== "preparing") return undefined;
+    const id = setInterval(() => setPrepareNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [viewMode]);
+
   // Format the time since order was created
   const timeAgo = formatDistanceToNow(new Date(order.createdAt), {
     addSuffix: true,
   });
+
+  const prepareMs = order.createdAt
+    ? prepareNow - new Date(order.createdAt).getTime()
+    : 0;
+  const prepareLabel = formatPrepareDuration(
+    Number.isFinite(prepareMs) ? prepareMs : 0,
+  );
+  const isLongPrepare = prepareMs >= 15 * 60 * 1000;
 
   /**
    * Canonical type is `order.orderType` (newer orders).
@@ -687,12 +714,34 @@ export default function OrderCard({
                           </div>
                         </div>
                       )}
-                      {/* Time Ago — hidden when showing fulfilment expected time */}
-                      {!scheduledExpectedLabel && (
-                        <div className="inline-flex items-center justify-end text-xs text-gray-500">
-                          Placed {timeAgo}
-                        </div>
-                      )}
+                      {/* Preparing: live elapsed timer (held-orders style). Else: placed ago. */}
+                      {!scheduledExpectedLabel &&
+                        (viewMode === "preparing" ? (
+                          <div
+                            className={cn(
+                              "inline-flex items-center gap-1.5 rounded-lg px-2 py-1 font-mono text-sm font-semibold tabular-nums tracking-tight",
+                              isLongPrepare
+                                ? "bg-amber-50 text-amber-800"
+                                : "bg-neutral-100 text-neutral-800",
+                            )}
+                            aria-label={`Preparing for ${prepareLabel}`}
+                          >
+                            <span
+                              className={cn(
+                                "size-1.5 shrink-0 rounded-full",
+                                isLongPrepare
+                                  ? "bg-amber-500"
+                                  : "animate-pulse bg-emerald-500",
+                              )}
+                              aria-hidden
+                            />
+                            {prepareLabel}
+                          </div>
+                        ) : (
+                          <div className="inline-flex items-center justify-end text-xs text-gray-500">
+                            Placed {timeAgo}
+                          </div>
+                        ))}
                     </div>
                     {/* Total + optional surcharge breakdown for pay-at-counter hidden temporarily */}
                     {isCounterPayment(order.paymentMethod) && (
