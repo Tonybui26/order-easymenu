@@ -134,7 +134,7 @@ export default function PosTableEntryDrawer({
           role="dialog"
           aria-modal="true"
           aria-label={title}
-          className="fixed inset-y-0 left-0 z-50 flex w-[min(100%,22rem)] flex-col bg-[#ec7439] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)] shadow-2xl"
+          className="fixed inset-y-0 left-0 z-50 flex w-[min(100%,22rem)] flex-col bg-[#984B28] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)] shadow-2xl"
           initial={{ x: "-100%" }}
           animate={{ x: 0 }}
           exit={{ x: "-100%" }}
@@ -184,7 +184,7 @@ export default function PosTableEntryDrawer({
                     key={type.id}
                     type="button"
                     onClick={() => handleSelectOrderType(type.id)}
-                    className="min-h-[3.25rem] rounded-lg bg-[#301C0F] px-2 text-sm font-bold tracking-wide text-white transition-colors hover:bg-[#3d2618] active:bg-[#24150b]"
+                    className="min-h-[3.25rem] rounded-lg bg-[#ec7439] px-2 text-sm font-bold tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
                   >
                     {type.label}
                   </button>
@@ -200,7 +200,7 @@ export default function PosTableEntryDrawer({
                       key={key}
                       type="button"
                       onClick={() => handleKey(key)}
-                      className="flex h-11 items-center justify-center rounded-md bg-white text-neutral-800 shadow-sm transition-transform active:scale-95"
+                      className="flex h-16 items-center justify-center rounded-md bg-white text-neutral-800 shadow-sm transition-transform active:scale-95"
                       aria-label="Delete"
                     >
                       <Delete size={18} strokeWidth={2.25} />
