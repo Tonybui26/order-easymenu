@@ -243,7 +243,9 @@ export default function PosTerminal() {
           (order) => String(order?.source || "").trim() !== "pos",
         );
         if (hasNonPos) {
-          showDismissibleToast("Only POS checks can be resumed on the terminal");
+          showDismissibleToast(
+            "Only POS checks can be resumed on the terminal",
+          );
           resumeLoadedRef.current = null;
           router.replace("/pos/held");
           return;
@@ -313,6 +315,7 @@ export default function PosTerminal() {
   const selectedRows = selectedTab?.rows || [];
   const isViewOnly = isCheckPaid;
   const isTableFieldLocked = isViewOnly || isResumedCheck;
+  const awaitingOrderType = !orderType && !isTableFieldLocked;
 
   const tableLabel = (() => {
     if (!orderType) {
@@ -1037,7 +1040,7 @@ export default function PosTerminal() {
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {/* Left: current order */}
           <section className="flex w-[34%] min-w-[280px] max-w-[440px] shrink-0 flex-col bg-white pb-[env(safe-area-inset-bottom)]">
-            <div className="flex shrink-0 items-stretch border-b border-neutral-200 bg-[#ececec] p-2">
+            <div className="relative z-20 flex shrink-0 items-stretch border-neutral-200 bg-[#f2f2f2] p-2">
               <motion.button
                 key={tableFieldShakeKey}
                 type="button"
@@ -1054,10 +1057,12 @@ export default function PosTerminal() {
                 }
                 transition={{ duration: 0.35, ease: "easeInOut" }}
                 className={cn(
-                  "flex min-h-[52px] w-full items-center justify-center rounded-md bg-white px-4 text-base font-semibold shadow-[0_0_0_1px_#d4d4d4] transition-colors hover:bg-neutral-50 active:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-800",
-                  isOrderTypeMissing && !orderType
-                    ? "bg-red-50 text-red-700 shadow-[0_0_0_2px_#ef4444]"
-                    : "text-neutral-700",
+                  "flex min-h-[52px] w-full items-center justify-center rounded-md bg-white px-4 text-base font-semibold transition-shadow hover:bg-neutral-50 active:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-800",
+                  awaitingOrderType
+                    ? isOrderTypeMissing
+                      ? "bg-red-50 text-red-700 shadow-[0_4px_14px_rgba(239,68,68,0.35)]"
+                      : "font-bold text-[#301C0F] shadow-[0_4px_14px_rgba(48,28,15,0.28)]"
+                    : "text-neutral-700 shadow-[0_0_0_1px_#d4d4d4]",
                 )}
               >
                 {tableLabel}
@@ -1083,14 +1088,21 @@ export default function PosTerminal() {
               onTrainingDone={handleTrainingPaymentDone}
             />
 
-            <div className="min-h-0 flex-1 overflow-y-auto bg-[#f2f2f2]">
+            <div
+              className={cn(
+                "min-h-0 flex-1 overflow-y-auto bg-[#f2f2f2] transition-opacity duration-300",
+                awaitingOrderType && "pointer-events-none opacity-35",
+              )}
+            >
               {isResumingOrder ? (
                 <div className="flex h-full items-center justify-center px-6 text-center text-sm text-neutral-400">
                   Loading held order…
                 </div>
               ) : cartLines.length === 0 ? (
                 <div className="flex h-full items-center justify-center px-6 text-center text-sm text-neutral-400">
-                  Tap products to add them to this order
+                  {awaitingOrderType
+                    ? "Choose dine in or take away to start"
+                    : "Tap products to add them to this order"}
                 </div>
               ) : (
                 <ul>
@@ -1121,11 +1133,20 @@ export default function PosTerminal() {
               onClear={handleClearOrder}
               onHold={handleFooterHold}
               onSend={handleSendOrder}
+              className={cn(
+                "transition-opacity duration-300",
+                awaitingOrderType && "pointer-events-none opacity-35",
+              )}
             />
           </section>
 
           {/* Right: POS menu layout (tabs + products) */}
-          <section className="flex min-w-0 flex-1">
+          <section
+            className={cn(
+              "flex min-w-0 flex-1 transition-opacity duration-300",
+              awaitingOrderType && "pointer-events-none opacity-35",
+            )}
+          >
             {/* Tabs column — z-30 + overhang so selected indicator sits on top of products */}
             <aside className="relative z-30 flex w-[120px] shrink-0 flex-col bg-[#f0f0f0] pb-[env(safe-area-inset-bottom)] sm:w-[150px]">
               <div className="-mr-3 min-h-0 flex-1 overflow-y-auto pr-3">
