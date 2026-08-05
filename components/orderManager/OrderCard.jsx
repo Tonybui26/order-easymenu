@@ -32,6 +32,7 @@ import { ModifierChoicesGrouped } from "@/lib/utils/modifierDisplay";
 import { getCustomerDisplayName } from "@/lib/helper/printNameAlias";
 import { cn } from "@/lib/helper";
 import { isOrderPaidForFulfillment } from "@/lib/helper/orderPaymentStatus";
+import { useMenuContext } from "@/components/context/MenuContext";
 import OrderCardMoreInfo from "./OrderCardMoreInfo";
 import RefundModal from "./RefundModal";
 import SendRefundConfirmationModal from "./SendRefundConfirmationModal";
@@ -42,6 +43,33 @@ function getOrderTableNumber(table) {
   const normalized = value.toLowerCase();
   if (normalized === "takeaway" || normalized === "pickup") return null;
   return value;
+}
+
+/**
+ * Source badge for POS-enabled stores.
+ * POS = counter POS ticket; QR = table QR scan; Online = storefront pickup/delivery without table.
+ */
+function getOrderSourceBadge(order) {
+  const source = String(order?.source || "qr").trim();
+  if (source === "pos") {
+    return {
+      label: "POS",
+      className: "bg-indigo-100 text-indigo-800",
+    };
+  }
+
+  const table = getOrderTableNumber(order?.table);
+  if (table) {
+    return {
+      label: "QR",
+      className: "bg-violet-100 text-violet-800",
+    };
+  }
+
+  return {
+    label: "Online",
+    className: "bg-sky-100 text-sky-800",
+  };
 }
 
 /** Elapsed prepare time as H:MM:SS or M:SS with leading zeros on minutes/seconds. */
@@ -136,6 +164,10 @@ export default function OrderCard({
   isProcessing = false,
   onPrint,
 }) {
+  const { menuConfig } = useMenuContext();
+  const posEnabled = Boolean(menuConfig?.posEnabled);
+  const sourceBadge = posEnabled ? getOrderSourceBadge(order) : null;
+
   const [showCustomerInfo, setShowCustomerInfo] = useState(false);
 
   const [moreInfoOpen, setMoreInfoOpen] = useState(false);
@@ -685,8 +717,18 @@ export default function OrderCard({
                         </span>
                       ) : null}
                     </h3>
-                    <p className="mt-0.5 text-sm font-medium text-gray-500">
-                      #{order._id.slice(-6).toUpperCase()}
+                    <p className="mt-0.5 flex flex-wrap items-center gap-1.5 font-medium text-gray-500">
+                      <span>#{order._id.slice(-6).toUpperCase()}</span>
+                      {sourceBadge ? (
+                        <span
+                          className={cn(
+                            "inline-block rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide",
+                            sourceBadge.className,
+                          )}
+                        >
+                          {sourceBadge.label}
+                        </span>
+                      ) : null}
                     </p>
                     <div className="mt-1 flex flex-col items-start gap-1">
                       {/* Pickup / delivery expected time */}
