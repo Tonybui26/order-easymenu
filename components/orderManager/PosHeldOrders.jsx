@@ -23,6 +23,7 @@ import {
 import PosChromeHeader from "./PosChromeHeader";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 import PosHeldOrderCard from "./PosHeldOrderCard";
+import SelfOrderingHeldOrderCard from "./SelfOrderingHeldOrderCard";
 import DeleteOrderDrawer from "./DeleteOrderDrawer";
 import DismissibleToast, {
   useDismissibleToast,
@@ -398,10 +399,15 @@ export default function PosHeldOrders() {
                     </div>
                   </div>
                 ) : (
-                  <ul className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                    {visibleHeldOrders.map((order) => (
+                <ul className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {visibleHeldOrders.map((order) => {
+                    const HeldCard =
+                      activeTab === "pos"
+                        ? PosHeldOrderCard
+                        : SelfOrderingHeldOrderCard;
+                    return (
                       <li key={order.id} className="min-w-0">
-                        <PosHeldOrderCard
+                        <HeldCard
                           order={order}
                           onSelect={handleSelectHeldOrder}
                           onReady={handleReadyHeldOrder}
@@ -413,8 +419,9 @@ export default function PosHeldOrders() {
                           isProcessing={processingCheckId === order.id}
                         />
                       </li>
-                    ))}
-                  </ul>
+                    );
+                  })}
+                </ul>
                 )}
               </div>
             </div>
