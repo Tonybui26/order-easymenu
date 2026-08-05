@@ -129,7 +129,6 @@ export default function LiveOrderTerminal() {
   const [completedOrders, setCompletedOrders] = useState([]);
   const [completedOrdersLoading, setCompletedOrdersLoading] = useState(false);
   const audioRef = useRef(null);
-  const [isPolling, setIsPolling] = useState(false);
   const soundIntervalRef = useRef(null);
   const playingAudioInstances = useRef(new Set());
   const appStateChangeCountRef = useRef(0);
@@ -223,16 +222,12 @@ export default function LiveOrderTerminal() {
 
     // Mark as in progress
     isPollingInProgressRef.current = true;
-    setIsPolling(true);
     lastPollTimeRef.current = Date.now();
 
     try {
       const data = await fetchOrders();
       const activeOrders = filterOrdersForActiveList(data, menuConfig);
-      // toast.success("polling orders");
-      const currentOrderIdsAsSet = new Set(
-        activeOrders.map((order) => order._id),
-      );
+
       setOrders(activeOrders);
 
       // Reset error tracking on successful poll
@@ -446,7 +441,6 @@ export default function LiveOrderTerminal() {
         }
       }
     } finally {
-      setIsPolling(false);
       // Clear the in-progress flag
       isPollingInProgressRef.current = false;
     }
@@ -807,7 +801,7 @@ export default function LiveOrderTerminal() {
       setConsecutiveErrors(0);
 
       // If polling is active, poll immediately to catch up on missed orders
-      if (isPollingActive && !isPolling && !isPollingInProgressRef.current) {
+      if (isPollingActive && !isPollingInProgressRef.current) {
         // Clear any pending retry
         if (pollingTimeoutRef.current) {
           clearTimeout(pollingTimeoutRef.current);
@@ -837,7 +831,7 @@ export default function LiveOrderTerminal() {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, [isPollingActive, isPolling, pollingOrders]);
+  }, [isPollingActive, pollingOrders]);
 
   // Separate useEffect to log when state actually changes
   // useEffect(() => {
