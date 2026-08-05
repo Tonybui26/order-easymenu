@@ -120,6 +120,8 @@ function useAllMenuItems(menuContent) {
 
 function PosProductCard({ item, onAdd, disabled = false }) {
   const displayTitle = formatPosItemDisplayName(item.title) || "Untitled";
+  const hasImage = Boolean(item.PhotoSrc);
+
   return (
     <button
       type="button"
@@ -130,24 +132,28 @@ function PosProductCard({ item, onAdd, disabled = false }) {
       <span className="absolute left-2 top-2 z-10 flex size-8 items-center justify-center rounded-full bg-white text-neutral-600 shadow-sm ring-1 ring-black/5">
         <Plus size={18} strokeWidth={2.5} />
       </span>
-      <div className="relative aspect-square w-full bg-neutral-100">
-        {item.PhotoSrc ? (
-          <Image
-            src={item.PhotoSrc}
-            alt={displayTitle}
-            fill
-            sizes="20vw"
-            className="object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-neutral-400">
-            No img
+      {hasImage ? (
+        <>
+          <div className="relative aspect-square w-full bg-neutral-100">
+            <Image
+              src={item.PhotoSrc}
+              alt={displayTitle}
+              fill
+              sizes="20vw"
+              className="object-cover"
+            />
           </div>
-        )}
-      </div>
-      <div className="px-2 py-2.5 text-center text-base font-semibold leading-snug text-neutral-900 xl:text-lg">
-        {displayTitle}
-      </div>
+          <div className="px-2 py-2.5 text-center text-base font-semibold leading-snug text-neutral-900 xl:text-lg">
+            {displayTitle}
+          </div>
+        </>
+      ) : (
+        <div className="flex aspect-square w-full items-center justify-center px-3 py-8">
+          <span className="line-clamp-4 text-center text-base font-semibold leading-snug text-neutral-900 xl:text-lg">
+            {displayTitle}
+          </span>
+        </div>
+      )}
     </button>
   );
 }
