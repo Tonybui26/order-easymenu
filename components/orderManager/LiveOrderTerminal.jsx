@@ -35,6 +35,7 @@ import {
   Clock,
   X,
   CalendarClock,
+  RefreshCw,
 } from "lucide-react";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import OnlineOrderControlButton from "./OnlineOrderControlButton";
@@ -171,7 +172,6 @@ export default function LiveOrderTerminal() {
 
   // Polling state tracking
   const [isPollingActive, setIsPollingActive] = useState(true);
-  const [isOnline, setIsOnline] = useState(true);
   const [consecutiveErrors, setConsecutiveErrors] = useState(0);
   const consecutiveErrorsRef = useRef(0); // Ref for use in callbacks
   const pollingTimeoutRef = useRef(null);
@@ -230,18 +230,13 @@ export default function LiveOrderTerminal() {
 
       setOrders(activeOrders);
 
-      // Reset error tracking on successful poll
+      // Successful fetch is the source of truth for connection status.
       const hadErrors = consecutiveErrorsRef.current > 0;
-      const wasOffline = !isOnline;
+      consecutiveErrorsRef.current = 0;
+      setConsecutiveErrors(0);
 
       if (hadErrors) {
-        consecutiveErrorsRef.current = 0;
-        setConsecutiveErrors(0);
-        setIsOnline(true);
-        // Show reconnection toast if we were offline
-        if (wasOffline) {
-          toast.success("Connection restored!", { duration: 2000 });
-        }
+        toast.success("Connection restored!", { duration: 2000 });
       }
 
       // Show connected toast on first successful poll after starting
@@ -379,34 +374,13 @@ export default function LiveOrderTerminal() {
     } catch (error) {
       console.error("Polling error:", error);
 
-      // Check if it's a network error
-      const isNetworkError =
-        error.message?.includes("fetch") ||
-        error.message?.includes("network") ||
-        error.message?.includes("Failed to fetch") ||
-        !navigator.onLine;
+      consecutiveErrorsRef.current += 1;
+      setConsecutiveErrors(consecutiveErrorsRef.current);
 
-      // Update online status
-      setIsOnline(navigator.onLine);
-
-      // Increment consecutive errors for network issues
-      if (isNetworkError) {
-        consecutiveErrorsRef.current += 1;
-        setConsecutiveErrors(consecutiveErrorsRef.current);
-      } else {
-        // Reset on non-network errors (might be temporary server issues)
-        consecutiveErrorsRef.current = Math.max(
-          0,
-          consecutiveErrorsRef.current - 1,
-        );
-        setConsecutiveErrors(consecutiveErrorsRef.current);
-      }
-
-      // Calculate exponential backoff for network errors
-      // Formula: min(ERROR_BASE * 2^errors, ERROR_MAX)
-      const errorCount = isNetworkError ? consecutiveErrorsRef.current : 1;
+      // Exponential backoff: min(ERROR_BASE * 2^(n-1), ERROR_MAX)
       const backoffInterval = Math.min(
-        POLLING_INTERVALS.ERROR_BASE * Math.pow(2, Math.min(errorCount - 1, 4)),
+        POLLING_INTERVALS.ERROR_BASE *
+          Math.pow(2, Math.min(consecutiveErrorsRef.current - 1, 4)),
         POLLING_INTERVALS.ERROR_MAX,
       );
 
@@ -424,16 +398,9 @@ export default function LiveOrderTerminal() {
           pollingOrders(); // This will retry, and if it fails again, it will retry again
         }, backoffInterval);
 
-        // Show user feedback for network errors
-        if (isNetworkError && consecutiveErrorsRef.current === 1) {
-          // Only show toast on first network error to avoid spam
+        if (consecutiveErrorsRef.current === 1) {
           toast.error("Connection lost. Retrying...", { duration: 3000 });
-        } else if (
-          isNetworkError &&
-          consecutiveErrorsRef.current > 1 &&
-          consecutiveErrorsRef.current % 3 === 0
-        ) {
-          // Show periodic updates every 3 retries to let user know it's still trying
+        } else if (consecutiveErrorsRef.current % 3 === 0) {
           toast.error(
             `Still retrying... (attempt ${consecutiveErrorsRef.current})`,
             { duration: 2000 },
@@ -789,47 +756,22 @@ export default function LiveOrderTerminal() {
     };
   }, [isNative, startPolling, stopPolling]);
 
-  // Network connectivity detection and recovery
+  // Browser online/offline are hints only — status comes from poll success/failure.
   useEffect(() => {
-    // Set initial online status
-    setIsOnline(navigator.onLine);
-
     const handleOnline = () => {
-      console.log("Network connection restored");
-      setIsOnline(true);
-      consecutiveErrorsRef.current = 0;
-      setConsecutiveErrors(0);
-
-      // If polling is active, poll immediately to catch up on missed orders
+      console.log("Browser reported online — polling to verify connection");
       if (isPollingActive && !isPollingInProgressRef.current) {
-        // Clear any pending retry
         if (pollingTimeoutRef.current) {
           clearTimeout(pollingTimeoutRef.current);
           pollingTimeoutRef.current = null;
         }
-        // Reset the connected toast flag so it shows after successful poll
-        hasShownConnectedToastRef.current = false;
-        // Poll immediately - toast will show after successful poll
         pollingOrders();
       }
     };
 
-    const handleOffline = () => {
-      console.log("Network connection lost");
-      setIsOnline(false);
-      toast.error("Connection lost. Will retry when connection is restored.", {
-        duration: 4000,
-      });
-    };
-
-    // Listen for online/offline events
     window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    // Cleanup
     return () => {
       window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
     };
   }, [isPollingActive, pollingOrders]);
 
@@ -1326,10 +1268,14 @@ export default function LiveOrderTerminal() {
       return;
     }
 
-    const success = await handleStatusUpdate(cancelTarget.orderId, "cancelled", {
-      cancelReason,
-      requireCancelReason: true,
-    });
+    const success = await handleStatusUpdate(
+      cancelTarget.orderId,
+      "cancelled",
+      {
+        cancelReason,
+        requireCancelReason: true,
+      },
+    );
 
     if (success) {
       setCancelDrawerOpen(false);
@@ -1776,8 +1722,8 @@ export default function LiveOrderTerminal() {
                       Enable Sound Notifications
                     </h3>
                     <p className="text-sm text-yellow-700">
-                      Click &quot;Enable Sound&quot; to hear audio alerts for new
-                      orders.
+                      Click &quot;Enable Sound&quot; to hear audio alerts for
+                      new orders.
                     </p>
                   </div>
                 </div>
@@ -1800,129 +1746,127 @@ export default function LiveOrderTerminal() {
           )}
 
           <div className="flex items-start justify-between">
-          {/* quick settings */}
-          <div className="mb-3 flex gap-4 rounded-3xl bg-[#0000003d] p-3 ring-2 ring-[#222222]">
-            {/* logo */}
-            <div className="hidden h-auto flex-col items-center justify-center gap-0 rounded-lg bg-gray-100 px-4 py-1 text-left transition-colors hover:bg-gray-200">
-              <Image
-                src={Logo}
-                alt="GoEasyMenu"
-                auto="true"
-                className="mx-auto w-[24px]"
-                priority
-              />
-              {/* <h1 className="font-bold">
+            {/* quick settings */}
+            <div className="mb-3 flex gap-4 rounded-3xl bg-[#0000003d] p-3 ring-2 ring-[#222222]">
+              {/* logo */}
+              <div className="hidden h-auto flex-col items-center justify-center gap-0 rounded-lg bg-gray-100 px-4 py-1 text-left transition-colors hover:bg-gray-200">
+                <Image
+                  src={Logo}
+                  alt="GoEasyMenu"
+                  auto="true"
+                  className="mx-auto w-[24px]"
+                  priority
+                />
+                {/* <h1 className="font-bold">
                 {storeProfile?.storeName || "Store Name"}
               </h1> */}
-            </div>
-            {/* Polling Status Indicator */}
-            <div
-              className={`hidden h-auto items-center gap-2 rounded-lg px-3 py-1 text-sm font-medium transition-colors lg:flex ${
-                isPollingActive && isOnline
-                  ? "bg-neutral-700 text-green-500"
-                  : !isOnline || consecutiveErrors > 0
-                    ? "bg-red-100 text-red-800"
-                    : "bg-yellow-100 text-yellow-800"
-              }`}
-            >
+              </div>
+              {/* Polling Status Indicator — driven by poll success/failure, not navigator.onLine */}
               <div
-                className={`h-3 w-3 rounded-full ${
-                  isPollingActive && isOnline
-                    ? "animate-pulse bg-green-500"
-                    : !isOnline || consecutiveErrors > 0
-                      ? "bg-red-500"
-                      : "bg-yellow-500"
+                className={`hidden h-auto items-center gap-2 rounded-lg px-3 py-1 text-sm font-medium transition-colors lg:flex ${
+                  isPollingActive && consecutiveErrors === 0
+                    ? "bg-neutral-700 text-green-500"
+                    : consecutiveErrors > 0
+                      ? "bg-red-100 text-red-800"
+                      : "bg-yellow-100 text-yellow-800"
                 }`}
-              ></div>
-              <span>
-                {!isOnline
-                  ? "OFFLINE"
-                  : consecutiveErrors > 0
-                    ? "CONNECTING"
-                    : isPollingActive
-                      ? "LIVE"
-                      : "OFFLINE"}
-              </span>
-            </div>
-            {/* Button for controlling online orders */}
-            <OnlineOrderControlButton />
-            {/* Button for controlling prep time */}
-            <PrepTimeControlButton />
-            {/* Button for refreshing app data - temporary disabled as not working properly */}
-            {/* <button
+              >
+                <div
+                  className={`h-3 w-3 rounded-full ${
+                    isPollingActive && consecutiveErrors === 0
+                      ? "animate-pulse bg-green-500"
+                      : consecutiveErrors > 0
+                        ? "bg-red-500"
+                        : "bg-yellow-500"
+                  }`}
+                ></div>
+                <span>
+                  {!isPollingActive
+                    ? "OFFLINE"
+                    : consecutiveErrors > 0
+                      ? "CONNECTING"
+                      : "LIVE"}
+                </span>
+              </div>
+              {/* Button for controlling online orders */}
+              <OnlineOrderControlButton />
+              {/* Button for controlling prep time */}
+              <PrepTimeControlButton />
+              {/* Button for refreshing app data - temporary disabled as not working properly */}
+              {/* <button
               onClick={handleFullRefresh}
               className="btn flex h-auto flex-col items-center gap-0 rounded-xl px-4 py-1 text-center transition-colors hover:bg-gray-200"
               title={isNative ? "Refresh app data" : "Refresh page"}
             >
               <RefreshCw className="size-5 text-gray-600" />
             </button> */}
-          </div>
+            </div>
 
-          {/* View Mode Tabs */}
-          <div className="mb-6 flex flex-wrap gap-3">
-            <div className="hidden flex-wrap gap-1 rounded-3xl bg-[#0000003d] p-3 ring-2 ring-[#222222] md:flex lg:gap-3">
-              <ViewModeTab
-                icon={Bell}
-                label="New"
-                count={newOrdersCount}
-                isActive={viewMode === "new"}
-                onClick={() => setViewMode("new")}
-              />
-              {hasPreorderEnabled ? (
+            {/* View Mode Tabs */}
+            <div className="mb-6 flex flex-wrap gap-3">
+              <div className="hidden flex-wrap gap-1 rounded-3xl bg-[#0000003d] p-3 ring-2 ring-[#222222] md:flex lg:gap-3">
                 <ViewModeTab
-                  icon={CalendarClock}
-                  label="Scheduled"
-                  count={scheduledCount}
-                  isActive={viewMode === "scheduled"}
-                  onClick={() => setViewMode("scheduled")}
+                  icon={Bell}
+                  label="New"
+                  count={newOrdersCount}
+                  isActive={viewMode === "new"}
+                  onClick={() => setViewMode("new")}
                 />
-              ) : null}
-              <ViewModeTab
-                icon={ChefHat}
-                label="Preparing"
-                count={preparingCount}
-                isActive={viewMode === "preparing"}
-                onClick={() => setViewMode("preparing")}
-              />
-              <ViewModeTab
-                icon={Check}
-                label="Ready"
-                count={readyCount}
-                isActive={viewMode === "ready"}
-                onClick={() => setViewMode("ready")}
-              />
-              {/* Only show Unpaid tab if Pay at Counter payment method is enabled */}
-              {storeProfile?.paymentMethods?.cash?.enabled && (
+                {hasPreorderEnabled ? (
+                  <ViewModeTab
+                    icon={CalendarClock}
+                    label="Scheduled"
+                    count={scheduledCount}
+                    isActive={viewMode === "scheduled"}
+                    onClick={() => setViewMode("scheduled")}
+                  />
+                ) : null}
                 <ViewModeTab
-                  icon={Banknote}
-                  label="Unpaid"
-                  count={unpaidTablesBadgeCount}
-                  isActive={viewMode === "unpaid"}
-                  onClick={() => setViewMode("unpaid")}
+                  icon={ChefHat}
+                  label="Preparing"
+                  count={preparingCount}
+                  isActive={viewMode === "preparing"}
+                  onClick={() => setViewMode("preparing")}
                 />
-              )}
-              <ViewModeTab
-                icon={Radio}
-                label="Active"
-                count={allActiveCount}
-                isActive={viewMode === "all"}
-                onClick={() => setViewMode("all")}
+                <ViewModeTab
+                  icon={Check}
+                  label="Ready"
+                  count={readyCount}
+                  isActive={viewMode === "ready"}
+                  onClick={() => setViewMode("ready")}
+                />
+                {/* Only show Unpaid tab if Pay at Counter payment method is enabled */}
+                {storeProfile?.paymentMethods?.cash?.enabled && (
+                  <ViewModeTab
+                    icon={Banknote}
+                    label="Unpaid"
+                    count={unpaidTablesBadgeCount}
+                    isActive={viewMode === "unpaid"}
+                    onClick={() => setViewMode("unpaid")}
+                  />
+                )}
+                <ViewModeTab
+                  icon={Radio}
+                  label="Active"
+                  count={allActiveCount}
+                  isActive={viewMode === "all"}
+                  onClick={() => setViewMode("all")}
+                />
+              </div>
+              {/* Add new tab here as a more menu button */}
+              <MoreMenuButton
+                setViewMode={setViewMode}
+                viewMode={viewMode}
+                newOrdersCount={newOrdersCount}
+                scheduledCount={scheduledCount}
+                hasPreorderEnabled={hasPreorderEnabled}
+                preparingCount={preparingCount}
+                readyCount={readyCount}
+                allActiveCount={allActiveCount}
+                unpaidTablesBadgeCount={unpaidTablesBadgeCount}
+                storeProfile={storeProfile}
               />
             </div>
-            {/* Add new tab here as a more menu button */}
-            <MoreMenuButton
-              setViewMode={setViewMode}
-              viewMode={viewMode}
-              newOrdersCount={newOrdersCount}
-              scheduledCount={scheduledCount}
-              hasPreorderEnabled={hasPreorderEnabled}
-              preparingCount={preparingCount}
-              readyCount={readyCount}
-              allActiveCount={allActiveCount}
-              unpaidTablesBadgeCount={unpaidTablesBadgeCount}
-              storeProfile={storeProfile}
-            />
-          </div>
           </div>
         </div>
 
@@ -1961,371 +1905,308 @@ export default function LiveOrderTerminal() {
           </div>
         )}
 
-        {/* Polling Status Modal - Shows connection issues and retry status */}
-        {(!isOnline || consecutiveErrors > 0) && isPollingActive && (
+        {/* Polling Status Modal — shown while polls are failing */}
+        {consecutiveErrors > 0 && isPollingActive && (
           <div className="fixed inset-0 z-40 flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm">
             <div className="mx-4 max-w-md rounded-2xl bg-white p-8 text-center shadow-2xl">
               {/* Status Icon */}
               <div className="relative mx-auto mb-6 flex h-24 w-24 items-center justify-center">
-                {!isOnline ? (
-                  // Offline - Red pulsing circle
-                  <>
-                    <span
-                      className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-30"
+                <span
+                  className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-500 opacity-30"
+                  style={{ animationDuration: "1.5s" }}
+                ></span>
+                <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-yellow-100">
+                  <div className="flex flex-col items-center">
+                    <div
+                      className="mb-1 animate-spin text-4xl"
                       style={{ animationDuration: "2s" }}
-                    ></span>
-                    <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-red-100">
-                      <div className="flex flex-col items-center">
-                        <div className="mb-1 text-4xl">📡</div>
-                        <div className="h-2 w-2 rounded-full bg-red-500"></div>
-                      </div>
+                    >
+                      🔄
                     </div>
-                  </>
-                ) : consecutiveErrors > 0 ? (
-                  // Retrying - Yellow/Orange pulsing circle
-                  <>
-                    <span
-                      className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-500 opacity-30"
-                      style={{ animationDuration: "1.5s" }}
-                    ></span>
-                    <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-yellow-100">
-                      <div className="flex flex-col items-center">
-                        <div
-                          className="mb-1 animate-spin text-4xl"
-                          style={{ animationDuration: "2s" }}
-                        >
-                          🔄
-                        </div>
-                        <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
-                      </div>
-                    </div>
-                  </>
-                ) : null}
+                    <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
+                  </div>
+                </div>
               </div>
 
               {/* Status Title */}
-              <h2
-                className={`mb-3 text-2xl font-bold ${
-                  !isOnline
-                    ? "text-red-600"
-                    : consecutiveErrors > 0
-                      ? "text-yellow-600"
-                      : "text-gray-900"
-                }`}
-              >
-                {!isOnline
-                  ? "Connection Lost"
-                  : consecutiveErrors > 0
-                    ? "Retrying Connection"
-                    : "Connecting"}
+              <h2 className="mb-3 text-2xl font-bold text-yellow-600">
+                Connection Error
               </h2>
 
               {/* Status Message */}
-              <div
-                className={`mb-4 rounded-lg p-4 ${
-                  !isOnline
-                    ? "bg-red-50"
-                    : consecutiveErrors > 0
-                      ? "bg-yellow-50"
-                      : "bg-blue-50"
-                }`}
-              >
-                <p
-                  className={`text-sm ${
-                    !isOnline
-                      ? "text-red-600"
-                      : consecutiveErrors > 0
-                        ? "text-yellow-700"
-                        : "text-blue-600"
-                  }`}
-                >
-                  {!isOnline
-                    ? "No network connection detected. The app will automatically retry when connection is restored."
-                    : consecutiveErrors > 0
-                      ? `Attempting to reconnect... (Attempt ${consecutiveErrors})`
-                      : "Establishing connection..."}
+              <div className="mb-4 rounded-lg bg-yellow-50 p-4">
+                <p className="text-sm text-yellow-700">
+                  Unable to fetch orders. Attempting to reconnect...
                 </p>
               </div>
 
-              {/* Retry Info */}
-              {consecutiveErrors > 0 && (
-                <div className="mt-4 text-xs text-gray-500">
-                  {consecutiveErrors === 1
-                    ? "Retrying in 10 seconds..."
-                    : consecutiveErrors === 2
-                      ? "Retrying in 20 seconds..."
-                      : consecutiveErrors === 3
-                        ? "Retrying in 40 seconds..."
-                        : "Retrying every 60 seconds..."}
-                </div>
-              )}
-
               {/* Connection Status Indicator */}
               <div className="mt-6 flex items-center justify-center gap-2 text-sm text-gray-600">
-                <div
-                  className={`h-2 w-2 rounded-full ${
-                    !isOnline ? "bg-red-500" : "animate-pulse bg-yellow-500"
-                  }`}
-                ></div>
-                <span>
-                  {!isOnline
-                    ? "Offline"
-                    : consecutiveErrors > 0
-                      ? "Reconnecting"
-                      : "Connecting"}
-                </span>
+                <div className="h-2 w-2 animate-pulse rounded-full bg-yellow-500"></div>
+                <span>Reconnecting</span>
               </div>
+
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-yellow-500 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-yellow-600"
+              >
+                <RefreshCw size={16} strokeWidth={2} aria-hidden />
+                Reload app
+              </button>
             </div>
           </div>
         )}
 
         <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        {loading ? (
-          <div className="hidden min-h-[200px] items-center justify-center">
-            <div className="text-center">
-              <span className="loading loading-spinner loading-lg text-brand_accent"></span>
-              <h3 className="mt-2 text-lg font-medium">Loading orders...</h3>
+          {loading ? (
+            <div className="hidden min-h-[200px] items-center justify-center">
+              <div className="text-center">
+                <span className="loading loading-spinner loading-lg text-brand_accent"></span>
+                <h3 className="mt-2 text-lg font-medium">Loading orders...</h3>
+              </div>
             </div>
-          </div>
-        ) : viewMode === "unpaid" ? (
-          <UnpaidTablesView
-            unpaidOrdersByTable={unpaidOrdersByTable}
-            showPayMultipleTables={unpaidTableCount > 1}
-            payLaterAtCounterEnabled={payLaterAtCounterEnabled}
-            onPayMultipleTables={(sourceTable) =>
-              setPayMultipleTablesModal({ show: true, sourceTable })
-            }
-            onMarkOrderPaid={(orderId) =>
-              setShowPaymentMethodModal({
-                orderId,
-                tableOrders: null,
-                isBulk: false,
-                show: true,
-              })
-            }
-            onMarkAllPaid={(tableOrders) =>
-              setShowPaymentMethodModal({
-                orderId: null,
-                tableOrders,
-                isBulk: true,
-                show: true,
-              })
-            }
-          />
-        ) : viewMode === "completed" ? (
-          // Completed Orders View
-          <div className="space-y-6">
-            {/* Trading Metrics Header */}
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 shadow-sm">
-              <div className="grid grid-cols-7 gap-4 text-center">
-                <div>
-                  <button
-                    onClick={() => setShowDatePicker(true)}
-                    className="group rounded-lg text-left transition-colors hover:bg-gray-50"
-                  >
-                    <div className="text-xs font-medium uppercase text-gray-500 group-hover:text-gray-600">
-                      Trading Date
+          ) : viewMode === "unpaid" ? (
+            <UnpaidTablesView
+              unpaidOrdersByTable={unpaidOrdersByTable}
+              showPayMultipleTables={unpaidTableCount > 1}
+              payLaterAtCounterEnabled={payLaterAtCounterEnabled}
+              onPayMultipleTables={(sourceTable) =>
+                setPayMultipleTablesModal({ show: true, sourceTable })
+              }
+              onMarkOrderPaid={(orderId) =>
+                setShowPaymentMethodModal({
+                  orderId,
+                  tableOrders: null,
+                  isBulk: false,
+                  show: true,
+                })
+              }
+              onMarkAllPaid={(tableOrders) =>
+                setShowPaymentMethodModal({
+                  orderId: null,
+                  tableOrders,
+                  isBulk: true,
+                  show: true,
+                })
+              }
+            />
+          ) : viewMode === "completed" ? (
+            // Completed Orders View
+            <div className="space-y-6">
+              {/* Trading Metrics Header */}
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 shadow-sm">
+                <div className="grid grid-cols-7 gap-4 text-center">
+                  <div>
+                    <button
+                      onClick={() => setShowDatePicker(true)}
+                      className="group rounded-lg text-left transition-colors hover:bg-gray-50"
+                    >
+                      <div className="text-xs font-medium uppercase text-gray-500 group-hover:text-gray-600">
+                        Trading Date
+                      </div>
+                      <div className="mt-1 flex items-center gap-2 text-lg font-bold text-gray-900 group-hover:text-blue-600">
+                        {formatDateForDisplay(selectedDate)}
+                        <Clock className="h-4 w-4 text-gray-400 group-hover:text-blue-500" />
+                      </div>
+                    </button>
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium uppercase text-gray-500">
+                      Total Orders
                     </div>
-                    <div className="mt-1 flex items-center gap-2 text-lg font-bold text-gray-900 group-hover:text-blue-600">
-                      {formatDateForDisplay(selectedDate)}
-                      <Clock className="h-4 w-4 text-gray-400 group-hover:text-blue-500" />
+                    <div className="mt-1 text-lg font-bold text-gray-900">
+                      {completedCount}
                     </div>
-                  </button>
-                </div>
-                <div>
-                  <div className="text-xs font-medium uppercase text-gray-500">
-                    Total Orders
                   </div>
-                  <div className="mt-1 text-lg font-bold text-gray-900">
-                    {completedCount}
+                  {/* temp hide */}
+                  <div className="hidden">
+                    <div className="text-xs font-medium uppercase text-gray-500">
+                      Avg Wait
+                    </div>
+                    <div className="mt-1 text-lg font-bold text-gray-900">
+                      {completedCount > 0
+                        ? Math.round(
+                            completedOrders.reduce(
+                              (sum, o) => sum + (o.completedAt - o.createdAt),
+                              0,
+                            ) /
+                              completedCount /
+                              60000,
+                          )
+                        : 0}
+                      mins
+                    </div>
                   </div>
-                </div>
-                {/* temp hide */}
-                <div className="hidden">
-                  <div className="text-xs font-medium uppercase text-gray-500">
-                    Avg Wait
+                  <div>
+                    <div className="text-xs font-medium uppercase text-gray-500">
+                      Total Payments
+                    </div>
+                    <div className="mt-1 text-lg font-bold text-gray-900">
+                      $
+                      {completedOrders
+                        .reduce((sum, o) => sum + o.total, 0)
+                        .toFixed(2)}
+                    </div>
                   </div>
-                  <div className="mt-1 text-lg font-bold text-gray-900">
-                    {completedCount > 0
-                      ? Math.round(
-                          completedOrders.reduce(
-                            (sum, o) => sum + (o.completedAt - o.createdAt),
-                            0,
-                          ) /
-                            completedCount /
-                            60000,
-                        )
-                      : 0}
-                    mins
+                  {/* temp hide */}
+                  <div className="hidden">
+                    <div className="text-xs font-medium uppercase text-gray-500">
+                      Avg Payment
+                    </div>
+                    <div className="mt-1 text-lg font-bold text-gray-900">
+                      $
+                      {completedCount > 0
+                        ? (
+                            completedOrders.reduce(
+                              (sum, o) => sum + o.total,
+                              0,
+                            ) / completedCount
+                          ).toFixed(2)
+                        : "0.00"}
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <div className="text-xs font-medium uppercase text-gray-500">
-                    Total Payments
+                  <div>
+                    <div className="text-xs font-medium uppercase text-gray-500">
+                      Refunds
+                    </div>
+                    <div className="mt-1 text-lg font-bold text-gray-900">
+                      {completedRefundSummary.refundCount}
+                    </div>
                   </div>
-                  <div className="mt-1 text-lg font-bold text-gray-900">
-                    $
-                    {completedOrders
-                      .reduce((sum, o) => sum + o.total, 0)
-                      .toFixed(2)}
-                  </div>
-                </div>
-                {/* temp hide */}
-                <div className="hidden">
-                  <div className="text-xs font-medium uppercase text-gray-500">
-                    Avg Payment
-                  </div>
-                  <div className="mt-1 text-lg font-bold text-gray-900">
-                    $
-                    {completedCount > 0
-                      ? (
-                          completedOrders.reduce((sum, o) => sum + o.total, 0) /
-                          completedCount
-                        ).toFixed(2)
-                      : "0.00"}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs font-medium uppercase text-gray-500">
-                    Refunds
-                  </div>
-                  <div className="mt-1 text-lg font-bold text-gray-900">
-                    {completedRefundSummary.refundCount}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs font-medium uppercase text-gray-500">
-                    Total Refunded
-                  </div>
-                  <div className="mt-1 text-lg font-bold text-gray-900">
-                    ${completedRefundSummary.totalRefunded.toFixed(2)}
+                  <div>
+                    <div className="text-xs font-medium uppercase text-gray-500">
+                      Total Refunded
+                    </div>
+                    <div className="mt-1 text-lg font-bold text-gray-900">
+                      ${completedRefundSummary.totalRefunded.toFixed(2)}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Completed Orders List */}
-            {completedOrdersLoading ? (
-              <div className="flex min-h-[200px] items-center justify-center">
-                <div className="text-center">
-                  <span className="loading loading-spinner loading-lg text-brand_accent"></span>
-                  <h3 className="mt-2 text-lg font-medium">
-                    Loading completed orders...
-                  </h3>
+              {/* Completed Orders List */}
+              {completedOrdersLoading ? (
+                <div className="flex min-h-[200px] items-center justify-center">
+                  <div className="text-center">
+                    <span className="loading loading-spinner loading-lg text-brand_accent"></span>
+                    <h3 className="mt-2 text-lg font-medium">
+                      Loading completed orders...
+                    </h3>
+                  </div>
                 </div>
-              </div>
-            ) : completedOrders.length === 0 ? (
-              <div className="rounded-lg bg-gray-50 p-12 text-center">
-                <Check size={48} className="mx-auto mb-4 text-gray-400" />
-                <h3 className="mb-2 text-xl font-semibold">
-                  No Completed Orders
-                </h3>
-                <p className="text-gray-500">
-                  Completed orders will appear here
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 lg:grid-cols-3 xl:gap-6">
-                {completedOrders.map((order) => (
-                  <OrderCard
-                    key={order._id}
-                    order={order}
-                    viewMode={viewMode}
-                    completedItems={getCompletedItems(order._id)}
-                    onToggleItemCompletion={toggleItemCompletion}
-                    onPrepare={() => {}} // No action needed for completed orders
-                    onAccept={() => {}}
-                    onReady={() => {}} // No action needed for completed orders
-                    onDeliver={() => {}} // No action needed for completed orders
-                    onCancel={() => {}} // No action needed for completed orders
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        ) : viewMode === "productAvailability" ? (
-          <PanelProductAvailability />
-        ) : filteredOrders.length === 0 ? (
-          <div className="rounded-lg bg-transparent p-12 text-center">
-            <Bell size={48} className="mx-auto mb-4 text-brand_accent" />
-            <h3 className="mb-2 text-xl font-semibold text-white">
-              {(() => {
-                switch (viewMode) {
-                  case "all":
-                    return "No Active Orders";
-                  case "new":
-                    return "No New Orders";
-                  case "scheduled":
-                    return "No Scheduled Pre-orders";
-                  case "preparing":
-                    return "No Orders Preparing";
-                  case "ready":
-                    return "No Orders Ready";
-                  case "unpaid":
-                    return "No Unpaid Counter Orders";
-                  case "completed":
-                    return "No Completed Orders";
-                  default:
-                    return "No Orders Found";
-                }
-              })()}
-            </h3>
-            <p className="text-gray-400">
-              {(() => {
-                switch (viewMode) {
-                  case "all":
-                    return "All active orders will show here.";
-                  case "new":
-                    return "You'll see new incoming orders here automatically.";
-                  case "scheduled":
-                    return "Paid pre-orders awaiting acceptance appear here, sorted by fulfilment time.";
-                  case "preparing":
-                    return "Orders being prepared will appear here.";
-                  case "ready":
-                    return "Orders ready for pickup or delivery will show here.";
-                  case "unpaid":
-                    return "Unpaid counter orders will be listed here.";
-                  case "completed":
-                    return "Completed orders will be listed here.";
-                  default:
-                    return "New orders will appear here automatically.";
-                }
-              })()}
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 lg:grid-cols-3 xl:gap-6">
-            {filteredOrders.map((order) => (
-              <OrderCard
-                key={order._id}
-                order={order}
-                viewMode={viewMode}
-                completedItems={getCompletedItems(order._id)}
-                onToggleItemCompletion={toggleItemCompletion}
-                onPrepare={() => {
-                  // Change: counter pending orders should go straight to preparing
-                  const newStatus =
-                    isCounterPayment(order.paymentMethod) &&
-                    order.status === "pending" &&
-                    !order.isPreorder
-                      ? "preparing"
-                      : "preparing";
-                  handleStatusUpdate(order._id, newStatus);
-                }}
-                onAccept={() => handleStatusUpdate(order._id, "accepted")}
-                onReady={() => handleStatusUpdate(order._id, "ready")}
-                onDeliver={() => handleStatusUpdate(order._id, "delivered")}
-                onCancel={() => handleCancelOrder(order)}
-                onMarkAsPaid={(orderId) => handleMarkAsPaid(orderId)}
-                onRefundSuccess={handleRefundSuccess}
-                onPrint={handleOpenPrinterSelection}
-                showMarkAsPaid={true}
-                payLaterEnabled={payLaterAtCounterEnabled}
-                isProcessing={processingOrders.has(order._id)}
-              />
-            ))}
-          </div>
-        )}
+              ) : completedOrders.length === 0 ? (
+                <div className="rounded-lg bg-gray-50 p-12 text-center">
+                  <Check size={48} className="mx-auto mb-4 text-gray-400" />
+                  <h3 className="mb-2 text-xl font-semibold">
+                    No Completed Orders
+                  </h3>
+                  <p className="text-gray-500">
+                    Completed orders will appear here
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 lg:grid-cols-3 xl:gap-6">
+                  {completedOrders.map((order) => (
+                    <OrderCard
+                      key={order._id}
+                      order={order}
+                      viewMode={viewMode}
+                      completedItems={getCompletedItems(order._id)}
+                      onToggleItemCompletion={toggleItemCompletion}
+                      onPrepare={() => {}} // No action needed for completed orders
+                      onAccept={() => {}}
+                      onReady={() => {}} // No action needed for completed orders
+                      onDeliver={() => {}} // No action needed for completed orders
+                      onCancel={() => {}} // No action needed for completed orders
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : viewMode === "productAvailability" ? (
+            <PanelProductAvailability />
+          ) : filteredOrders.length === 0 ? (
+            <div className="rounded-lg bg-transparent p-12 text-center">
+              <Bell size={48} className="mx-auto mb-4 text-brand_accent" />
+              <h3 className="mb-2 text-xl font-semibold text-white">
+                {(() => {
+                  switch (viewMode) {
+                    case "all":
+                      return "No Active Orders";
+                    case "new":
+                      return "No New Orders";
+                    case "scheduled":
+                      return "No Scheduled Pre-orders";
+                    case "preparing":
+                      return "No Orders Preparing";
+                    case "ready":
+                      return "No Orders Ready";
+                    case "unpaid":
+                      return "No Unpaid Counter Orders";
+                    case "completed":
+                      return "No Completed Orders";
+                    default:
+                      return "No Orders Found";
+                  }
+                })()}
+              </h3>
+              <p className="text-gray-400">
+                {(() => {
+                  switch (viewMode) {
+                    case "all":
+                      return "All active orders will show here.";
+                    case "new":
+                      return "You'll see new incoming orders here automatically.";
+                    case "scheduled":
+                      return "Paid pre-orders awaiting acceptance appear here, sorted by fulfilment time.";
+                    case "preparing":
+                      return "Orders being prepared will appear here.";
+                    case "ready":
+                      return "Orders ready for pickup or delivery will show here.";
+                    case "unpaid":
+                      return "Unpaid counter orders will be listed here.";
+                    case "completed":
+                      return "Completed orders will be listed here.";
+                    default:
+                      return "New orders will appear here automatically.";
+                  }
+                })()}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 lg:grid-cols-3 xl:gap-6">
+              {filteredOrders.map((order) => (
+                <OrderCard
+                  key={order._id}
+                  order={order}
+                  viewMode={viewMode}
+                  completedItems={getCompletedItems(order._id)}
+                  onToggleItemCompletion={toggleItemCompletion}
+                  onPrepare={() => {
+                    // Change: counter pending orders should go straight to preparing
+                    const newStatus =
+                      isCounterPayment(order.paymentMethod) &&
+                      order.status === "pending" &&
+                      !order.isPreorder
+                        ? "preparing"
+                        : "preparing";
+                    handleStatusUpdate(order._id, newStatus);
+                  }}
+                  onAccept={() => handleStatusUpdate(order._id, "accepted")}
+                  onReady={() => handleStatusUpdate(order._id, "ready")}
+                  onDeliver={() => handleStatusUpdate(order._id, "delivered")}
+                  onCancel={() => handleCancelOrder(order)}
+                  onMarkAsPaid={(orderId) => handleMarkAsPaid(orderId)}
+                  onRefundSuccess={handleRefundSuccess}
+                  onPrint={handleOpenPrinterSelection}
+                  showMarkAsPaid={true}
+                  payLaterEnabled={payLaterAtCounterEnabled}
+                  isProcessing={processingOrders.has(order._id)}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         <PaymentMethodModal
@@ -2363,7 +2244,10 @@ export default function LiveOrderTerminal() {
         <DeleteOrderDrawer
           isOpen={cancelDrawerOpen}
           onClose={() => {
-            if (cancelTarget?.orderId && processingOrders.has(cancelTarget.orderId)) {
+            if (
+              cancelTarget?.orderId &&
+              processingOrders.has(cancelTarget.orderId)
+            ) {
               return;
             }
             setCancelDrawerOpen(false);
@@ -2371,11 +2255,9 @@ export default function LiveOrderTerminal() {
           }}
           target={cancelTarget}
           onConfirm={handleConfirmCancel}
-          isProcessing={
-            Boolean(
-              cancelTarget?.orderId && processingOrders.has(cancelTarget.orderId),
-            )
-          }
+          isProcessing={Boolean(
+            cancelTarget?.orderId && processingOrders.has(cancelTarget.orderId),
+          )}
         />
       </div>
       {/* Custom Toast Component */}
