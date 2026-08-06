@@ -85,8 +85,7 @@ export default function VersionBanner() {
           <div className="flex items-center gap-3">
             <RefreshCw className="size-7" />
             <p className="text-lg font-medium">
-              A new version is available. Reload to update to the latest
-              version.
+              Updates available: Reload to get the latest improvements.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -94,7 +93,7 @@ export default function VersionBanner() {
               onClick={handleReload}
               className="rounded-md bg-white px-10 py-3 text-lg font-semibold text-blue-600 transition-colors hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600"
             >
-              Reload
+              Reload Now
             </button>
             <button
               onClick={handleDismiss}
