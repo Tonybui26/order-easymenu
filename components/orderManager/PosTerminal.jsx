@@ -781,6 +781,7 @@ export default function PosTerminal() {
           await printKitchenOrder(mockOrder, {
             storeProfile,
             itemGroups,
+            menuConfig,
             source: "pos_training",
             notify: true,
             notifySuccess: false,
@@ -840,6 +841,7 @@ export default function PosTerminal() {
         await printKitchenOrder(result.order, {
           storeProfile,
           itemGroups,
+          menuConfig,
           source: "pos_send",
           notify: true,
           notifySuccess: false,

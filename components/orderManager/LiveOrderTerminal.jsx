@@ -1010,6 +1010,7 @@ export default function LiveOrderTerminal() {
     printKitchenOrder(order, {
       storeProfile,
       itemGroups,
+      menuConfig,
       selectedPrinters,
       retryCount,
       showCustomToast,
@@ -1697,6 +1698,7 @@ export default function LiveOrderTerminal() {
       const result = await printKitchenOrder(freshOrder, {
         storeProfile,
         itemGroups,
+        menuConfig,
         selectedPrinters: retry.failedPrinters?.length
           ? retry.failedPrinters
           : null,

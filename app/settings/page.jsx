@@ -20,19 +20,35 @@ export default function SettingsPage() {
     () => resolvePosConfig(menuConfig),
     [menuConfig],
   );
+  const savedSkipKitchenDocketGroupHeaders = Boolean(
+    menuConfig?.skipKitchenDocketGroupHeaders,
+  );
   const [draftPosConfig, setDraftPosConfig] = useState(savedPosConfig);
+  const [draftSkipKitchenDocketGroupHeaders, setDraftSkipKitchenDocketGroupHeaders] =
+    useState(savedSkipKitchenDocketGroupHeaders);
   const [isSaving, setIsSaving] = useState(false);
 
   const isDirty = useMemo(
-    () => !posConfigDraftEquals(draftPosConfig, savedPosConfig),
-    [draftPosConfig, savedPosConfig],
+    () =>
+      !posConfigDraftEquals(draftPosConfig, savedPosConfig) ||
+      draftSkipKitchenDocketGroupHeaders !==
+        savedSkipKitchenDocketGroupHeaders,
+    [
+      draftPosConfig,
+      savedPosConfig,
+      draftSkipKitchenDocketGroupHeaders,
+      savedSkipKitchenDocketGroupHeaders,
+    ],
   );
 
   useEffect(() => {
     if (!isDirty) {
       setDraftPosConfig(savedPosConfig);
+      setDraftSkipKitchenDocketGroupHeaders(
+        savedSkipKitchenDocketGroupHeaders,
+      );
     }
-  }, [savedPosConfig, isDirty]);
+  }, [savedPosConfig, savedSkipKitchenDocketGroupHeaders, isDirty]);
 
   async function handleSaveSettings() {
     if (!isDirty || isSaving || !userData?.ownerEmail) return;
@@ -43,6 +59,7 @@ export default function SettingsPage() {
       const freshConfig = latestData?.config || {};
       const configToSave = {
         ...freshConfig,
+        skipKitchenDocketGroupHeaders: draftSkipKitchenDocketGroupHeaders,
         pos: {
           ...resolvePosConfig(freshConfig),
           ...draftPosConfig,
@@ -84,7 +101,13 @@ export default function SettingsPage() {
           {dataLoaded ? (
             <SystemSettings
               draftPosConfig={draftPosConfig}
-              onDraftChange={setDraftPosConfig}
+              onDraftPosChange={setDraftPosConfig}
+              draftSkipKitchenDocketGroupHeaders={
+                draftSkipKitchenDocketGroupHeaders
+              }
+              onDraftSkipKitchenDocketGroupHeadersChange={
+                setDraftSkipKitchenDocketGroupHeaders
+              }
             />
           ) : (
             <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-neutral-500 shadow-sm">

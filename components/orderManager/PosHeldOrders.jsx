@@ -47,7 +47,7 @@ export default function PosHeldOrders() {
     hideToast: hideDismissibleToast,
   } = useDismissibleToast();
   const { handleOpenCashDrawer } = usePosOpenCashDrawer(showDismissibleToast);
-  const { storeProfile, itemGroups } = useMenuContext();
+  const { storeProfile, itemGroups, menuConfig } = useMenuContext();
   const [heldOrders, setHeldOrders] = useState([]);
   const [activeTab, setActiveTab] = useState("pos");
   const [isLoading, setIsLoading] = useState(true);
@@ -233,6 +233,7 @@ export default function PosHeldOrders() {
       const result = await reprintHeldCheckKitchen(orders, {
         storeProfile,
         itemGroups,
+        menuConfig,
         showCustomToast: showDismissibleToast,
       });
 
