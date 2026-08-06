@@ -8,9 +8,11 @@ import {
   fetchPosResumeOrders,
   updatePosHeldCheckStatus,
 } from "@/lib/api/fetchApi";
+import { printKitchenOrder } from "@/lib/helper/printKitchenOrder";
 import { useMenuContext } from "@/components/context/MenuContext";
 import {
   printBillForHeldCheck,
+  printHeldCheckKitchenOnPrepare,
   reprintHeldCheckKitchen,
 } from "@/lib/pos/posHeldOrderPrint";
 import {
@@ -55,6 +57,58 @@ export default function PosHeldOrders() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteDrawerOpen, setDeleteDrawerOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isPrintToastRetrying, setIsPrintToastRetrying] = useState(false);
+
+  const showCustomToast = useCallback(
+    (message, type = "error", retry = null) => {
+      showDismissibleToast(message, type, retry);
+    },
+    [showDismissibleToast],
+  );
+
+  const hideCustomToast = useCallback(() => {
+    hideDismissibleToast();
+    setIsPrintToastRetrying(false);
+  }, [hideDismissibleToast]);
+
+  const handlePrintToastRetry = useCallback(async () => {
+    const retry = dismissibleToast.retry;
+    if (!retry?.order || isPrintToastRetrying) return;
+
+    setIsPrintToastRetrying(true);
+
+    try {
+      const result = await fetchPosResumeOrders([String(retry.order._id)]);
+      const freshOrder = result?.orders?.[0] || retry.order;
+
+      const printResult = await printKitchenOrder(freshOrder, {
+        storeProfile,
+        itemGroups,
+        menuConfig,
+        selectedPrinters: retry.failedPrinters?.length
+          ? retry.failedPrinters
+          : null,
+        source: "retry",
+        showCustomToast,
+      });
+
+      if (printResult?.success && (printResult.failedPrints ?? 0) === 0) {
+        hideCustomToast();
+      }
+    } catch (error) {
+      console.error("Print toast retry failed:", error);
+    } finally {
+      setIsPrintToastRetrying(false);
+    }
+  }, [
+    dismissibleToast.retry,
+    hideCustomToast,
+    isPrintToastRetrying,
+    itemGroups,
+    menuConfig,
+    showCustomToast,
+    storeProfile,
+  ]);
 
   const loadHeldOrders = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setIsLoading(true);
@@ -123,6 +177,45 @@ export default function PosHeldOrders() {
       await loadHeldOrders({ silent: true });
     } catch (error) {
       showDismissibleToast(error?.message || "Failed to update order");
+    } finally {
+      setProcessingCheckId(null);
+    }
+  }
+
+  async function handlePrepareHeldOrder(order) {
+    const confirmedIds = getTicketIdsByStatus(order, "confirmed");
+    const acceptedIds = getTicketIdsByStatus(order, "accepted");
+    const orderIds = [...confirmedIds, ...acceptedIds];
+    if (orderIds.length === 0) {
+      showDismissibleToast("No tickets to prepare");
+      return;
+    }
+
+    setProcessingCheckId(order.id);
+    try {
+      const result = await updatePosHeldCheckStatus({
+        orderIds,
+        status: "preparing",
+      });
+      if (!result?.success) {
+        showDismissibleToast(result?.error || "Failed to start preparation");
+        return;
+      }
+
+      const orders = await loadHeldCheckOrders(order);
+      if (orders?.length) {
+        await printHeldCheckKitchenOnPrepare(orders, orderIds, {
+          storeProfile,
+          itemGroups,
+          menuConfig,
+          showCustomToast,
+        });
+      }
+
+      toast.success("Preparation started");
+      await loadHeldOrders({ silent: true });
+    } catch (error) {
+      showDismissibleToast(error?.message || "Failed to start preparation");
     } finally {
       setProcessingCheckId(null);
     }
@@ -234,7 +327,7 @@ export default function PosHeldOrders() {
         storeProfile,
         itemGroups,
         menuConfig,
-        showCustomToast: showDismissibleToast,
+        showCustomToast,
       });
 
       if (result.success) {
@@ -415,6 +508,11 @@ export default function PosHeldOrders() {
                           <HeldCard
                             order={order}
                             onSelect={handleSelectHeldOrder}
+                            onPrepare={
+                              activeTab === "self-ordering"
+                                ? handlePrepareHeldOrder
+                                : undefined
+                            }
                             onReady={handleReadyHeldOrder}
                             onAllItemsServed={handleAllItemsServedHeldOrder}
                             onComplete={handleCompleteHeldOrder}
@@ -435,7 +533,9 @@ export default function PosHeldOrders() {
       </div>
       <DismissibleToast
         toast={dismissibleToast}
-        onDismiss={hideDismissibleToast}
+        onDismiss={hideCustomToast}
+        onRetry={handlePrintToastRetry}
+        isRetrying={isPrintToastRetrying}
         className="right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))]"
       />
 

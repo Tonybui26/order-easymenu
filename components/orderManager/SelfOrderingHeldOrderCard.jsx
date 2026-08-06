@@ -12,8 +12,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/helper";
 import {
-  getHeldAggregateStatusLabel,
-  getPosHeldCardActions,
+  getSelfOrderingHeldCardActions,
+  getSelfOrderingHeldStatusLabel,
   isPosDineInHeldOrder,
 } from "@/lib/pos/posHeldOrder";
 
@@ -109,9 +109,6 @@ function orderNumberLabel(order) {
   return "#—";
 }
 
-function aggregateStatusLabel(heldOrder, status) {
-  return getHeldAggregateStatusLabel(heldOrder, status);
-}
 
 const HELD_MORE_ACTIONS = [
   {
@@ -136,13 +133,13 @@ const HELD_MORE_ACTIONS = [
 
 /**
  * Held-order card for Self Ordering (QR / online) checks.
- * Currently mirrors PosHeldOrderCard; diverge as Self Ordering UX is defined.
+ * Status and actions follow Live Order Terminal (non-counter online flow).
  */
 export default function SelfOrderingHeldOrderCard({
   order,
   onSelect,
+  onPrepare,
   onReady,
-  onAllItemsServed,
   onComplete,
   onPrintBill,
   onReprintOrder,
@@ -155,14 +152,13 @@ export default function SelfOrderingHeldOrderCard({
   const [showMoreActions, setShowMoreActions] = useState(false);
   const {
     showStatus,
+    showPrepare,
     showReady,
-    showAllItemsServed,
     showComplete,
-    aggregateStatus,
+    primaryStatus,
     completeLabel,
-    allItemsServedLabel,
-  } = getPosHeldCardActions(order);
-  const hasActions = showReady || showAllItemsServed || showComplete;
+  } = getSelfOrderingHeldCardActions(order);
+  const hasActions = showPrepare || showReady || showComplete;
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -291,13 +287,13 @@ export default function SelfOrderingHeldOrderCard({
                   <span
                     className={cn(
                       "rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide",
-                      aggregateStatus === "ready" ||
-                        aggregateStatus === "delivered"
+                      primaryStatus === "ready" ||
+                        primaryStatus === "delivered"
                         ? "bg-green-100 text-green-800"
                         : "bg-blue-100 text-blue-800",
                     )}
                   >
-                    {aggregateStatusLabel(order, aggregateStatus)}
+                    {getSelfOrderingHeldStatusLabel(primaryStatus)}
                   </span>
                 ) : null}
               </div>
@@ -329,24 +325,22 @@ export default function SelfOrderingHeldOrderCard({
 
           {hasActions ? (
             <div className="grid grid-cols-1 gap-2 border-t border-neutral-100 bg-neutral-50/80 p-3">
-              {showAllItemsServed ? (
+              {showPrepare ? (
                 <button
                   type="button"
                   disabled={isProcessing}
                   onClick={(event) => {
                     event.stopPropagation();
-                    onAllItemsServed?.(order);
+                    onPrepare?.(order);
                   }}
                   className={cn(
-                    "rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold tracking-wide text-white transition-colors",
+                    "rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
                     isProcessing
                       ? "cursor-not-allowed opacity-50"
-                      : "hover:bg-green-700 active:bg-green-800",
+                      : "hover:bg-blue-700 active:bg-blue-800",
                   )}
                 >
-                  {isProcessing
-                    ? "Updating…"
-                    : allItemsServedLabel || "All Served"}
+                  {isProcessing ? "Updating…" : "Prepare"}
                 </button>
               ) : null}
               {showReady ? (
