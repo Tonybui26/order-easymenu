@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MoreVertical } from "lucide-react";
+import { MoreVertical, Search } from "lucide-react";
 import toast from "react-hot-toast";
+import InputText from "@/components/InputText";
 import PosChromeHeader from "./PosChromeHeader";
 import OrderHistoryActionsPanel from "./OrderHistoryActionsPanel";
 import RefundModal from "./RefundModal";
@@ -12,6 +13,7 @@ import { useMenuContext } from "@/components/context/MenuContext";
 import { fetchCompletedOrders, updateOrderStatus } from "@/lib/api/fetchApi";
 import {
   buildOrderHistoryRows,
+  filterOrderHistoryRows,
   isPosDeliveredHistoryOrder,
 } from "@/lib/helper/orderHistoryDisplay";
 import {
@@ -37,6 +39,7 @@ export default function OrderHistory() {
 
   const [orders, setOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
   const [activeRow, setActiveRow] = useState(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -66,6 +69,11 @@ export default function OrderHistory() {
   const rows = useMemo(
     () => buildOrderHistoryRows(orders, storeTimezone),
     [orders, storeTimezone],
+  );
+
+  const filteredRows = useMemo(
+    () => filterOrderHistoryRows(rows, searchQuery),
+    [rows, searchQuery],
   );
 
   function closeActionsPanel() {
@@ -190,9 +198,25 @@ export default function OrderHistory() {
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-gray-50 pb-[env(safe-area-inset-bottom)]">
         <div className="mx-auto max-w-7xl p-4 md:p-6">
-          <h1 className="text-xl font-bold text-neutral-900 sm:text-2xl">
-            Order History
-          </h1>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <h1 className="text-xl font-bold text-neutral-900 sm:text-2xl">
+              Order History
+            </h1>
+            <div className="relative w-full sm:max-w-xs">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400"
+                aria-hidden
+              />
+              <InputText
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search invoice, customer, order…"
+                aria-label="Search order history"
+                className="pl-9"
+              />
+            </div>
+          </div>
 
           <div className="mt-6 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
             <div className="overflow-x-auto">
@@ -230,8 +254,17 @@ export default function OrderHistory() {
                         No delivered POS orders yet
                       </td>
                     </tr>
+                  ) : filteredRows.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={TABLE_COLUMNS.length}
+                        className="px-4 py-12 text-center text-gray-500"
+                      >
+                        No orders match “{searchQuery.trim()}”
+                      </td>
+                    </tr>
                   ) : (
-                    rows.map((row) => (
+                    filteredRows.map((row) => (
                       <tr
                         key={row.id}
                         className="border-b border-gray-100 last:border-b-0"
