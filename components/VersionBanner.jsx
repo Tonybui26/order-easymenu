@@ -80,18 +80,19 @@ export default function VersionBanner() {
 
   return (
     <div className="fixed left-0 right-0 top-0 z-[9999] bg-blue-600 text-white shadow-lg">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <RefreshCw className="h-5 w-5" />
-            <p className="text-sm font-medium">
-              A new version is available. Reload to update.
+            <RefreshCw className="size-7" />
+            <p className="text-lg font-medium">
+              A new version is available. Reload to update to the latest
+              version.
             </p>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleReload}
-              className="rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600"
+              className="rounded-md bg-white px-10 py-3 text-lg font-semibold text-blue-600 transition-colors hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600"
             >
               Reload
             </button>
