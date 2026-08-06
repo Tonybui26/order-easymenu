@@ -17,6 +17,7 @@ export default function PosCartLine({
   isActive = false,
   readOnly = false,
   allowVoidSentLine = false,
+  useKitchenPrintAliases = false,
   onSelect,
   onQtyClick,
   onRemoveLine,
@@ -36,7 +37,9 @@ export default function PosCartLine({
     allowVoidSentLine && isSentToKitchen && !isCancelled;
   const showRemoveUnsentButton = !readOnly && !isSentToKitchen && !isCancelled;
   const strikeClass = isCancelled ? "line-through decoration-neutral-400" : "";
-  const displayTitle = formatPosItemDisplayName(line.title) || "Untitled";
+  const nameOptions = { useKitchenPrintAliases };
+  const displayTitle =
+    formatPosItemDisplayName(line.title, nameOptions) || "Untitled";
 
   return (
     <li
@@ -167,7 +170,8 @@ export default function PosCartLine({
         >
           {variants.map((variant) => {
             const optionLabel =
-              formatPosItemDisplayName(variant.optionName) || variant.optionName;
+              formatPosItemDisplayName(variant.optionName, nameOptions) ||
+              variant.optionName;
             return (
             <li
               key={`variant-${variant.groupName}-${variant.optionId}`}
@@ -201,7 +205,7 @@ export default function PosCartLine({
           {modifiers.map((modifier) => {
             const price = Number(modifier.priceModifier || 0);
             const optionLabel =
-              formatPosItemDisplayName(modifier.optionName) ||
+              formatPosItemDisplayName(modifier.optionName, nameOptions) ||
               modifier.optionName;
             return (
               <li

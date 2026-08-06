@@ -118,8 +118,15 @@ function useAllMenuItems(menuContent) {
   }, [menuContent]);
 }
 
-function PosProductCard({ item, onAdd, disabled = false }) {
-  const displayTitle = formatPosItemDisplayName(item.title) || "Untitled";
+function PosProductCard({
+  item,
+  onAdd,
+  disabled = false,
+  useKitchenPrintAliases = false,
+}) {
+  const displayTitle =
+    formatPosItemDisplayName(item.title, { useKitchenPrintAliases }) ||
+    "Untitled";
   const hasImage = Boolean(item.PhotoSrc);
 
   return (
@@ -213,6 +220,9 @@ export default function PosTerminal() {
   const { handleOpenCashDrawer } = usePosOpenCashDrawer(showDismissibleToast);
   const posConfig = useMemo(() => resolvePosConfig(menuConfig), [menuConfig]);
   const isTrainingMode = Boolean(posConfig.trainingModeEnabled);
+  const useKitchenPrintAliases = Boolean(
+    posConfig.showKitchenPrintAliasesOnPos,
+  );
 
   useEffect(() => {
     if (!isTrainingMode || !resumeParam) return;
@@ -1121,6 +1131,7 @@ export default function PosTerminal() {
                       isActive={line.lineId === customizingLineId}
                       readOnly={isViewOnly}
                       allowVoidSentLine={!isViewOnly && !isTrainingMode}
+                      useKitchenPrintAliases={useKitchenPrintAliases}
                       onSelect={handleSelectCartLine}
                       onQtyClick={handleQtyClick}
                       onRemoveLine={handleRemoveLine}
@@ -1253,6 +1264,7 @@ export default function PosTerminal() {
                       globalVariants={globalVariants || {}}
                       selectedVariants={panelSelections.selectedVariants}
                       selectedModifiers={panelSelections.selectedModifiers}
+                      useKitchenPrintAliases={useKitchenPrintAliases}
                       onSelectVariant={handleSelectVariant}
                       onToggleModifier={handleToggleModifier}
                     />
@@ -1298,6 +1310,7 @@ export default function PosTerminal() {
                                 item={item}
                                 onAdd={handleAddItem}
                                 disabled={isViewOnly}
+                                useKitchenPrintAliases={useKitchenPrintAliases}
                               />
                             ))}
                           </div>
@@ -1325,6 +1338,7 @@ export default function PosTerminal() {
         }}
         onConfirm={handleConfirmCancelSentLine}
         isSubmitting={isVoidingLine}
+        useKitchenPrintAliases={useKitchenPrintAliases}
       />
     </>
   );

@@ -21,11 +21,13 @@ export default function PosCancelSentLineDrawer({
   onClose,
   onConfirm,
   isSubmitting = false,
+  useKitchenPrintAliases = false,
 }) {
   const line = drawerState?.line;
   const isOpen = Boolean(drawerState?.show && line);
   const lineDisplayTitle = line
-    ? formatPosItemDisplayName(line.title) || line.title
+    ? formatPosItemDisplayName(line.title, { useKitchenPrintAliases }) ||
+      line.title
     : "";
   const [portalReady, setPortalReady] = useState(false);
   const [selectedReason, setSelectedReason] = useState("");

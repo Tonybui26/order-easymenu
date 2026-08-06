@@ -49,6 +49,14 @@ export default function SystemSettings({ draftPosConfig, onDraftChange }) {
                 updatePosDraft({ trainingModeEnabled: checked })
               }
             />
+            <SettingsToggleRow
+              title="Show kitchen print names on POS"
+              description="When on, product and option labels on the POS use the ((kitchen alias)) from the menu title, like kitchen dockets. Group headings still hide the alias markers. When off, the POS shows the full original names. Bills and dockets are unchanged."
+              checked={Boolean(draftPosConfig?.showKitchenPrintAliasesOnPos)}
+              onChange={(checked) =>
+                updatePosDraft({ showKitchenPrintAliasesOnPos: checked })
+              }
+            />
           </div>
         )}
       </section>

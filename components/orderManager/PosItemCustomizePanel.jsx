@@ -21,12 +21,15 @@ export default function PosItemCustomizePanel({
   globalVariants = {},
   selectedVariants = {},
   selectedModifiers = {},
+  useKitchenPrintAliases = false,
   onSelectVariant,
   onToggleModifier,
 }) {
   if (!item) return null;
 
-  const itemDisplayTitle = formatPosItemDisplayName(item.title) || "Customize";
+  const nameOptions = { useKitchenPrintAliases };
+  const itemDisplayTitle =
+    formatPosItemDisplayName(item.title, nameOptions) || "Customize";
 
   const variantGroups = (item.variants || []).filter(
     (group) => item.hasVariants && (group.options || []).length > 0,
@@ -55,7 +58,10 @@ export default function PosItemCustomizePanel({
           );
           if (options.length === 0) return null;
 
-          const groupLabel = formatPosGroupDisplayName(variant.groupName);
+          const groupLabel = formatPosGroupDisplayName(
+            variant.groupName,
+            nameOptions,
+          );
 
           return (
             <section key={variant.groupId || variant.groupName}>
@@ -72,7 +78,8 @@ export default function PosItemCustomizePanel({
                     <OptionTile
                       key={option.id}
                       label={
-                        formatPosItemDisplayName(option.name) || option.name
+                        formatPosItemDisplayName(option.name, nameOptions) ||
+                        option.name
                       }
                       isSelected={isSelected}
                       onClick={() =>
@@ -97,6 +104,7 @@ export default function PosItemCustomizePanel({
 
           const groupLabel = formatPosGroupDisplayName(
             modifierGroup.groupName || globalGroup?.groupName,
+            nameOptions,
           );
 
           return (
@@ -113,7 +121,8 @@ export default function PosItemCustomizePanel({
                     <OptionTile
                       key={option.id}
                       label={
-                        formatPosItemDisplayName(option.name) || option.name
+                        formatPosItemDisplayName(option.name, nameOptions) ||
+                        option.name
                       }
                       isSelected={isSelected}
                       onClick={() =>
