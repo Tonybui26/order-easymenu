@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MoreVertical, Search } from "lucide-react";
+import { MoreVertical, Search, Banknote, CreditCard } from "lucide-react";
 import toast from "react-hot-toast";
 import InputText from "@/components/InputText";
+import DropdownSelect from "@/components/DropdownSelect";
 import PosChromeHeader from "./PosChromeHeader";
 import OrderHistoryActionsPanel from "./OrderHistoryActionsPanel";
 import RefundModal from "./RefundModal";
@@ -15,6 +16,8 @@ import {
   buildOrderHistoryRows,
   filterOrderHistoryRows,
   isPosDeliveredHistoryOrder,
+  ORDER_HISTORY_PAYMENT_FILTER_ALL,
+  ORDER_HISTORY_PAYMENT_FILTER_OPTIONS,
 } from "@/lib/helper/orderHistoryDisplay";
 import {
   buildHistoryRefundOrder,
@@ -32,6 +35,18 @@ const TABLE_COLUMNS = [
   { key: "actions", label: "", className: "w-12" },
 ];
 
+const PAYMENT_FILTER_ICONS = {
+  Cash: Banknote,
+  Card: CreditCard,
+};
+
+const PAYMENT_FILTER_OPTIONS = ORDER_HISTORY_PAYMENT_FILTER_OPTIONS.map(
+  (option) => ({
+    ...option,
+    Icon: PAYMENT_FILTER_ICONS[option.id],
+  }),
+);
+
 export default function OrderHistory() {
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
   const { storeProfile } = useMenuContext();
@@ -40,6 +55,9 @@ export default function OrderHistory() {
   const [orders, setOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState(
+    ORDER_HISTORY_PAYMENT_FILTER_ALL,
+  );
   const [activeRow, setActiveRow] = useState(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -72,8 +90,8 @@ export default function OrderHistory() {
   );
 
   const filteredRows = useMemo(
-    () => filterOrderHistoryRows(rows, searchQuery),
-    [rows, searchQuery],
+    () => filterOrderHistoryRows(rows, searchQuery, paymentFilter),
+    [rows, searchQuery, paymentFilter],
   );
 
   function closeActionsPanel() {
@@ -94,7 +112,9 @@ export default function OrderHistory() {
 
     setIsProcessing(true);
     try {
-      const result = await printBillForHistoryCheck(row.orders, { storeProfile });
+      const result = await printBillForHistoryCheck(row.orders, {
+        storeProfile,
+      });
       if (result.success) {
         toast.success(result.message || "Bill printed");
         closeActionsPanel();
@@ -202,18 +222,28 @@ export default function OrderHistory() {
             <h1 className="text-xl font-bold text-neutral-900 sm:text-2xl">
               Order History
             </h1>
-            <div className="relative w-full sm:max-w-xs">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400"
-                aria-hidden
-              />
-              <InputText
-                type="search"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search invoice, customer, order…"
-                aria-label="Search order history"
-                className="pl-9"
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+              <div className="relative w-full sm:w-64">
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400"
+                  aria-hidden
+                />
+                <InputText
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search invoice, customer, order…"
+                  aria-label="Search order history"
+                  className="pl-9"
+                />
+              </div>
+              <DropdownSelect
+                options={PAYMENT_FILTER_OPTIONS}
+                value={paymentFilter}
+                onChange={setPaymentFilter}
+                ariaLabel="Filter by payment type"
+                showIcons
+                className="w-full sm:w-48"
               />
             </div>
           </div>
@@ -260,7 +290,9 @@ export default function OrderHistory() {
                         colSpan={TABLE_COLUMNS.length}
                         className="px-4 py-12 text-center text-gray-500"
                       >
-                        No orders match “{searchQuery.trim()}”
+                        {searchQuery.trim()
+                          ? `No orders match “${searchQuery.trim()}”`
+                          : "No orders match this payment filter"}
                       </td>
                     </tr>
                   ) : (
@@ -289,7 +321,9 @@ export default function OrderHistory() {
                           <button
                             type="button"
                             aria-label="Order actions"
-                            aria-expanded={isPanelOpen && activeRow?.id === row.id}
+                            aria-expanded={
+                              isPanelOpen && activeRow?.id === row.id
+                            }
                             onClick={() =>
                               isPanelOpen && activeRow?.id === row.id
                                 ? closeActionsPanel()
