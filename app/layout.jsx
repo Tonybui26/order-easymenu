@@ -8,6 +8,7 @@ import { MenuContextProvider } from "@/components/context/MenuContext";
 import { fetchGetMenuByOwnerEmail } from "@/lib/api/fetchApi";
 import { Toaster } from "react-hot-toast";
 import VersionBanner from "@/components/VersionBanner";
+import PrintToastHost from "@/components/print/PrintToastHost";
 
 const inter = Inter({
   weight: ["400", "500", "600", "700", "800", "900"],
@@ -47,6 +48,7 @@ export default async function RootLayout({ children }) {
           <GlobalAppContextProvider userData={user}>
             <MenuContextProvider data={menuData}>
               {children}
+              <PrintToastHost />
             </MenuContextProvider>
           </GlobalAppContextProvider>
         </NextAuthProvider>

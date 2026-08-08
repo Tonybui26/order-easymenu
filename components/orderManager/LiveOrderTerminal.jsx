@@ -200,6 +200,7 @@ export default function LiveOrderTerminal() {
 
   // Pilot-store flag — all pay-later UI/API paths gate on this (default stores unchanged)
   const payLaterAtCounterEnabled = isPayLaterAtCounterEnabled(menuConfig);
+  const posEnabled = Boolean(menuConfig?.posEnabled);
 
   useEffect(() => {
     if (!hasPreorderEnabled && viewMode === "scheduled") {
@@ -1013,7 +1014,7 @@ export default function LiveOrderTerminal() {
       menuConfig,
       selectedPrinters,
       retryCount,
-      showCustomToast,
+      ...(posEnabled ? {} : { showCustomToast }),
       ...options,
     });
 

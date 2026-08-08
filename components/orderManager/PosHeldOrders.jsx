@@ -8,7 +8,6 @@ import {
   fetchPosResumeOrders,
   updatePosHeldCheckStatus,
 } from "@/lib/api/fetchApi";
-import { printKitchenOrder } from "@/lib/helper/printKitchenOrder";
 import { useMenuContext } from "@/components/context/MenuContext";
 import {
   printBillForHeldCheck,
@@ -57,58 +56,6 @@ export default function PosHeldOrders() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteDrawerOpen, setDeleteDrawerOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isPrintToastRetrying, setIsPrintToastRetrying] = useState(false);
-
-  const showCustomToast = useCallback(
-    (message, type = "error", retry = null) => {
-      showDismissibleToast(message, type, retry);
-    },
-    [showDismissibleToast],
-  );
-
-  const hideCustomToast = useCallback(() => {
-    hideDismissibleToast();
-    setIsPrintToastRetrying(false);
-  }, [hideDismissibleToast]);
-
-  const handlePrintToastRetry = useCallback(async () => {
-    const retry = dismissibleToast.retry;
-    if (!retry?.order || isPrintToastRetrying) return;
-
-    setIsPrintToastRetrying(true);
-
-    try {
-      const result = await fetchPosResumeOrders([String(retry.order._id)]);
-      const freshOrder = result?.orders?.[0] || retry.order;
-
-      const printResult = await printKitchenOrder(freshOrder, {
-        storeProfile,
-        itemGroups,
-        menuConfig,
-        selectedPrinters: retry.failedPrinters?.length
-          ? retry.failedPrinters
-          : null,
-        source: "retry",
-        showCustomToast,
-      });
-
-      if (printResult?.success && (printResult.failedPrints ?? 0) === 0) {
-        hideCustomToast();
-      }
-    } catch (error) {
-      console.error("Print toast retry failed:", error);
-    } finally {
-      setIsPrintToastRetrying(false);
-    }
-  }, [
-    dismissibleToast.retry,
-    hideCustomToast,
-    isPrintToastRetrying,
-    itemGroups,
-    menuConfig,
-    showCustomToast,
-    storeProfile,
-  ]);
 
   const loadHeldOrders = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setIsLoading(true);
@@ -208,7 +155,6 @@ export default function PosHeldOrders() {
           storeProfile,
           itemGroups,
           menuConfig,
-          showCustomToast,
         });
       }
 
@@ -327,13 +273,10 @@ export default function PosHeldOrders() {
         storeProfile,
         itemGroups,
         menuConfig,
-        showCustomToast,
       });
 
       if (result.success) {
         toast.success(result.message || "Kitchen ticket reprinted");
-      } else {
-        showDismissibleToast(result.message || "Failed to reprint order");
       }
     } catch (error) {
       showDismissibleToast(error?.message || "Failed to reprint order");
@@ -533,9 +476,7 @@ export default function PosHeldOrders() {
       </div>
       <DismissibleToast
         toast={dismissibleToast}
-        onDismiss={hideCustomToast}
-        onRetry={handlePrintToastRetry}
-        isRetrying={isPrintToastRetrying}
+        onDismiss={hideDismissibleToast}
         className="right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))]"
       />
 
