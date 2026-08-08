@@ -785,12 +785,9 @@ export default function PosTerminal() {
             source: "pos_training",
             notify: true,
             notifySuccess: false,
-            silentNoPrinters: true,
-            showCustomToast: (message) => showDismissibleToast(message),
           });
         } catch (printError) {
           console.error("POS training print error:", printError);
-          showDismissibleToast("Training docket print failed");
           return;
         }
 
@@ -845,12 +842,9 @@ export default function PosTerminal() {
           source: "pos_send",
           notify: true,
           notifySuccess: false,
-          silentNoPrinters: true,
-          showCustomToast: (message) => showDismissibleToast(message),
         });
       } catch (printError) {
         console.error("POS send print error:", printError);
-        showDismissibleToast("Kitchen ticket print failed");
       }
     } catch (error) {
       showDismissibleToast(error?.message || "Failed to send order");
