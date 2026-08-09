@@ -25,6 +25,7 @@
     "daisyui": "^4.12.24",
     "date-fns": "^4.1.0",
     "debounce": "^2.2.0",
+    "immersive-mode": "file:immersive-mode",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.460.0",
     "mongoose": "^8.8.3",

@@ -9,6 +9,7 @@ import { fetchGetMenuByOwnerEmail } from "@/lib/api/fetchApi";
 import { Toaster } from "react-hot-toast";
 import VersionBanner from "@/components/VersionBanner";
 import PrintToastHost from "@/components/print/PrintToastHost";
+import PosImmersiveHost from "@/components/orderManager/PosImmersiveHost";
 
 const inter = Inter({
   weight: ["400", "500", "600", "700", "800", "900"],
@@ -49,6 +50,7 @@ export default async function RootLayout({ children }) {
             <MenuContextProvider data={menuData}>
               {children}
               <PrintToastHost />
+              <PosImmersiveHost />
             </MenuContextProvider>
           </GlobalAppContextProvider>
         </NextAuthProvider>

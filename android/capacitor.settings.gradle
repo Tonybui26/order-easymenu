@@ -11,6 +11,9 @@ project(':capacitor-network').projectDir = new File('../node_modules/@capacitor/
 include ':capacitor-splash-screen'
 project(':capacitor-splash-screen').projectDir = new File('../node_modules/@capacitor/splash-screen/android')
 
+include ':immersive-mode'
+project(':immersive-mode').projectDir = new File('../immersive-mode/android')
+
 include ':printer-tcp-socket'
 project(':printer-tcp-socket').projectDir = new File('../printer-tcp-socket/android')
 

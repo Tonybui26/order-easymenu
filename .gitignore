@@ -19,6 +19,7 @@ node_modules/
 # Local Capacitor plugin Android build outputs
 printer-tcp-socket/android/build/
 printer-usb/android/build/
+immersive-mode/android/build/
 
 # misc
 .DS_Store
