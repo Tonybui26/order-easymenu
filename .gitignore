@@ -16,6 +16,10 @@ node_modules/
 # production
 /build
 
+# Local Capacitor plugin Android build outputs
+printer-tcp-socket/android/build/
+printer-usb/android/build/
+
 # misc
 .DS_Store
 *.pem
