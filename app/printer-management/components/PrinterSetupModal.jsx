@@ -11,6 +11,22 @@ import {
   DEFAULT_PRINTER_COMMAND_LANGUAGE,
 } from "@/lib/constants/printerLanguages";
 
+const EMPTY_FORM = {
+  name: "",
+  connectionType: "network",
+  localIp: "",
+  port: "",
+  forTakeaway: false,
+  forDineIn: false,
+  forReceipt: false,
+  // Item group routing. Empty array = no group filter → printer prints
+  // every item it receives (default + backwards compatible). When any box
+  // is ticked we only print items that belong to one of the selected groups;
+  // items without a group (or in a different group) are dropped at print time.
+  groupIds: [],
+  commandLanguage: DEFAULT_PRINTER_COMMAND_LANGUAGE,
+};
+
 export default function PrinterSetupModal({
   isOpen,
   onClose,
@@ -20,20 +36,7 @@ export default function PrinterSetupModal({
 }) {
   const DEFAULT_PRINTER_PORT = 9100;
 
-  const [formData, setFormData] = useState({
-    name: "",
-    localIp: "",
-    port: "",
-    forTakeaway: false,
-    forDineIn: false,
-    forReceipt: false,
-    // Item group routing. Empty array = no group filter → printer prints
-    // every item it receives (default + backwards compatible). When any box
-    // is ticked we only print items that belong to one of the selected groups;
-    // items without a group (or in a different group) are dropped at print time.
-    groupIds: [],
-    commandLanguage: DEFAULT_PRINTER_COMMAND_LANGUAGE,
-  });
+  const [formData, setFormData] = useState({ ...EMPTY_FORM });
 
   const [errors, setErrors] = useState({});
   const [isSaving, setIsSaving] = useState(false);
@@ -44,6 +47,7 @@ export default function PrinterSetupModal({
     if (mode === "edit" && printer) {
       setFormData({
         name: printer.name || "",
+        connectionType: printer.connectionType || "network",
         localIp: printer.localIp || "",
         port: printer.port ? String(printer.port) : "",
         forTakeaway: printer.forTakeaway || false,
@@ -70,6 +74,7 @@ export default function PrinterSetupModal({
 
   const validateForm = () => {
     const newErrors = {};
+    const isUsb = formData.connectionType === "usb";
 
     // Printer name validation
     if (!formData.name.trim()) {
@@ -80,26 +85,27 @@ export default function PrinterSetupModal({
       newErrors.name = "Printer name must be less than 50 characters";
     }
 
-    // Local IP validation
-    if (!formData.localIp.trim()) {
-      newErrors.localIp = "Local IP address is required";
-    } else if (!validateIpAddress(formData.localIp)) {
-      newErrors.localIp = "Please enter a valid IP address";
-    }
+    if (isUsb) {
+      if (formData.commandLanguage !== PRINTER_COMMAND_LANGUAGES.ESCPOS) {
+        newErrors.commandLanguage = "USB supports ESC/POS only";
+      }
+    } else {
+      // Local IP validation
+      if (!formData.localIp.trim()) {
+        newErrors.localIp = "Local IP address is required";
+      } else if (!validateIpAddress(formData.localIp)) {
+        newErrors.localIp = "Please enter a valid IP address";
+      }
 
-    // Port validation (optional — blank uses default 9100)
-    const portStr = String(formData.port ?? "").trim();
-    if (portStr !== "") {
-      const port = parseInt(portStr, 10);
-      if (isNaN(port) || port < 1 || port > 65535) {
-        newErrors.port = "Port must be between 1 and 65535";
+      // Port validation (optional — blank uses default 9100)
+      const portStr = String(formData.port ?? "").trim();
+      if (portStr !== "") {
+        const port = parseInt(portStr, 10);
+        if (isNaN(port) || port < 1 || port > 65535) {
+          newErrors.port = "Port must be between 1 and 65535";
+        }
       }
     }
-
-    // At least one order type must be selected
-    // if (!formData.forTakeaway && !formData.forDineIn) {
-    //   newErrors.orderTypes = "Please select at least one order type";
-    // }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -113,6 +119,9 @@ export default function PrinterSetupModal({
         value === PRINTER_COMMAND_LANGUAGES.TSPL
       ) {
         next.forReceipt = false;
+      }
+      if (field === "connectionType" && value === "usb") {
+        next.commandLanguage = PRINTER_COMMAND_LANGUAGES.ESCPOS;
       }
       return next;
     });
@@ -130,14 +139,20 @@ export default function PrinterSetupModal({
 
     setIsSaving(true);
     try {
+      const isUsb = formData.connectionType === "usb";
       const portStr = String(formData.port ?? "").trim();
       const port =
         portStr === "" ? DEFAULT_PRINTER_PORT : parseInt(portStr, 10);
 
       const printerData = {
         ...formData,
-        port,
-        status: "unknown", // Default status for simple management
+        connectionType: isUsb ? "usb" : "network",
+        port: isUsb ? DEFAULT_PRINTER_PORT : port,
+        localIp: isUsb ? formData.localIp || "usb" : formData.localIp,
+        commandLanguage: isUsb
+          ? PRINTER_COMMAND_LANGUAGES.ESCPOS
+          : formData.commandLanguage,
+        status: "unknown",
       };
 
       onSave(printerData);
@@ -150,7 +165,11 @@ export default function PrinterSetupModal({
   };
 
   const handlePrinterSelect = (printerData) => {
-    setFormData(printerData);
+    setFormData({
+      ...EMPTY_FORM,
+      ...printerData,
+      connectionType: "network",
+    });
     setShowManualForm(true);
   };
 
@@ -161,16 +180,7 @@ export default function PrinterSetupModal({
   const handleClose = () => {
     // Reset all states when modal closes
     setShowManualForm(!isNativeApp()); // Reset based on platform
-    setFormData({
-      name: "",
-      localIp: "",
-      port: "",
-      forTakeaway: false,
-      forDineIn: false,
-      forReceipt: false,
-      groupIds: [],
-      commandLanguage: DEFAULT_PRINTER_COMMAND_LANGUAGE,
-    });
+    setFormData({ ...EMPTY_FORM });
     setErrors({});
     setIsSaving(false);
     onClose();
@@ -243,60 +253,92 @@ export default function PrinterSetupModal({
               )}
             </div>
 
-            {/* Network Configuration */}
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text">IP Address *</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.localIp}
-                  onChange={(e) => handleInputChange("localIp", e.target.value)}
-                  className={`input input-bordered w-full ${
-                    errors.localIp ? "input-error" : ""
-                  }`}
-                  placeholder="192.168.1.100"
-                />
-                {errors.localIp && (
-                  <label className="label">
-                    <span className="label-text-alt text-error">
-                      {errors.localIp}
-                    </span>
-                  </label>
-                )}
-              </div>
-
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text">Port</span>
-                </label>
-                <input
-                  type="number"
-                  value={formData.port}
-                  onChange={(e) => handleInputChange("port", e.target.value)}
-                  className={`input input-bordered w-full ${
-                    errors.port ? "input-error" : ""
-                  }`}
-                  placeholder={`${DEFAULT_PRINTER_PORT} (default)`}
-                  min="1"
-                  max="65535"
-                />
-                {errors.port ? (
-                  <label className="label">
-                    <span className="label-text-alt text-error">
-                      {errors.port}
-                    </span>
-                  </label>
-                ) : (
-                  <label className="label">
-                    <span className="label-text-alt text-gray-500">
-                      Leave blank for default port {DEFAULT_PRINTER_PORT}
-                    </span>
-                  </label>
-                )}
-              </div>
+            {/* Connection type: network (default) or Android USB backup */}
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text">Connection</span>
+              </label>
+              <select
+                value={formData.connectionType}
+                onChange={(e) =>
+                  handleInputChange("connectionType", e.target.value)
+                }
+                className="select select-bordered w-full"
+              >
+                <option value="network">Network (IP / port 9100)</option>
+                <option value="usb">USB (Android tablet)</option>
+              </select>
+              <label className="label">
+                <span className="label-text-alt text-gray-500">
+                  {formData.connectionType === "usb"
+                    ? "USB auto-detects the printer plugged into this tablet. On first print Android may ask for USB permission. Printing only works in the Android app."
+                    : "Network sends raw ESC/POS over TCP (usually port 9100)."}
+                </span>
+              </label>
             </div>
+
+            {formData.connectionType === "usb" ? (
+              <div className="rounded-lg border border-amber-100 bg-amber-50 p-3 text-sm text-amber-900">
+                Plug the ESC/POS printer into this Android tablet, then use{" "}
+                <strong>Print Test</strong>. No IP or device scan needed.
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="form-control">
+                  <label className="label">
+                    <span className="label-text">IP Address *</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.localIp}
+                    onChange={(e) =>
+                      handleInputChange("localIp", e.target.value)
+                    }
+                    className={`input input-bordered w-full ${
+                      errors.localIp ? "input-error" : ""
+                    }`}
+                    placeholder="192.168.1.100"
+                  />
+                  {errors.localIp && (
+                    <label className="label">
+                      <span className="label-text-alt text-error">
+                        {errors.localIp}
+                      </span>
+                    </label>
+                  )}
+                </div>
+
+                <div className="form-control">
+                  <label className="label">
+                    <span className="label-text">Port</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.port}
+                    onChange={(e) => handleInputChange("port", e.target.value)}
+                    className={`input input-bordered w-full ${
+                      errors.port ? "input-error" : ""
+                    }`}
+                    placeholder={`${DEFAULT_PRINTER_PORT} (default)`}
+                    min="1"
+                    max="65535"
+                  />
+                  {errors.port ? (
+                    <label className="label">
+                      <span className="label-text-alt text-error">
+                        {errors.port}
+                      </span>
+                    </label>
+                  ) : (
+                    <label className="label">
+                      <span className="label-text-alt text-gray-500">
+                        Leave blank for default port {DEFAULT_PRINTER_PORT}
+                      </span>
+                    </label>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Printer command language */}
             <div className="form-control">
@@ -309,6 +351,7 @@ export default function PrinterSetupModal({
                   handleInputChange("commandLanguage", e.target.value)
                 }
                 className="select select-bordered w-full"
+                disabled={formData.connectionType === "usb"}
               >
                 <option value={PRINTER_COMMAND_LANGUAGES.ESCPOS}>
                   Receipt (ESC/POS)
@@ -320,6 +363,13 @@ export default function PrinterSetupModal({
                   Label (TSPL)
                 </option>
               </select>
+              {errors.commandLanguage && (
+                <label className="label">
+                  <span className="label-text-alt text-error">
+                    {errors.commandLanguage}
+                  </span>
+                </label>
+              )}
               {formData.commandLanguage === PRINTER_COMMAND_LANGUAGES.STARPRNT && (
                 <label className="label">
                   <span className="label-text-alt text-gray-500">

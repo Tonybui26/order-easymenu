@@ -13,6 +13,7 @@ dependencies {
     implementation project(':capacitor-network')
     implementation project(':capacitor-splash-screen')
     implementation project(':printer-tcp-socket')
+    implementation project(':printer-usb')
 
 }
 

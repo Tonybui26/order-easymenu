@@ -36,6 +36,8 @@ import { printTsplTestLabel } from "@/lib/printers/printTsplTestLabel";
 import { printTaxInvoiceReceiptTest } from "@/lib/printers/printTaxInvoiceReceiptTest";
 import { printBillReceiptTest } from "@/lib/printers/printBillReceiptTest";
 import { printPrinterFontTest } from "@/lib/printers/printPrinterFontTest";
+import { isUsbPrinter } from "@/lib/printers/transport/isUsbPrinter";
+import { getPrinterEndpointLabel } from "@/lib/printers/transport/isPrinterReady";
 
 export default function PrinterCard({ printer, onDelete, onUpdate }) {
   const { storeProfile } = useMenuContext();
@@ -114,7 +116,7 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
       }
 
       addLog(
-        `Starting ${isTspl ? "TSPL label" : isStarPrnt ? "StarPRNT receipt" : "receipt"} test for ${printer.name} (${printer.localIp}:${printer.port})`,
+        `Starting ${isTspl ? "TSPL label" : isStarPrnt ? "StarPRNT receipt" : "receipt"} test for ${printer.name} (${getPrinterEndpointLabel(printer)})${isUsbPrinter(printer) ? " via USB" : ""}`,
         "info",
       );
       if (!isTspl && includeLogo && storeProfile?.storeLogo) {
@@ -193,7 +195,7 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
       setShowLogsModal(true);
 
       addLog(
-        `Starting font test for ${printer.name} (${printer.localIp}:${printer.port})`,
+        `Starting font test for ${printer.name} (${getPrinterEndpointLabel(printer)})`,
         "info",
       );
 
@@ -226,7 +228,7 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
       setShowLogsModal(true);
 
       addLog(
-        `Starting TAX INVOICE receipt test for ${printer.name} (${printer.localIp}:${printer.port})`,
+        `Starting TAX INVOICE receipt test for ${printer.name} (${getPrinterEndpointLabel(printer)})`,
         "info",
       );
       if (storeProfile?.storeLogo) {
@@ -284,7 +286,7 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
       setShowLogsModal(true);
 
       addLog(
-        `Starting BILL receipt test for ${printer.name} (${printer.localIp}:${printer.port})`,
+        `Starting BILL receipt test for ${printer.name} (${getPrinterEndpointLabel(printer)})`,
         "info",
       );
       if (storeProfile?.storeLogo) {
@@ -419,6 +421,11 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
             <div className="flex-1">
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 <h4 className="font-medium text-gray-900">{printer.name}</h4>
+                {isUsbPrinter(printer) ? (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                    USB
+                  </span>
+                ) : null}
                 {isTsplPrinter(printer) ? (
                   <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
                     Label Printer (TSPL)
@@ -437,7 +444,7 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
               <div className="flex items-center gap-4 text-sm text-gray-600">
                 <div className="flex items-center gap-1">
                   <Wifi className="h-3 w-3" />
-                  <span>{printer.localIp}</span>
+                  <span>{getPrinterEndpointLabel(printer)}</span>
                 </div>
               </div>
 

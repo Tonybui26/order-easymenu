@@ -85,7 +85,9 @@ export default function PrinterSelectionModal({
                   <div className="flex-1">
                     <p className="font-medium text-gray-900">{printer.name}</p>
                     <p className="text-xs text-gray-500">
-                      {printer.localIp}:{printer.port}
+                      {printer.connectionType === "usb"
+                        ? "USB (auto-detect)"
+                        : `${printer.localIp}:${printer.port}`}
                       {printer.isActive ? (
                         <span className="ml-2 text-green-600">● Active</span>
                       ) : (
