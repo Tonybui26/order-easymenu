@@ -62,13 +62,13 @@ export default function SignInForm() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+      <form onSubmit={handleSubmit} className="mt-10 space-y-4">
         <div>
           <label
             htmlFor="menuLink"
             className="block text-sm font-medium text-gray-700"
           >
-            Menu Link
+            Store Link
           </label>
           <input
             id="menuLink"

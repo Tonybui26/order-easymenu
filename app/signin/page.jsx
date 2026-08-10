@@ -15,25 +15,29 @@ export default async function SignInPage({ searchParams }) {
   }
 
   return (
-    <div className="min-h-[100vh] bg-[#fff8f4] px-4 py-12 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-md rounded-xl bg-white p-8 shadow-lg sm:p-10">
+    <div className="flex min-h-[100vh] items-center justify-center bg-[#fff8f4] px-4 py-12 sm:px-6 lg:px-8">
+      <div className="mx-auto min-w-[350px] max-w-md translate-y-[-20%] rounded-2xl border-4 border-[#f8e3d8] bg-white p-8 shadow-lg sm:p-10 lg:min-w-[400px] xl:min-w-[450px]">
         <div className="text-center">
-          <Link href="/" className="text-2xl font-bold text-primary">
+          <Link
+            href="/"
+            className="flex items-center justify-center gap-4 text-2xl font-bold text-primary"
+          >
             <Image
               src={Logo}
               alt="GoEasyMenu"
               auto="true"
-              className="mx-auto w-[28px] lg:w-[30px]"
+              className="w-[28px] lg:w-[36px]"
               priority
             />
+            <span className="text-2xl font-bold text-gray-900 lg:text-3xl">
+              Easy<span className="text-brand_accent">Menu</span>
+            </span>
           </Link>
-          <h2 className="mt-6 text-2xl font-bold text-gray-900 lg:text-3xl">
-            Log in to your store
+          <h2 className="mt-6 hidden text-2xl font-bold text-gray-900">
+            Log in
           </h2>
         </div>
-        <div className="mt-8">
-          <SignInForm />
-        </div>
+        <SignInForm />
       </div>
     </div>
   );
