@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Printer, Plus, Settings } from "lucide-react";
+import { Printer, Plus } from "lucide-react";
 import {
   addPrinter,
   deletePrinter,
@@ -10,17 +10,12 @@ import {
 import PrinterCard from "./components/PrinterCard";
 import PrinterSetupModal from "./components/PrinterSetupModal";
 import { toast } from "react-hot-toast";
-import { useMenuContext } from "@/components/context/MenuContext";
 import PosChromeHeader from "@/components/orderManager/PosChromeHeader";
 import { usePosOpenCashDrawer } from "@/components/orderManager/usePosOpenCashDrawer";
 
 export default function PrinterManagementPage() {
   const [loading, setLoading] = useState(true);
   const [printers, setPrinters] = useState([]);
-  const { menuConfig, updateMenuConfigField } = useMenuContext();
-  const [autoPrintingEnabled, setAutoPrintingEnabled] = useState(
-    menuConfig?.autoPrinting?.enabled || false,
-  );
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
   // Fetch printers on component mount
   useEffect(() => {
@@ -40,15 +35,6 @@ export default function PrinterManagementPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleAutoPrintingChange = async (e) => {
-    setAutoPrintingEnabled(e.target.checked);
-
-    // Use the reusable function to update config with fresh server data
-    await updateMenuConfigField("autoPrinting", {
-      enabled: e.target.checked,
-    });
   };
 
   const [showAddPrinterModal, setShowAddPrinterModal] = useState(false);
@@ -107,95 +93,63 @@ export default function PrinterManagementPage() {
             </p>
           </div>
 
-        {/* Printer Setup Section */}
-        <div className="mb-6 rounded-lg border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-orange-100 p-2">
-                  <Printer className="h-5 w-5 text-brand_accent" />
+          {/* Printer Setup Section */}
+          <div className="mb-6 rounded-lg border border-gray-200 bg-white shadow-sm">
+            <div className="border-b border-gray-200 p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-lg bg-orange-100 p-2">
+                    <Printer className="h-5 w-5 text-brand_accent" />
+                  </div>
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Printers
+                  </h2>
                 </div>
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Printers
-                </h2>
-              </div>
-              <button
-                onClick={() => setShowAddPrinterModal(true)}
-                className="btn-primary btn btn-sm"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Add New Printer
-              </button>
-            </div>
-          </div>
-
-          {/* Receipt Printers */}
-          <div className="p-6">
-            {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <span className="loading loading-spinner loading-lg text-brand_accent"></span>
-                <span className="ml-3 text-gray-600">Loading printers...</span>
-              </div>
-            ) : printers.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-4 text-center">
-                <Printer className="mx-auto h-12 w-12 text-gray-400" />
-                <p className="text-gray-500">No printers configured yet</p>
                 <button
                   onClick={() => setShowAddPrinterModal(true)}
-                  className="flex items-center gap-2 rounded-lg bg-brand_accent px-4 py-2 text-sm font-medium text-white transition-all duration-300 hover:bg-brand_accent/90"
+                  className="btn-primary btn btn-sm"
                 >
-                  <Plus className="h-4 w-4" />
-                  Add Your First Printer
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add New Printer
                 </button>
               </div>
-            ) : (
-              <div className="space-y-4">
-                {printers.map((printer) => (
-                  <PrinterCard
-                    key={printer._id}
-                    printer={printer}
-                    onDelete={handleDeletePrinter}
-                    onUpdate={handleUpdatePrinter}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+            </div>
 
-        {/* General Printing Settings */}
-        <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-200 p-6">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-orange-100 p-2">
-                <Settings className="h-5 w-5 text-brand_accent" />
-              </div>
-              <h2 className="text-lg font-semibold text-gray-900">
-                Configuration
-              </h2>
+            {/* Receipt Printers */}
+            <div className="p-6">
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <span className="loading loading-spinner loading-lg text-brand_accent"></span>
+                  <span className="ml-3 text-gray-600">
+                    Loading printers...
+                  </span>
+                </div>
+              ) : printers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-4 text-center">
+                  <Printer className="mx-auto h-12 w-12 text-gray-400" />
+                  <p className="text-gray-500">No printers configured yet</p>
+                  <button
+                    onClick={() => setShowAddPrinterModal(true)}
+                    className="flex items-center gap-2 rounded-lg bg-brand_accent px-4 py-2 text-sm font-medium text-white transition-all duration-300 hover:bg-brand_accent/90"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Your First Printer
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {printers.map((printer) => (
+                    <PrinterCard
+                      key={printer._id}
+                      printer={printer}
+                      onDelete={handleDeletePrinter}
+                      onUpdate={handleUpdatePrinter}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-
-          <div className="space-y-6 p-6">
-            {/* Auto Printing Toggle */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="mb-1 font-medium text-gray-900">
-                  Auto Printing
-                </h3>
-                <p className="text-sm text-gray-600">
-                  Automatically print order dockets when new orders are received
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                className="toggle toggle-success"
-                checked={autoPrintingEnabled}
-                onChange={handleAutoPrintingChange}
-              />
-            </div>
-          </div>
-        </div>
         </div>
       </div>
 
