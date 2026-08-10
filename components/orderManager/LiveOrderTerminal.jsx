@@ -159,7 +159,6 @@ export default function LiveOrderTerminal() {
     setLastDismissedIds(new Set(next.keys()));
   }, []);
   const [audioInitialized, setAudioInitialized] = useState(false);
-  const [showAudioPrompt, setShowAudioPrompt] = useState(false);
   const { soundEnabled, notificationSoundId, newOrderAlertsMuted } =
     useGlobalAppContext();
   // Polling configuration
@@ -832,24 +831,6 @@ export default function LiveOrderTerminal() {
     };
   }, [showDatePicker]);
 
-  // Function to initialize audio with user interaction (web only)
-  const initializeAudio = async () => {
-    if (!audioRef.current || isNative) return;
-
-    try {
-      // Play and immediately pause to initialize audio context
-      await audioRef.current.play();
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      setAudioInitialized(true);
-      setShowAudioPrompt(false);
-      console.log("Audio initialized successfully");
-    } catch (error) {
-      console.error("Failed to initialize audio:", error);
-      setShowAudioPrompt(true);
-    }
-  };
-
   // Function to play sound continuously with intervals
   const playSoundCycle = () => {
     if (!soundEnabled || newOrderAlertsMuted || !audioRef.current) return;
@@ -894,10 +875,6 @@ export default function LiveOrderTerminal() {
         }
       } catch (error) {
         console.error("Error playing sound:", error);
-        // If audio fails to play, show the audio prompt (web only)
-        if (!audioInitialized && !isNative) {
-          setShowAudioPrompt(true);
-        }
       }
     };
 
@@ -956,22 +933,6 @@ export default function LiveOrderTerminal() {
       );
     };
   }, [replaceDismissedOrderIds]);
-
-  // Show audio prompt on first visit if sound is enabled (web only)
-  useEffect(() => {
-    if (
-      soundEnabled &&
-      !newOrderAlertsMuted &&
-      !audioInitialized &&
-      !loading &&
-      !isNative
-    ) {
-      // Small delay to let the page load first
-      setTimeout(() => {
-        setShowAudioPrompt(true);
-      }, 1000);
-    }
-  }, [soundEnabled, newOrderAlertsMuted, audioInitialized, loading, isNative]);
 
   // Auto-initialize audio for native apps
   useEffect(() => {
@@ -1726,42 +1687,8 @@ export default function LiveOrderTerminal() {
           src={getNotificationSoundUrl(notificationSoundId)}
         />
 
-        {/* Top chrome: audio prompt + header (single safe-area top inset) */}
+        {/* Top chrome: header (safe-area top inset) */}
         <div className="shrink-0 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-          {/* Audio Permission Prompt - Web Only */}
-          {showAudioPrompt && !isNative && (
-            <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Bell className="mr-2 h-5 w-5 text-yellow-600" />
-                  <div>
-                    <h3 className="text-sm font-medium text-yellow-800">
-                      Enable Sound Notifications
-                    </h3>
-                    <p className="text-sm text-yellow-700">
-                      Click &quot;Enable Sound&quot; to hear audio alerts for
-                      new orders.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={initializeAudio}
-                    className="rounded-md bg-yellow-600 px-3 py-2 text-sm font-medium text-white hover:bg-yellow-700"
-                  >
-                    Enable Sound
-                  </button>
-                  <button
-                    onClick={() => setShowAudioPrompt(false)}
-                    className="rounded-md bg-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-400"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
           <div className="flex items-start justify-between">
             {/* quick settings */}
             <div className="mb-3 flex gap-4 rounded-3xl bg-[#0000003d] p-3 ring-2 ring-[#222222]">
