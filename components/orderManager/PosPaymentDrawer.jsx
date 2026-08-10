@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { Banknote, CreditCard, Delete, HandCoins } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/helper";
+import SideDrawer from "./SideDrawer";
 
 const KEYPAD_ROWS = [
   ["1", "2", "3", "backspace"],
@@ -56,16 +55,11 @@ export default function PosPaymentDrawer({
   onTrainingDone,
 }) {
   const [digits, setDigits] = useState("");
-  const [portalReady, setPortalReady] = useState(false);
   const [step, setStep] = useState("tender"); // tender | finalise
   const [paymentSummary, setPaymentSummary] = useState(null);
   const amountDueLabel = Number(amountDue || 0)
     .toFixed(2)
     .replace(/\.00$/, "");
-
-  useEffect(() => {
-    setPortalReady(true);
-  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -147,126 +141,105 @@ export default function PosPaymentDrawer({
     onClose?.();
   }
 
-  if (!portalReady) return null;
-
   const displayValue =
     digits !== ""
       ? formatTenderDisplay(digits)
       : formatTenderDisplay(amountDueLabel);
 
-  return createPortal(
-    <AnimatePresence>
-      {isOpen ? (
-        <motion.button
-          key="pos-payment-backdrop"
-          type="button"
-          aria-label="Close payment"
-          className="fixed inset-0 z-40 bg-black/30"
-          onClick={handleClose}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.18, ease: "easeOut" }}
+  return (
+    <SideDrawer
+      isOpen={isOpen}
+      onClose={handleClose}
+      showHeader={false}
+      side="right"
+      zIndex={40}
+      panelClassName="bg-[#984B28]"
+      bodyClassName=""
+      contentKey="pos-payment-drawer"
+      ariaLabel={step === "finalise" ? "Finalise Sale" : "Amount Tendered"}
+    >
+      {step === "finalise" && paymentSummary ? (
+        <FinaliseSaleStep
+          paymentSummary={paymentSummary}
+          amountTendered={paymentSummary.amountTendered}
+          change={paymentSummary.change}
+          onCompleteSale={handleCompleteSale}
+          onPrintReceipt={onPrintReceipt}
+          isPrintingReceipt={isPrintingReceipt}
+          trainingMode={trainingMode}
+          onTrainingDone={onTrainingDone}
         />
-      ) : null}
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
+          <p className="mb-3 text-center text-xl font-semibold text-white">
+            Amount Tendered
+          </p>
 
-      {isOpen ? (
-        <motion.aside
-          key="pos-payment-drawer"
-          role="dialog"
-          aria-modal="true"
-          aria-label={step === "finalise" ? "Finalise Sale" : "Amount Tendered"}
-          className="fixed inset-y-0 right-0 z-50 flex w-[min(100%,28rem)] flex-col bg-[#984B28] pb-[env(safe-area-inset-bottom)] pr-[env(safe-area-inset-right)] pt-[env(safe-area-inset-top)] shadow-2xl"
-          initial={{ x: "100%" }}
-          animate={{ x: 0 }}
-          exit={{ x: "100%" }}
-          transition={{ type: "spring", damping: 28, stiffness: 280 }}
-        >
-          {step === "finalise" && paymentSummary ? (
-            <FinaliseSaleStep
-              paymentSummary={paymentSummary}
-              amountTendered={paymentSummary.amountTendered}
-              change={paymentSummary.change}
-              onCompleteSale={handleCompleteSale}
-              onPrintReceipt={onPrintReceipt}
-              isPrintingReceipt={isPrintingReceipt}
-              trainingMode={trainingMode}
-              onTrainingDone={onTrainingDone}
-            />
-          ) : (
-            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
-              <p className="mb-3 text-center text-xl font-semibold text-white">
-                Amount Tendered
-              </p>
-
-              <div className="mb-4 flex items-center gap-2">
-                <div
-                  className={cn(
-                    "flex min-h-[3.25rem] flex-1 items-center justify-center rounded-lg bg-white px-4 py-4 text-center text-3xl font-bold tabular-nums",
-                    digits ? "text-neutral-900" : "text-neutral-300",
-                  )}
-                >
-                  {displayValue || "$ "}
-                </div>
-                <button
-                  type="button"
-                  aria-label="Tip"
-                  className="flex size-12 shrink-0 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:bg-white/20"
-                >
-                  <HandCoins size={28} strokeWidth={1.75} />
-                </button>
-              </div>
-
-              <div className="mb-4 grid grid-cols-4 gap-1.5">
-                {KEYPAD_ROWS.flat().map((key) => {
-                  if (key === "backspace") {
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => handleKey(key)}
-                        className="flex h-16 items-center justify-center rounded-md bg-white text-2xl font-semibold text-neutral-900 shadow-sm transition-transform active:scale-95"
-                        aria-label="Delete"
-                      >
-                        <Delete size={20} strokeWidth={2.25} />
-                      </button>
-                    );
-                  }
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => handleKey(key)}
-                      className="flex h-16 items-center justify-center rounded-md bg-white text-2xl font-semibold text-neutral-900 shadow-sm transition-transform active:scale-95"
-                    >
-                      {key}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                {PAYMENT_METHODS.map(({ id, label, Icon, className }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => handleSelectPayment(id)}
-                    className={cn(
-                      "flex min-h-[5.5rem] flex-col items-center justify-center gap-1.5 rounded-lg px-3 py-3 text-sm font-bold uppercase tracking-wide shadow-sm transition-colors",
-                      className,
-                    )}
-                  >
-                    <Icon size={28} strokeWidth={1.75} />
-                    {label}
-                  </button>
-                ))}
-              </div>
+          <div className="mb-4 flex items-center gap-2">
+            <div
+              className={cn(
+                "flex min-h-[3.25rem] flex-1 items-center justify-center rounded-lg bg-white px-4 py-4 text-center text-3xl font-bold tabular-nums",
+                digits ? "text-neutral-900" : "text-neutral-300",
+              )}
+            >
+              {displayValue || "$ "}
             </div>
-          )}
-        </motion.aside>
-      ) : null}
-    </AnimatePresence>,
-    document.body,
+            <button
+              type="button"
+              aria-label="Tip"
+              className="flex size-12 shrink-0 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:bg-white/20"
+            >
+              <HandCoins size={28} strokeWidth={1.75} />
+            </button>
+          </div>
+
+          <div className="mb-4 grid grid-cols-4 gap-1.5">
+            {KEYPAD_ROWS.flat().map((key) => {
+              if (key === "backspace") {
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => handleKey(key)}
+                    className="flex h-16 items-center justify-center rounded-md bg-white text-2xl font-semibold text-neutral-900 shadow-sm transition-transform active:scale-95"
+                    aria-label="Delete"
+                  >
+                    <Delete size={20} strokeWidth={2.25} />
+                  </button>
+                );
+              }
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => handleKey(key)}
+                  className="flex h-16 items-center justify-center rounded-md bg-white text-2xl font-semibold text-neutral-900 shadow-sm transition-transform active:scale-95"
+                >
+                  {key}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {PAYMENT_METHODS.map(({ id, label, Icon, className }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => handleSelectPayment(id)}
+                className={cn(
+                  "flex min-h-[5.5rem] flex-col items-center justify-center gap-1.5 rounded-lg px-3 py-3 text-sm font-bold uppercase tracking-wide shadow-sm transition-colors",
+                  className,
+                )}
+              >
+                <Icon size={28} strokeWidth={1.75} />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </SideDrawer>
   );
 }
 

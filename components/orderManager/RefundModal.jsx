@@ -1,9 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import { X } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
 import toast from "react-hot-toast";
 import DropDownList from "@/components/DropDownList";
 import { cn } from "@/lib/helper";
@@ -18,6 +15,7 @@ import {
   POS_CANCEL_LINE_REASONS,
   POS_CANCEL_OTHER_REASON,
 } from "@/lib/pos/posCancelLineReasons";
+import SideDrawer from "./SideDrawer";
 
 const refundTypeOptions = [
   {
@@ -45,17 +43,12 @@ export default function RefundModal({
   order,
   onRefundSuccess,
 }) {
-  const [portalReady, setPortalReady] = useState(false);
   const [refundType, setRefundType] = useState("");
   const [refundMethod, setRefundMethod] = useState("");
   const [selectedReason, setSelectedReason] = useState("");
   const [otherReason, setOtherReason] = useState("");
   const [partialAmount, setPartialAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-
-  useEffect(() => {
-    setPortalReady(true);
-  }, []);
 
   useEffect(() => {
     if (!isOpen) {
@@ -70,7 +63,7 @@ export default function RefundModal({
     setRefundMethod(resolveDefaultRefundMethod(order));
   }, [isOpen, order?._id]);
 
-  if (!portalReady || !order) return null;
+  if (!order) return null;
 
   const refundMethodOptions = buildRefundMethodOptions(order);
   const refundMethodHelpText = getRefundMethodHelpText(order);
@@ -108,10 +101,7 @@ export default function RefundModal({
       return;
     }
 
-    if (
-      selectedReason === POS_CANCEL_OTHER_REASON &&
-      !otherReason.trim()
-    ) {
+    if (selectedReason === POS_CANCEL_OTHER_REASON && !otherReason.trim()) {
       toast.error("Enter a reason for the refund.");
       return;
     }
@@ -149,240 +139,187 @@ export default function RefundModal({
     Boolean(refundType) &&
     Boolean(refundMethod) &&
     !(refundType === "partial" && !partialAmount) &&
-    !(
-      selectedReason === POS_CANCEL_OTHER_REASON && !otherReason.trim()
-    ) &&
+    !(selectedReason === POS_CANCEL_OTHER_REASON && !otherReason.trim()) &&
     !isProcessing;
 
-  return createPortal(
-    <AnimatePresence>
-      {isOpen ? (
-        <motion.button
-          key="refund-drawer-backdrop"
-          type="button"
-          aria-label="Close refund drawer"
-          className="fixed inset-0 z-[60] bg-black/30"
-          onClick={handleClose}
+  return (
+    <SideDrawer
+      isOpen={isOpen}
+      onClose={handleClose}
+      title={`Refund order #${orderIdShort}`}
+      subtitle={`Total ${formatCurrency(order.total)} · This cannot be undone.`}
+      closeDisabled={isProcessing}
+      contentKey="refund-drawer"
+      bodyClassName="space-y-6 px-5 py-4"
+      footer={
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={handleClose}
+            disabled={isProcessing}
+            className="flex-1 rounded-xl border border-neutral-300 px-4 py-3 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!canConfirm}
+            onClick={handleConfirm}
+            className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-neutral-300"
+          >
+            {isProcessing ? "Processing…" : "Confirm refund"}
+          </button>
+        </div>
+      }
+    >
+      <div className="space-y-2">
+        <label className="block text-sm font-semibold text-neutral-700">
+          Refund type <span className="text-red-600">*</span>
+        </label>
+        <DropDownList
+          options={refundTypeOptions}
+          value={refundType}
+          onChange={setRefundType}
+          placeholder="Select refund type"
           disabled={isProcessing}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.18, ease: "easeOut" }}
+          summaryClassName={dropdownSummaryClassName}
         />
-      ) : null}
+      </div>
 
-      {isOpen ? (
-        <motion.aside
-          key="refund-drawer"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="refund-drawer-title"
-          className="fixed inset-y-0 right-0 z-[70] flex w-[min(100%,28rem)] flex-col bg-white pb-[env(safe-area-inset-bottom)] pr-[env(safe-area-inset-right)] pt-[env(safe-area-inset-top)] shadow-2xl"
-          initial={{ x: "100%" }}
-          animate={{ x: 0 }}
-          exit={{ x: "100%" }}
-          transition={{ type: "spring", damping: 28, stiffness: 280 }}
-        >
-          <div className="flex items-start justify-between gap-3 border-b border-neutral-200 px-5 py-4">
-            <div className="min-w-0">
-              <h2
-                id="refund-drawer-title"
-                className="text-lg font-bold text-neutral-900"
-              >
-                Refund order #{orderIdShort}
-              </h2>
-              <p className="mt-1 text-sm text-neutral-500">
-                Total {formatCurrency(order.total)} · This cannot be undone.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleClose}
+      {refundType === "partial" && (
+        <div className="space-y-2">
+          <label className="block text-sm font-semibold text-neutral-700">
+            Refund amount <span className="text-red-600">*</span>
+          </label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500">
+              $
+            </span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={partialAmount}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                  setPartialAmount(value);
+                }
+              }}
+              placeholder="0.00"
               disabled={isProcessing}
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100"
-              aria-label="Close"
-            >
-              <X size={18} />
-            </button>
+              className="w-full rounded-xl border border-neutral-300 bg-neutral-50 py-2.5 pl-8 pr-3 text-base text-neutral-900 outline-none ring-0 placeholder:text-neutral-400 focus:border-neutral-500"
+            />
           </div>
+          <p className="text-xs text-neutral-500">
+            Maximum: {formatCurrency(order.total)}
+          </p>
+        </div>
+      )}
 
-          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-4">
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-neutral-700">
-                Refund type <span className="text-red-600">*</span>
-              </label>
-              <DropDownList
-                options={refundTypeOptions}
-                value={refundType}
-                onChange={setRefundType}
-                placeholder="Select refund type"
+      <div>
+        <p className="mb-3 text-sm font-semibold text-neutral-700">
+          Refund method <span className="text-red-600">*</span>
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {refundMethodOptions.map((option) => {
+            const isSelected = refundMethod === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                disabled={isProcessing || refundMethodOptions.length === 1}
+                onClick={() => setRefundMethod(option.id)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
+                  isSelected
+                    ? "border-neutral-900 bg-neutral-900 text-white"
+                    : "border-neutral-300 bg-white text-neutral-700 hover:border-neutral-400",
+                )}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-xs text-neutral-500">{refundMethodHelpText}</p>
+      </div>
+
+      <div>
+        <p className="mb-3 text-sm font-semibold text-neutral-700">
+          Reason (optional)
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {POS_CANCEL_LINE_REASONS.map((reason) => {
+            const isSelected = selectedReason === reason;
+            return (
+              <button
+                key={reason}
+                type="button"
                 disabled={isProcessing}
-                summaryClassName={dropdownSummaryClassName}
-              />
+                onClick={() => setSelectedReason(reason)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
+                  isSelected
+                    ? "border-neutral-900 bg-neutral-900 text-white"
+                    : "border-neutral-300 bg-white text-neutral-700 hover:border-neutral-400",
+                )}
+              >
+                {reason}
+              </button>
+            );
+          })}
+        </div>
+
+        {selectedReason === POS_CANCEL_OTHER_REASON ? (
+          <textarea
+            value={otherReason}
+            onChange={(event) => setOtherReason(event.target.value)}
+            disabled={isProcessing}
+            rows={4}
+            placeholder="Describe why this order is being refunded"
+            className="mt-4 w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm text-neutral-800 outline-none ring-0 focus:border-neutral-500"
+          />
+        ) : null}
+      </div>
+
+      {refundType ? (
+        <div className="rounded-xl bg-neutral-100 p-4 text-sm">
+          <p className="font-semibold text-neutral-900">Refund summary</p>
+          <div className="mt-2 space-y-1 text-neutral-700">
+            <div className="flex justify-between gap-4">
+              <span>Type</span>
+              <span className="font-medium">
+                {refundTypeOptions.find((o) => o.id === refundType)?.name}
+              </span>
             </div>
-
-            {refundType === "partial" && (
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-neutral-700">
-                  Refund amount <span className="text-red-600">*</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500">
-                    $
-                  </span>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={partialAmount}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === "" || /^\d*\.?\d*$/.test(value)) {
-                        setPartialAmount(value);
-                      }
-                    }}
-                    placeholder="0.00"
-                    disabled={isProcessing}
-                    className="w-full rounded-xl border border-neutral-300 bg-neutral-50 py-2.5 pl-8 pr-3 text-base text-neutral-900 outline-none ring-0 placeholder:text-neutral-400 focus:border-neutral-500"
-                  />
-                </div>
-                <p className="text-xs text-neutral-500">
-                  Maximum: {formatCurrency(order.total)}
-                </p>
-              </div>
-            )}
-
-            <div>
-              <p className="mb-3 text-sm font-semibold text-neutral-700">
-                Refund method <span className="text-red-600">*</span>
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {refundMethodOptions.map((option) => {
-                  const isSelected = refundMethod === option.id;
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      disabled={isProcessing || refundMethodOptions.length === 1}
-                      onClick={() => setRefundMethod(option.id)}
-                      className={cn(
-                        "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
-                        isSelected
-                          ? "border-neutral-900 bg-neutral-900 text-white"
-                          : "border-neutral-300 bg-white text-neutral-700 hover:border-neutral-400",
-                      )}
-                    >
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-2 text-xs text-neutral-500">
-                {refundMethodHelpText}
-              </p>
+            <div className="flex justify-between gap-4">
+              <span>Amount</span>
+              <span className="font-semibold text-red-700">
+                {formatCurrency(refundAmountPreview)}
+              </span>
             </div>
-
-            <div>
-              <p className="mb-3 text-sm font-semibold text-neutral-700">
-                Reason (optional)
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {POS_CANCEL_LINE_REASONS.map((reason) => {
-                  const isSelected = selectedReason === reason;
-                  return (
-                    <button
-                      key={reason}
-                      type="button"
-                      disabled={isProcessing}
-                      onClick={() => setSelectedReason(reason)}
-                      className={cn(
-                        "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
-                        isSelected
-                          ? "border-neutral-900 bg-neutral-900 text-white"
-                          : "border-neutral-300 bg-white text-neutral-700 hover:border-neutral-400",
-                      )}
-                    >
-                      {reason}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {selectedReason === POS_CANCEL_OTHER_REASON ? (
-                <textarea
-                  value={otherReason}
-                  onChange={(event) => setOtherReason(event.target.value)}
-                  disabled={isProcessing}
-                  rows={4}
-                  placeholder="Describe why this order is being refunded"
-                  className="mt-4 w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm text-neutral-800 outline-none ring-0 focus:border-neutral-500"
-                />
-              ) : null}
+            <div className="flex justify-between gap-4">
+              <span>Method</span>
+              <span className="font-medium">
+                {REFUND_METHOD_LABELS[refundMethod] || refundMethod}
+              </span>
             </div>
-
-            {refundType ? (
-              <div className="rounded-xl bg-neutral-100 p-4 text-sm">
-                <p className="font-semibold text-neutral-900">Refund summary</p>
-                <div className="mt-2 space-y-1 text-neutral-700">
-                  <div className="flex justify-between gap-4">
-                    <span>Type</span>
-                    <span className="font-medium">
-                      {
-                        refundTypeOptions.find((o) => o.id === refundType)
-                          ?.name
-                      }
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span>Amount</span>
-                    <span className="font-semibold text-red-700">
-                      {formatCurrency(refundAmountPreview)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span>Method</span>
-                    <span className="font-medium">
-                      {REFUND_METHOD_LABELS[refundMethod] || refundMethod}
-                    </span>
-                  </div>
-                  {resolvedRefundReason ? (
-                    <div className="flex justify-between gap-4">
-                      <span>Reason</span>
-                      <span className="max-w-[60%] text-right font-medium">
-                        {resolvedRefundReason}
-                      </span>
-                    </div>
-                  ) : null}
-                </div>
+            {resolvedRefundReason ? (
+              <div className="flex justify-between gap-4">
+                <span>Reason</span>
+                <span className="max-w-[60%] text-right font-medium">
+                  {resolvedRefundReason}
+                </span>
               </div>
             ) : null}
-
-            <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-xs text-yellow-900">
-              This action is immediate and cannot be undone. The refund will be
-              processed instantly.
-            </div>
           </div>
-
-          <div className="flex gap-3 border-t border-neutral-200 px-5 py-4">
-            <button
-              type="button"
-              onClick={handleClose}
-              disabled={isProcessing}
-              className="flex-1 rounded-xl border border-neutral-300 px-4 py-3 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={!canConfirm}
-              onClick={handleConfirm}
-              className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-neutral-300"
-            >
-              {isProcessing ? "Processing…" : "Confirm refund"}
-            </button>
-          </div>
-        </motion.aside>
+        </div>
       ) : null}
-    </AnimatePresence>,
-    document.body,
+
+      <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-xs text-yellow-900">
+        This action is immediate and cannot be undone. The refund will be
+        processed instantly.
+      </div>
+    </SideDrawer>
   );
 }
