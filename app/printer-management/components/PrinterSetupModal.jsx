@@ -1,6 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import {
+  Eye,
+  FileText,
+  Receipt,
+  Settings,
+  Trash2,
+  Type,
+} from "lucide-react";
 import { toast } from "react-hot-toast";
 import SideDrawer from "@/components/orderManager/SideDrawer";
 import PrinterScanner from "./PrinterScanner";
@@ -38,6 +46,14 @@ export default function PrinterSetupModal({
   onSave,
   mode = "add",
   printer = null,
+  onPrintTest,
+  onPrintTestNoLogo,
+  onTestFonts,
+  onTestReceipt,
+  onTestBill,
+  onViewLogs,
+  onDelete,
+  actionStatus = {},
 }) {
   const [formData, setFormData] = useState({ ...EMPTY_FORM });
   const [errors, setErrors] = useState({});
@@ -206,6 +222,16 @@ export default function PrinterSetupModal({
       : "Edit Printer";
 
   const showFormActions = !(mode === "add" && !showManualForm);
+  const isEditMode = mode === "edit";
+  const isTspl = formData.commandLanguage === PRINTER_COMMAND_LANGUAGES.TSPL;
+  const showReceiptActions = Boolean(formData.forReceipt) && !isTspl;
+  const {
+    testingPrinter = false,
+    testingPrinterNoLogo = false,
+    testingFonts = false,
+    testingReceipt = false,
+    testingBill = false,
+  } = actionStatus;
 
   return (
     <SideDrawer
@@ -213,7 +239,7 @@ export default function PrinterSetupModal({
       onClose={handleClose}
       title={title}
       subtitle={
-        mode === "edit"
+        isEditMode
           ? "Update this printer's connection and routing."
           : "Configure how this printer connects and what it prints."
       }
@@ -521,6 +547,107 @@ export default function PrinterSetupModal({
                     })}
                   </div>
                 </div>
+
+                {isEditMode ? (
+                  <div className="space-y-3 border-t border-neutral-200 pt-4">
+                    <h3 className="text-sm font-medium text-neutral-800">
+                      Actions
+                    </h3>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={onPrintTest}
+                        disabled={testingPrinter || testingPrinterNoLogo}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-300 px-3 py-2.5 text-sm font-semibold text-neutral-800 transition-colors hover:bg-neutral-50 disabled:opacity-50"
+                      >
+                        {testingPrinter ? (
+                          <span className="loading loading-spinner loading-xs" />
+                        ) : (
+                          <Settings className="h-4 w-4" />
+                        )}
+                        Print Test
+                      </button>
+                      {!isTspl ? (
+                        <button
+                          type="button"
+                          onClick={onPrintTestNoLogo}
+                          disabled={testingPrinter || testingPrinterNoLogo}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-300 px-3 py-2.5 text-sm font-semibold text-neutral-800 transition-colors hover:bg-neutral-50 disabled:opacity-50"
+                        >
+                          {testingPrinterNoLogo ? (
+                            <span className="loading loading-spinner loading-xs" />
+                          ) : (
+                            <Settings className="h-4 w-4" />
+                          )}
+                          Print Test (no logo)
+                        </button>
+                      ) : null}
+                      {!isTspl ? (
+                        <button
+                          type="button"
+                          onClick={onTestFonts}
+                          disabled={testingFonts}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-300 px-3 py-2.5 text-sm font-semibold text-neutral-800 transition-colors hover:bg-neutral-50 disabled:opacity-50"
+                        >
+                          {testingFonts ? (
+                            <span className="loading loading-spinner loading-xs" />
+                          ) : (
+                            <Type className="h-4 w-4" />
+                          )}
+                          Test Fonts
+                        </button>
+                      ) : null}
+                      {showReceiptActions ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={onTestReceipt}
+                            disabled={testingReceipt}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-300 px-3 py-2.5 text-sm font-semibold text-neutral-800 transition-colors hover:bg-neutral-50 disabled:opacity-50"
+                          >
+                            {testingReceipt ? (
+                              <span className="loading loading-spinner loading-xs" />
+                            ) : (
+                              <Receipt className="h-4 w-4" />
+                            )}
+                            Test Receipt
+                          </button>
+                          <button
+                            type="button"
+                            onClick={onTestBill}
+                            disabled={testingBill}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-300 px-3 py-2.5 text-sm font-semibold text-neutral-800 transition-colors hover:bg-neutral-50 disabled:opacity-50"
+                          >
+                            {testingBill ? (
+                              <span className="loading loading-spinner loading-xs" />
+                            ) : (
+                              <FileText className="h-4 w-4" />
+                            )}
+                            Test Bill
+                          </button>
+                        </>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={onViewLogs}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-300 px-3 py-2.5 text-sm font-semibold text-neutral-800 transition-colors hover:bg-neutral-50"
+                      >
+                        <Eye className="h-4 w-4" />
+                        View Logs
+                      </button>
+                    </div>
+                    {onDelete ? (
+                      <button
+                        type="button"
+                        onClick={onDelete}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete Printer
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             )}
     </SideDrawer>

@@ -1,6 +1,7 @@
 "use client";
 
 import { Printer, X } from "lucide-react";
+import { getPrinterEndpointLabel } from "@/lib/printers/transport/isPrinterReady";
 
 export const PRINTER_SELECTION_MODAL_CLOSED = {
   order: null,
@@ -85,9 +86,7 @@ export default function PrinterSelectionModal({
                   <div className="flex-1">
                     <p className="font-medium text-gray-900">{printer.name}</p>
                     <p className="text-xs text-gray-500">
-                      {printer.connectionType === "usb"
-                        ? "USB (auto-detect)"
-                        : `${printer.localIp}:${printer.port}`}
+                      {getPrinterEndpointLabel(printer)}
                       {printer.isActive ? (
                         <span className="ml-2 text-green-600">● Active</span>
                       ) : (

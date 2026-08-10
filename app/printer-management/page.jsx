@@ -83,77 +83,57 @@ export default function PrinterManagementPage() {
       <PosChromeHeader onOpenCashDrawer={handleOpenCashDrawer} />
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-gray-50 pb-[env(safe-area-inset-bottom)]">
-        <div className="mx-auto max-w-6xl p-4 md:p-6">
-          <div className="mb-6">
+        <div className="mx-auto max-w-7xl p-4 md:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <h1 className="text-xl font-bold text-neutral-900 sm:text-2xl">
               Printer Management
             </h1>
-            <p className="mt-0.5 text-sm text-neutral-500">
-              Manage your printers and printing configurations
-            </p>
+            <button
+              type="button"
+              onClick={() => setShowAddPrinterModal(true)}
+              className="btn-primary btn btn-sm w-full sm:w-auto"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add New Printer
+            </button>
           </div>
 
-          {/* Printer Setup Section */}
-          <div className="mb-6 rounded-lg border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-200 p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-orange-100 p-2">
-                    <Printer className="h-5 w-5 text-brand_accent" />
-                  </div>
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    Printers
-                  </h2>
-                </div>
+          <div className="mt-6">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center px-4 py-12 text-center text-gray-500">
+                <span className="loading loading-spinner loading-md text-brand_accent" />
+                <p className="mt-3">Loading printers…</p>
+              </div>
+            ) : printers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-4 px-4 py-12 text-center">
+                <Printer className="mx-auto h-12 w-12 text-gray-400" />
+                <p className="text-gray-500">No printers configured yet</p>
                 <button
+                  type="button"
                   onClick={() => setShowAddPrinterModal(true)}
-                  className="btn-primary btn btn-sm"
+                  className="flex items-center gap-2 rounded-lg bg-brand_accent px-4 py-2 text-sm font-medium text-white transition-all duration-300 hover:bg-brand_accent/90"
                 >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add New Printer
+                  <Plus className="h-4 w-4" />
+                  Add Your First Printer
                 </button>
               </div>
-            </div>
-
-            {/* Receipt Printers */}
-            <div className="p-6">
-              {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <span className="loading loading-spinner loading-lg text-brand_accent"></span>
-                  <span className="ml-3 text-gray-600">
-                    Loading printers...
-                  </span>
-                </div>
-              ) : printers.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-4 text-center">
-                  <Printer className="mx-auto h-12 w-12 text-gray-400" />
-                  <p className="text-gray-500">No printers configured yet</p>
-                  <button
-                    onClick={() => setShowAddPrinterModal(true)}
-                    className="flex items-center gap-2 rounded-lg bg-brand_accent px-4 py-2 text-sm font-medium text-white transition-all duration-300 hover:bg-brand_accent/90"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Your First Printer
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {printers.map((printer) => (
+            ) : (
+              <ul className="grid grid-cols-1 gap-x-3 gap-y-10 pt-6 sm:grid-cols-2 xl:grid-cols-3">
+                {printers.map((printer) => (
+                  <li key={printer._id} className="min-w-0">
                     <PrinterCard
-                      key={printer._id}
                       printer={printer}
                       onDelete={handleDeletePrinter}
                       onUpdate={handleUpdatePrinter}
                     />
-                  ))}
-                </div>
-              )}
-            </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Add Printer Modal */}
       <PrinterSetupModal
         isOpen={showAddPrinterModal}
         onClose={() => setShowAddPrinterModal(false)}

@@ -3,17 +3,10 @@ import { useState } from "react";
 import {
   Printer,
   Wifi,
-  Settings,
-  Edit2,
-  Trash2,
+  Usb,
   CheckCircle,
-  MoreVertical,
-  RotateCcw,
   Eye,
   X,
-  Receipt,
-  Type,
-  FileText,
 } from "lucide-react";
 import PrinterSetupModal from "./PrinterSetupModal";
 import { createTestPrintJob } from "@/lib/api/fetchApi";
@@ -39,9 +32,17 @@ import { printPrinterFontTest } from "@/lib/printers/printPrinterFontTest";
 import { isUsbPrinter } from "@/lib/printers/transport/isUsbPrinter";
 import { getPrinterEndpointLabel } from "@/lib/printers/transport/isPrinterReady";
 
+/** Card enable toggle is on if any print role is still active. */
+function isPrinterCardEnabled(printer) {
+  return Boolean(
+    printer?.forTakeaway || printer?.forDineIn || printer?.forReceipt,
+  );
+}
+
 export default function PrinterCard({ printer, onDelete, onUpdate }) {
   const { storeProfile } = useMenuContext();
   const [showEditModal, setShowEditModal] = useState(false);
+  const [isTogglingEnabled, setIsTogglingEnabled] = useState(false);
   const [testingPrinter, setTestingPrinter] = useState(false);
   const [testingFonts, setTestingFonts] = useState(false);
   const [testingReceipt, setTestingReceipt] = useState(false);
@@ -80,15 +81,40 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
     setQueueLogCallback(addLog);
   };
 
-  const handleEdit = () => {
-    setShowEditModal(true);
-  };
-
   const handleDelete = () => {
     if (confirm("Are you sure you want to delete this printer?")) {
       onDelete(printer._id);
+      setShowEditModal(false);
     }
   };
+
+  const cardEnabled = isPrinterCardEnabled(printer);
+
+  async function handleEnableToggle(nextEnabled) {
+    if (isTogglingEnabled) return;
+
+    const patch = nextEnabled
+      ? {
+          // Turn on kitchen roles; leave receipt as-is (edit drawer still controls it).
+          forTakeaway: true,
+          forDineIn: true,
+        }
+      : {
+          forTakeaway: false,
+          forDineIn: false,
+          forReceipt: false,
+        };
+
+    setIsTogglingEnabled(true);
+    try {
+      await onUpdate(printer._id, {
+        ...printer,
+        ...patch,
+      });
+    } finally {
+      setIsTogglingEnabled(false);
+    }
+  }
 
   const runPrintTest = async (includeLogo = true) => {
     const setLoading = includeLogo ? setTestingPrinter : setTestingPrinterNoLogo;
@@ -410,261 +436,107 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
 
   return (
     <>
-      <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
-        {/* Main Printer Info */}
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg">
-              <Printer className="size-6" />
-            </div>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setShowEditModal(true)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setShowEditModal(true);
+          }
+        }}
+        className={`relative h-full cursor-pointer rounded-xl border border-gray-200 bg-white pt-10 shadow-sm transition-shadow hover:shadow-md ${
+          cardEnabled ? "" : "opacity-60"
+        }`}
+      >
+        {/* Overlapping printer icon */}
+        <div className="pointer-events-none absolute left-1/2 top-0 z-10 flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 border-white bg-orange-50 text-brand_accent shadow-md">
+          <Printer className="size-6" strokeWidth={1.75} />
+        </div>
 
-            <div className="flex-1">
-              <div className="mb-1 flex flex-wrap items-center gap-2">
-                <h4 className="font-medium text-gray-900">{printer.name}</h4>
-                {isUsbPrinter(printer) ? (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-                    USB
-                  </span>
-                ) : null}
-                {isTsplPrinter(printer) ? (
-                  <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
-                    Label Printer (TSPL)
-                  </span>
-                ) : isStarPrntPrinter(printer) ? (
-                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                    Docket Printer (StarPRNT)
-                  </span>
-                ) : (
-                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
-                    Docket Printer (ESC/POS)
-                  </span>
-                )}
-              </div>
+        {/* Enable toggle */}
+        <div
+          className="absolute right-3 top-3 z-20"
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          <label
+            className="flex cursor-pointer items-center"
+            title={
+              cardEnabled
+                ? "Disable this printer for all order types and receipts"
+                : "Enable takeaway and dine-in printing"
+            }
+          >
+            <span className="sr-only">
+              {cardEnabled ? "Disable printer" : "Enable printer"}
+            </span>
+            <input
+              type="checkbox"
+              className="toggle toggle-success toggle-md"
+              checked={cardEnabled}
+              disabled={isTogglingEnabled}
+              onChange={(event) => handleEnableToggle(event.target.checked)}
+            />
+          </label>
+        </div>
 
-              <div className="flex items-center gap-4 text-sm text-gray-600">
-                <div className="flex items-center gap-1">
-                  <Wifi className="h-3 w-3" />
-                  <span>{getPrinterEndpointLabel(printer)}</span>
-                </div>
-              </div>
+        <div className="flex flex-col items-center px-4 pb-5 text-center">
+          <h4 className="text-base font-semibold text-gray-900">
+            {printer.name}
+          </h4>
 
-              {/* Order Type Indicators */}
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                {printer.forReceipt && (
-                  <span className="flex items-center gap-1 rounded-full bg-teal-100 px-2 py-1 text-teal-800">
+          <div className="mt-3 flex w-full flex-col items-center gap-2.5">
+            <span
+              className={`inline-flex size-9 items-center justify-center rounded-full ${
+                isUsbPrinter(printer)
+                  ? "bg-amber-100 text-amber-800"
+                  : "bg-sky-100 text-sky-700"
+              }`}
+              title={isUsbPrinter(printer) ? "USB" : "Network"}
+              aria-label={isUsbPrinter(printer) ? "USB connection" : "Network connection"}
+            >
+              {isUsbPrinter(printer) ? (
+                <Usb className="size-4" strokeWidth={2} />
+              ) : (
+                <Wifi className="size-4" strokeWidth={2} />
+              )}
+            </span>
+
+            <p className="text-sm text-gray-600">
+              {getPrinterEndpointLabel(printer)}
+            </p>
+
+            {(printer.forReceipt ||
+              (Array.isArray(printer.groupIds) &&
+                printer.groupIds.length > 0)) && (
+              <div className="flex flex-wrap items-center justify-center gap-1.5">
+                {printer.forReceipt ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2.5 py-1 text-xs font-medium text-teal-800">
                     <CheckCircle className="h-3 w-3" />
                     Receipt
                   </span>
-                )}
-                {printer.forTakeaway && (
-                  <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-green-700">
-                    <CheckCircle className="h-3 w-3" />
-                    Takeaway
-                  </span>
-                )}
-                {printer.forDineIn && (
-                  <span className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-blue-700">
-                    <CheckCircle className="h-3 w-3" />
-                    Dine-in
-                  </span>
-                )}
-                {!printer.forReceipt &&
-                  !printer.forTakeaway &&
-                  !printer.forDineIn && (
-                  <span className="text-gray-400">No roles assigned</span>
-                )}
+                ) : null}
+                {(printer.groupIds || []).map((gid) => {
+                  const meta = PRINTER_ROUTING_GROUPS.find((g) => g.id === gid);
+                  const label = meta?.name || gid;
+                  const isBackup = gid === "backup";
+                  return (
+                    <span
+                      key={gid}
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                        isBackup
+                          ? "bg-amber-100 text-amber-800"
+                          : "bg-orange-100 text-orange-700"
+                      }`}
+                    >
+                      {label}
+                    </span>
+                  );
+                })}
               </div>
-
-              {/* Item Group Indicators — only shown when the printer has a
-                  group filter set. Empty groupIds means "prints everything" so
-                  we hide the row entirely to avoid noise. */}
-              {Array.isArray(printer.groupIds) &&
-                printer.groupIds.length > 0 && (
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                    <span className="text-gray-400">Prints:</span>
-                    {printer.groupIds.map((gid) => {
-                      const meta = PRINTER_ROUTING_GROUPS.find(
-                        (g) => g.id === gid,
-                      );
-                      const label = meta?.name || gid;
-                      const isBackup = gid === "backup";
-                      return (
-                        <span
-                          key={gid}
-                          className={`rounded-full px-2 py-1 ${
-                            isBackup
-                              ? "bg-amber-100 text-amber-800"
-                              : "bg-orange-100 text-orange-700"
-                          }`}
-                        >
-                          {label}
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="dropdown dropdown-end">
-            <div tabIndex={0} role="button" className="btn btn-ghost btn-sm">
-              <MoreVertical className="h-4 w-4" />
-            </div>
-            <ul
-              tabIndex={0}
-              className="menu dropdown-content z-[1] w-52 rounded-box bg-base-100 p-2 shadow"
-            >
-              <li className="hidden">
-                <button
-                  onClick={handleAggressiveTestPrinter}
-                  disabled={aggressiveTestingPrinter}
-                  className="flex items-center gap-2"
-                >
-                  {aggressiveTestingPrinter ? (
-                    <>
-                      <div className="h-4 w-4 animate-spin rounded-full border border-red-300 border-t-red-600"></div>
-                      Aggressive Testing...
-                    </>
-                  ) : (
-                    <>
-                      <RotateCcw className="h-4 w-4" />
-                      Aggressive Testing
-                    </>
-                  )}
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={handleTestPrinter}
-                  disabled={testingPrinter || testingPrinterNoLogo}
-                  className="flex items-center gap-2"
-                >
-                  {testingPrinter ? (
-                    <>
-                      <div className="h-4 w-4 animate-spin rounded-full border border-blue-300 border-t-blue-600"></div>
-                      Printing...
-                    </>
-                  ) : (
-                    <>
-                      <Settings className="h-4 w-4" />
-                      Print Test
-                    </>
-                  )}
-                </button>
-              </li>
-              {!isTsplPrinter(printer) ? (
-                <li>
-                  <button
-                    onClick={handleTestPrinterNoLogo}
-                    disabled={testingPrinter || testingPrinterNoLogo}
-                    className="flex items-center gap-2"
-                  >
-                    {testingPrinterNoLogo ? (
-                      <>
-                        <div className="h-4 w-4 animate-spin rounded-full border border-blue-300 border-t-blue-600"></div>
-                        Printing...
-                      </>
-                    ) : (
-                      <>
-                        <Settings className="h-4 w-4" />
-                        Print Test (no logo)
-                      </>
-                    )}
-                  </button>
-                </li>
-              ) : null}
-              {!isTsplPrinter(printer) ? (
-                <li>
-                  <button
-                    onClick={handleTestFonts}
-                    disabled={testingFonts}
-                    className="flex items-center gap-2"
-                  >
-                    {testingFonts ? (
-                      <>
-                        <div className="h-4 w-4 animate-spin rounded-full border border-indigo-300 border-t-indigo-600"></div>
-                        Printing Fonts...
-                      </>
-                    ) : (
-                      <>
-                        <Type className="h-4 w-4" />
-                        Test Fonts
-                      </>
-                    )}
-                  </button>
-                </li>
-              ) : null}
-              {printer.forReceipt && !isTsplPrinter(printer) ? (
-                <>
-                  <li>
-                    <button
-                      onClick={handleTestReceiptPrinter}
-                      disabled={testingReceipt}
-                      className="flex items-center gap-2"
-                    >
-                      {testingReceipt ? (
-                        <>
-                          <div className="h-4 w-4 animate-spin rounded-full border border-teal-300 border-t-teal-600"></div>
-                          Printing Receipt...
-                        </>
-                      ) : (
-                        <>
-                          <Receipt className="h-4 w-4" />
-                          Test Receipt
-                        </>
-                      )}
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      onClick={handleTestBillPrinter}
-                      disabled={testingBill}
-                      className="flex items-center gap-2"
-                    >
-                      {testingBill ? (
-                        <>
-                          <div className="h-4 w-4 animate-spin rounded-full border border-teal-300 border-t-teal-600"></div>
-                          Printing Bill...
-                        </>
-                      ) : (
-                        <>
-                          <FileText className="h-4 w-4" />
-                          Test Bill
-                        </>
-                      )}
-                    </button>
-                  </li>
-                </>
-              ) : null}
-              <li>
-                <button
-                  onClick={() => setShowLogsModal(true)}
-                  className="flex items-center gap-2"
-                >
-                  <Eye className="h-4 w-4" />
-                  View Logs
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={handleEdit}
-                  className="flex items-center gap-2"
-                >
-                  <Edit2 className="h-4 w-4" />
-                  Edit Printer
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={handleDelete}
-                  className="flex items-center gap-2 text-error"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete Printer
-                </button>
-              </li>
-            </ul>
+            )}
           </div>
         </div>
       </div>
@@ -756,6 +628,20 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
         }}
         mode="edit"
         printer={printer}
+        onPrintTest={handleTestPrinter}
+        onPrintTestNoLogo={handleTestPrinterNoLogo}
+        onTestFonts={handleTestFonts}
+        onTestReceipt={handleTestReceiptPrinter}
+        onTestBill={handleTestBillPrinter}
+        onViewLogs={() => setShowLogsModal(true)}
+        onDelete={handleDelete}
+        actionStatus={{
+          testingPrinter,
+          testingPrinterNoLogo,
+          testingFonts,
+          testingReceipt,
+          testingBill,
+        }}
       />
     </>
   );
