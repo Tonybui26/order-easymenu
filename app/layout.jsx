@@ -1,4 +1,5 @@
 import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { NextAuthProvider } from "@/lib/auth/nextAuthProvider";
 import { GlobalAppContextProvider } from "@/components/context/GlobalAppContext";
@@ -17,6 +18,12 @@ const inter = Inter({
   display: "swap",
 });
 
+const quicksand = localFont({
+  src: "./fonts/Quicksand/Quicksand-VariableFont_wght.ttf",
+  display: "swap",
+  weight: "300 700",
+  variable: "--font-quicksand",
+});
 export const metadata = {
   title: "Order Manager",
   description: "GoEasyMenu - Order Manager by GoEasyMenu",
@@ -42,7 +49,7 @@ export default async function RootLayout({ children }) {
   }
 
   return (
-    <html lang="en">
+    <html lang="en" className={quicksand.variable}>
       <body className={`${inter.className} min-h-[100vh] antialiased`}>
         <VersionBanner />
         <NextAuthProvider>

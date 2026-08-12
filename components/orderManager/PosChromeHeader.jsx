@@ -2,7 +2,13 @@
 
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Folder, PanelBottomOpen, Printer, QrCode, RefreshCw } from "lucide-react";
+import {
+  Folder,
+  PanelBottomOpen,
+  Printer,
+  QrCode,
+  RefreshCw,
+} from "lucide-react";
 import { useMenuContext } from "@/components/context/MenuContext";
 import PosHeaderNavMenu from "./PosHeaderNavMenu";
 import Logo from "../../public/images/logo.svg";
@@ -79,7 +85,7 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
           className="size-8 xl:size-9"
           priority
         />
-        <span className="text-base font-bold text-white xl:text-lg">
+        <span className="font-brand text-lg font-extrabold text-white xl:text-lg">
           Easy<span className="text-brand_accent">Menu</span>
         </span>
       </button>
@@ -88,8 +94,7 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
         {headerActions.map(({ id, label, Icon, href }) => {
           const isActive =
             href &&
-            (pathname === href ||
-              (href !== "/" && pathname?.startsWith(href)));
+            (pathname === href || (href !== "/" && pathname?.startsWith(href)));
 
           return (
             <button

@@ -1,17 +1,10 @@
 import Image from "next/image";
-import localFont from "next/font/local";
 import Logo from "../../public/images/logo.svg";
 import SignInForm from "@/components/auth/SignInForm";
 import { getServerUserSession } from "@/lib/auth/serverSession";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getAuthRedirectUrl } from "@/lib/constants/auth";
-
-const quicksand = localFont({
-  src: "../fonts/Quicksand/Quicksand-VariableFont_wght.ttf",
-  display: "swap",
-  weight: "300 700",
-});
 
 export default async function SignInPage({ searchParams }) {
   const callbackUrl = searchParams?.callbackUrl;
@@ -36,9 +29,7 @@ export default async function SignInPage({ searchParams }) {
               className="w-[28px] lg:w-[36px]"
               priority
             />
-            <span
-              className={`${quicksand.className} text-2xl text-gray-900 lg:text-3xl`}
-            >
+            <span className="font-brand text-2xl text-gray-900 lg:text-3xl">
               Easy<span className="text-brand_accent">Menu</span>
             </span>
           </Link>

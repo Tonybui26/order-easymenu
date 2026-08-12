@@ -16,6 +16,9 @@ module.exports = {
         dark_background: "#212121", // #212121,3A3B38
         dark_text: "#ffffff",
       },
+      fontFamily: {
+        brand: ["var(--font-quicksand)", "sans-serif"],
+      },
     },
   },
   plugins: [require("daisyui"), require("tailwindcss-animate")],
