@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useMenuContext } from "@/components/context/MenuContext";
 import PosHeaderNavMenu from "./PosHeaderNavMenu";
+import PosHeaderUserPanel from "./PosHeaderUserPanel";
 import Logo from "../../public/images/logo.svg";
 
 const POS_HEADER_ACTIONS = [
@@ -124,6 +125,7 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
           );
         })}
         <PosHeaderNavMenu />
+        <PosHeaderUserPanel />
       </div>
     </header>
   );
