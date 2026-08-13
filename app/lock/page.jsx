@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, ArrowRight, Delete } from "lucide-react";
 import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
 import Image from "next/image";
-import logoIcon from "../../../easymenu/public/images/goeasymenu-logo-icon.svg";
+import logoIcon from "../../public/images/logo.svg";
 import {
   STAFF_PIN_CODE_MAX_LENGTH,
   STAFF_PIN_CODE_MIN_LENGTH,
