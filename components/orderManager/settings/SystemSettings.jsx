@@ -12,6 +12,8 @@ export default function SystemSettings({
   onDraftPosChange,
   draftSkipKitchenDocketGroupHeaders = false,
   onDraftSkipKitchenDocketGroupHeadersChange,
+  draftStaffPinLockEnabled = false,
+  onDraftStaffPinLockEnabledChange,
 }) {
   const { menuConfig } = useMenuContext();
   const posEnabled = Boolean(menuConfig?.posEnabled);
@@ -35,6 +37,24 @@ export default function SystemSettings({
             checked={Boolean(draftSkipKitchenDocketGroupHeaders)}
             onChange={(checked) =>
               onDraftSkipKitchenDocketGroupHeadersChange?.(checked)
+            }
+          />
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-100 px-6 py-3">
+          <h2 className="text-sm font-semibold text-neutral-900">
+            Staff access
+          </h2>
+        </div>
+        <div className="divide-y divide-gray-100/80">
+          <SettingsToggleRow
+            title="PIN lock screen"
+            description="After sign-in, staff switch users with a PIN. Header Logout returns to the lock screen; only Store managers can fully log out of the app. Requires PIN codes on staff accounts in Admin."
+            checked={Boolean(draftStaffPinLockEnabled)}
+            onChange={(checked) =>
+              onDraftStaffPinLockEnabledChange?.(checked)
             }
           />
         </div>

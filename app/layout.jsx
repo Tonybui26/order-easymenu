@@ -55,17 +55,17 @@ export default async function RootLayout({ children }) {
       <body className={`${inter.className} min-h-[100vh] antialiased`}>
         <VersionBanner />
         <NextAuthProvider>
-          <ActiveOperatorProvider>
-            <GlobalAppContextProvider userData={user}>
-              <MenuContextProvider data={menuData}>
+          <GlobalAppContextProvider userData={user}>
+            <MenuContextProvider data={menuData}>
+              <ActiveOperatorProvider>
                 <RequireActiveOperator>
                   {children}
                   <PrintToastHost />
                   <PosImmersiveHost />
                 </RequireActiveOperator>
-              </MenuContextProvider>
-            </GlobalAppContextProvider>
-          </ActiveOperatorProvider>
+              </ActiveOperatorProvider>
+            </MenuContextProvider>
+          </GlobalAppContextProvider>
         </NextAuthProvider>
         <Toaster position="bottom-right" />
       </body>

@@ -23,7 +23,11 @@ import { isNativeApp, getPlatform } from "../../lib/helper/platformDetection";
 import { useRouter } from "next/navigation";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
-import { isStoreManagerRole } from "@/lib/staff/staffRoles";
+import { useMenuContext } from "@/components/context/MenuContext";
+import {
+  isStaffPinLockEnabled,
+  isStoreManagerRole,
+} from "@/lib/staff/staffRoles";
 import {
   NOTIFICATION_SOUND_OPTIONS,
   NOTIFICATION_SOUND_REPLAY_INTERVAL_MS,
@@ -49,7 +53,10 @@ export default function MoreMenuButton({
   const [isTestingSound, setIsTestingSound] = useState(false);
   const router = useRouter();
   const { activeOperator, storeLogout } = useActiveOperator();
-  const canStoreLogout = isStoreManagerRole(activeOperator?.role);
+  const { menuConfig } = useMenuContext();
+  const pinLockEnabled = isStaffPinLockEnabled(menuConfig);
+  const canStoreLogout =
+    !pinLockEnabled || isStoreManagerRole(activeOperator?.role);
   const {
     notificationSoundId,
     setNotificationSoundId,

@@ -1,6 +1,8 @@
 "use client";
 
 import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
+import { useMenuContext } from "@/components/context/MenuContext";
+import { isStaffPinLockEnabled } from "@/lib/staff/staffRoles";
 
 function getStaffDisplayName(operator) {
   const name = String(operator?.name || "").trim();
@@ -16,7 +18,9 @@ function getStaffDisplayName(operator) {
  * Current staff user + lock affordance (far right of POS chrome header).
  */
 export default function PosHeaderUserPanel() {
-  const { activeOperator, lock } = useActiveOperator();
+  const { activeOperator, lock, storeLogout } = useActiveOperator();
+  const { menuConfig } = useMenuContext();
+  const pinLockEnabled = isStaffPinLockEnabled(menuConfig);
   const displayName = getStaffDisplayName(activeOperator);
 
   return (
@@ -26,7 +30,7 @@ export default function PosHeaderUserPanel() {
       </span>
       <button
         type="button"
-        onClick={lock}
+        onClick={pinLockEnabled ? lock : storeLogout}
         className="mt-0.5 text-xs font-normal text-white/55 transition-colors hover:text-white/85 active:text-white"
       >
         Logout

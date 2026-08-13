@@ -18,11 +18,15 @@ import {
   readActiveOperator,
   writeActiveOperator,
 } from "@/lib/staff/activeOperatorStorage";
+import { useMenuContext } from "@/components/context/MenuContext";
+import { isStaffPinLockEnabled } from "@/lib/staff/staffRoles";
 
 const ActiveOperatorContext = createContext(null);
 
 export function ActiveOperatorProvider({ children }) {
   const { data: session, status } = useSession();
+  const { menuConfig, dataLoaded } = useMenuContext();
+  const pinLockEnabled = isStaffPinLockEnabled(menuConfig);
   const router = useRouter();
   const pathname = usePathname();
   const [activeOperator, setActiveOperator] = useState(null);
@@ -38,6 +42,8 @@ export function ActiveOperatorProvider({ children }) {
       return;
     }
 
+    if (!dataLoaded) return;
+
     const stored = readActiveOperator();
     if (stored) {
       setActiveOperator(stored);
@@ -45,7 +51,7 @@ export function ActiveOperatorProvider({ children }) {
       return;
     }
 
-    if (!isTerminalLocked()) {
+    if (!pinLockEnabled || !isTerminalLocked()) {
       const seeded = operatorFromSessionUser(session?.user);
       if (seeded) {
         writeActiveOperator(seeded);
@@ -54,13 +60,14 @@ export function ActiveOperatorProvider({ children }) {
     }
 
     setHydrated(true);
-  }, [session?.user, status]);
+  }, [dataLoaded, pinLockEnabled, session?.user, status]);
 
   const lock = useCallback(() => {
+    if (!pinLockEnabled) return;
     clearActiveOperator({ locked: true });
     setActiveOperator(null);
     if (pathname !== "/lock") router.push("/lock");
-  }, [pathname, router]);
+  }, [pathname, pinLockEnabled, router]);
 
   const unlock = useCallback(async (pinCode) => {
     const result = await verifyStaffPinAction(pinCode);

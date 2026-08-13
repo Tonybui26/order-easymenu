@@ -23,21 +23,28 @@ export default function SettingsPage() {
   const savedSkipKitchenDocketGroupHeaders = Boolean(
     menuConfig?.skipKitchenDocketGroupHeaders,
   );
+  const savedStaffPinLockEnabled = Boolean(menuConfig?.staffPinLockEnabled);
   const [draftPosConfig, setDraftPosConfig] = useState(savedPosConfig);
   const [draftSkipKitchenDocketGroupHeaders, setDraftSkipKitchenDocketGroupHeaders] =
     useState(savedSkipKitchenDocketGroupHeaders);
+  const [draftStaffPinLockEnabled, setDraftStaffPinLockEnabled] = useState(
+    savedStaffPinLockEnabled,
+  );
   const [isSaving, setIsSaving] = useState(false);
 
   const isDirty = useMemo(
     () =>
       !posConfigDraftEquals(draftPosConfig, savedPosConfig) ||
       draftSkipKitchenDocketGroupHeaders !==
-        savedSkipKitchenDocketGroupHeaders,
+        savedSkipKitchenDocketGroupHeaders ||
+      draftStaffPinLockEnabled !== savedStaffPinLockEnabled,
     [
       draftPosConfig,
       savedPosConfig,
       draftSkipKitchenDocketGroupHeaders,
       savedSkipKitchenDocketGroupHeaders,
+      draftStaffPinLockEnabled,
+      savedStaffPinLockEnabled,
     ],
   );
 
@@ -47,8 +54,14 @@ export default function SettingsPage() {
       setDraftSkipKitchenDocketGroupHeaders(
         savedSkipKitchenDocketGroupHeaders,
       );
+      setDraftStaffPinLockEnabled(savedStaffPinLockEnabled);
     }
-  }, [savedPosConfig, savedSkipKitchenDocketGroupHeaders, isDirty]);
+  }, [
+    savedPosConfig,
+    savedSkipKitchenDocketGroupHeaders,
+    savedStaffPinLockEnabled,
+    isDirty,
+  ]);
 
   async function handleSaveSettings() {
     if (!isDirty || isSaving || !userData?.ownerEmail) return;
@@ -60,6 +73,7 @@ export default function SettingsPage() {
       const configToSave = {
         ...freshConfig,
         skipKitchenDocketGroupHeaders: draftSkipKitchenDocketGroupHeaders,
+        staffPinLockEnabled: draftStaffPinLockEnabled,
         pos: {
           ...resolvePosConfig(freshConfig),
           ...draftPosConfig,
@@ -108,6 +122,8 @@ export default function SettingsPage() {
               onDraftSkipKitchenDocketGroupHeadersChange={
                 setDraftSkipKitchenDocketGroupHeaders
               }
+              draftStaffPinLockEnabled={draftStaffPinLockEnabled}
+              onDraftStaffPinLockEnabledChange={setDraftStaffPinLockEnabled}
             />
           ) : (
             <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-neutral-500 shadow-sm">
