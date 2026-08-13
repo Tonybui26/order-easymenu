@@ -69,7 +69,7 @@ function LockScreen() {
   }
 
   const keyClassName =
-    "flex aspect-square items-center justify-center rounded-lg bg-[#ffffff36] text-4xl text-white font-semibold text-gray-900 transition active:scale-95 disabled:opacity-50";
+    "flex aspect-[1.3] items-center justify-center rounded-lg bg-[#ffffff36] text-4xl text-white font-semibold text-gray-900 transition active:scale-95 disabled:opacity-50";
 
   return (
     <div className="bg-darken_primary flex min-h-[100vh] items-center justify-between gap-10 px-4 py-12 sm:px-20">
@@ -129,7 +129,7 @@ function LockScreen() {
               type="button"
               onClick={submitPin}
               disabled={isSubmitting || !canSubmit}
-              className="flex aspect-square items-center justify-center rounded-2xl bg-brand_accent text-white shadow-sm transition active:scale-95"
+              className="flex aspect-[1.3] items-center justify-center rounded-lg bg-brand_accent text-white shadow-sm transition active:scale-95"
               aria-label="Unlock"
             >
               <ArrowRight className="size-8" strokeWidth={2.25} />
