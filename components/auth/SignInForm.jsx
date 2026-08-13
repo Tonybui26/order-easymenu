@@ -1,10 +1,14 @@
 "use client";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Eye, EyeOff, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { getAuthRedirectUrl } from "@/lib/constants/auth";
+import {
+  operatorFromSessionUser,
+  writeActiveOperator,
+} from "@/lib/staff/activeOperatorStorage";
 
 export default function SignInForm() {
   const [username, setUsername] = useState("");
@@ -35,6 +39,9 @@ export default function SignInForm() {
       }
       console.log(result);
       if (result?.ok) {
+        const session = await getSession();
+        const operator = operatorFromSessionUser(session?.user);
+        if (operator) writeActiveOperator(operator);
         router.push(getAuthRedirectUrl());
         router.refresh();
       }

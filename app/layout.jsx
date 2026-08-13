@@ -11,6 +11,8 @@ import { Toaster } from "react-hot-toast";
 import VersionBanner from "@/components/VersionBanner";
 import PrintToastHost from "@/components/print/PrintToastHost";
 import PosImmersiveHost from "@/components/orderManager/PosImmersiveHost";
+import { ActiveOperatorProvider } from "@/components/context/ActiveOperatorContext";
+import RequireActiveOperator from "@/components/auth/RequireActiveOperator";
 
 const inter = Inter({
   weight: ["400", "500", "600", "700", "800", "900"],
@@ -53,13 +55,17 @@ export default async function RootLayout({ children }) {
       <body className={`${inter.className} min-h-[100vh] antialiased`}>
         <VersionBanner />
         <NextAuthProvider>
-          <GlobalAppContextProvider userData={user}>
-            <MenuContextProvider data={menuData}>
-              {children}
-              <PrintToastHost />
-              <PosImmersiveHost />
-            </MenuContextProvider>
-          </GlobalAppContextProvider>
+          <ActiveOperatorProvider>
+            <GlobalAppContextProvider userData={user}>
+              <MenuContextProvider data={menuData}>
+                <RequireActiveOperator>
+                  {children}
+                  <PrintToastHost />
+                  <PosImmersiveHost />
+                </RequireActiveOperator>
+              </MenuContextProvider>
+            </GlobalAppContextProvider>
+          </ActiveOperatorProvider>
         </NextAuthProvider>
         <Toaster position="bottom-right" />
       </body>

@@ -61,6 +61,7 @@ export const config = {
   matcher: [
     // Protected pages that require authentication
     "/",
+    "/lock",
     "/pos",
     "/pos/held",
     "/order-history",

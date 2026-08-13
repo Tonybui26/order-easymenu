@@ -1,28 +1,23 @@
 "use client";
 
-import { useSession } from "next-auth/react";
-import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
+import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
 
-function getStaffDisplayName(userData, sessionUser) {
-  const name = String(userData?.name || sessionUser?.name || "").trim();
+function getStaffDisplayName(operator) {
+  const name = String(operator?.name || "").trim();
   if (name) return name;
 
-  const username = String(
-    userData?.username || sessionUser?.username || "",
-  ).trim();
+  const username = String(operator?.username || "").trim();
   if (username) return username;
 
   return "Staff";
 }
 
 /**
- * Current staff user + logout affordance (far right of POS chrome header).
- * Logout action wired later.
+ * Current staff user + lock affordance (far right of POS chrome header).
  */
 export default function PosHeaderUserPanel() {
-  const { userData } = useGlobalAppContext();
-  const { data: session } = useSession();
-  const displayName = getStaffDisplayName(userData, session?.user);
+  const { activeOperator, lock } = useActiveOperator();
+  const displayName = getStaffDisplayName(activeOperator);
 
   return (
     <div className="flex shrink-0 flex-col items-end justify-center text-right">
@@ -31,7 +26,7 @@ export default function PosHeaderUserPanel() {
       </span>
       <button
         type="button"
-        onClick={() => {}}
+        onClick={lock}
         className="mt-0.5 text-xs font-normal text-white/55 transition-colors hover:text-white/85 active:text-white"
       >
         Logout

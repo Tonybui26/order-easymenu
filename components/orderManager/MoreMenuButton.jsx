@@ -19,10 +19,11 @@ import {
   Package2,
   Settings,
 } from "lucide-react";
-import { signOut } from "next-auth/react";
 import { isNativeApp, getPlatform } from "../../lib/helper/platformDetection";
 import { useRouter } from "next/navigation";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
+import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
+import { isStoreManagerRole } from "@/lib/staff/staffRoles";
 import {
   NOTIFICATION_SOUND_OPTIONS,
   NOTIFICATION_SOUND_REPLAY_INTERVAL_MS,
@@ -47,6 +48,8 @@ export default function MoreMenuButton({
   const [isSmallScreen, setIsSmallScreen] = useState(false);
   const [isTestingSound, setIsTestingSound] = useState(false);
   const router = useRouter();
+  const { activeOperator, storeLogout } = useActiveOperator();
+  const canStoreLogout = isStoreManagerRole(activeOperator?.role);
   const {
     notificationSoundId,
     setNotificationSoundId,
@@ -432,22 +435,20 @@ export default function MoreMenuButton({
             })}
           </div>
 
-          {/* Footer */}
-          <div className="mt-6 flex justify-end">
-            {/* Logout Button - moved to bottom right */}
-            <button
-              onClick={async () => {
-                console.log("Logging out", window.location.origin);
-                setShowModal(false);
-                await signOut({ redirect: false });
-                window.location.href = `${window.location.origin}/signin`;
-              }}
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-700"
-            >
-              <LogOut className="size-4" />
-              <span>Logout</span>
-            </button>
-          </div>
+          {canStoreLogout ? (
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={async () => {
+                  setShowModal(false);
+                  await storeLogout();
+                }}
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-700"
+              >
+                <LogOut className="size-4" />
+                <span>Logout</span>
+              </button>
+            </div>
+          ) : null}
         </div>
         <form
           method="dialog"
