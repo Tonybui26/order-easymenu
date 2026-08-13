@@ -1,51 +1,39 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useSession } from "next-auth/react";
-import { AlertCircle, Delete } from "lucide-react";
+import { AlertCircle, ArrowRight, Delete } from "lucide-react";
 import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
+import Image from "next/image";
+import logoIcon from "../../../easymenu/public/images/goeasymenu-logo-icon.svg";
 import {
   STAFF_PIN_CODE_MAX_LENGTH,
   STAFF_PIN_CODE_MIN_LENGTH,
 } from "@/lib/staff/staffRoles";
 import { getAuthRedirectUrl } from "@/lib/constants/auth";
 
-const KEYPAD = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "del"];
+const DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
 function LockScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { data: session } = useSession();
   const { unlock } = useActiveOperator();
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const storeName = session?.user?.storeName || "Order Manager";
   const callbackUrl = searchParams.get("callbackUrl");
+  const canSubmit =
+    pin.length >= STAFF_PIN_CODE_MIN_LENGTH &&
+    pin.length <= STAFF_PIN_CODE_MAX_LENGTH;
 
-  const pinDots = useMemo(
-    () =>
-      Array.from({ length: STAFF_PIN_CODE_MAX_LENGTH }, (_, index) => ({
-        filled: index < pin.length,
-      })),
-    [pin],
-  );
-
-  async function submitPin(nextPin) {
-    if (isSubmitting) return;
-    if (
-      nextPin.length < STAFF_PIN_CODE_MIN_LENGTH ||
-      nextPin.length > STAFF_PIN_CODE_MAX_LENGTH
-    ) {
-      return;
-    }
+  async function submitPin() {
+    if (isSubmitting || !canSubmit) return;
 
     setIsSubmitting(true);
     setError("");
     try {
-      const result = await unlock(nextPin);
+      const result = await unlock(pin);
       if (!result.ok) {
         setError(
           result.status === 429
@@ -67,14 +55,11 @@ function LockScreen() {
   function handleDigit(digit) {
     if (isSubmitting) return;
     setError("");
-    setPin((current) => {
-      if (current.length >= STAFF_PIN_CODE_MAX_LENGTH) return current;
-      const next = `${current}${digit}`;
-      if (next.length === STAFF_PIN_CODE_MAX_LENGTH) {
-        queueMicrotask(() => submitPin(next));
-      }
-      return next;
-    });
+    setPin((current) =>
+      current.length >= STAFF_PIN_CODE_MAX_LENGTH
+        ? current
+        : `${current}${digit}`,
+    );
   }
 
   function handleDelete() {
@@ -83,85 +68,74 @@ function LockScreen() {
     setPin((current) => current.slice(0, -1));
   }
 
+  const keyClassName =
+    "flex aspect-square items-center justify-center rounded-lg bg-[#ffffff36] text-4xl text-white font-semibold text-gray-900 transition active:scale-95 disabled:opacity-50";
+
   return (
-    <div className="flex min-h-[100vh] items-center justify-center bg-[#fff8f4] px-4 py-12">
-      <div className="w-full max-w-sm rounded-2xl border-4 border-[#f8e3d8] bg-white p-8 shadow-lg">
-        <div className="text-center">
-          <p className="font-brand text-2xl text-gray-900">
+    <div className="bg-darken_primary flex min-h-[100vh] items-center justify-between gap-10 px-4 py-12 sm:px-20">
+      <div className="mx-auto flex w-full max-w-[800px] justify-between gap-10">
+        <div className="font-brand flex items-center justify-center gap-2">
+          <Image
+            src={logoIcon}
+            alt="EasyMenu"
+            className="size-[57px] xl:size-16"
+          />
+          <h1 className="text-[58px] font-bold text-white xl:text-6xl">
             Easy<span className="text-brand_accent">Menu</span>
-          </p>
-          <h1 className="mt-4 text-xl font-semibold text-gray-900">
-            Enter pin
           </h1>
-          <p className="mt-1 text-sm text-gray-500">{storeName}</p>
         </div>
-
-        <div className="mt-8 flex justify-center gap-2">
-          {pinDots.map((dot, index) => (
-            <span
-              key={index}
-              className={`size-3 rounded-full ${
-                dot.filled ? "bg-brand_accent" : "bg-gray-200"
-              }`}
-            />
-          ))}
-        </div>
-
-        {error ? (
-          <div className="mt-4 flex items-center justify-center gap-2 text-sm text-red-700">
-            <AlertCircle className="size-4 shrink-0" />
-            {error}
+        <div className="w-full max-w-xs rounded-3xl shadow-lg">
+          <div className="flex h-24 items-center justify-center rounded-lg bg-[#ffffff5c] text-2xl tracking-[0.35em] text-gray-900">
+            {pin ? "•".repeat(pin.length) : null}
           </div>
-        ) : (
-          <p className="mt-4 text-center text-sm text-gray-400">
-            {isSubmitting ? "Checking…" : "4–6 digit pin"}
-          </p>
-        )}
 
-        <div className="mt-6 grid grid-cols-3 gap-3">
-          {KEYPAD.map((key) => {
-            if (key === "") {
-              return <span key="empty" />;
-            }
-            if (key === "del") {
-              return (
-                <button
-                  key="del"
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={isSubmitting}
-                  className="flex h-14 items-center justify-center rounded-xl text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
-                  aria-label="Delete"
-                >
-                  <Delete className="size-5" />
-                </button>
-              );
-            }
-            return (
+          {error ? (
+            <div className="mt-3 flex items-center justify-center gap-2 text-sm text-red-700">
+              <AlertCircle className="size-4 shrink-0" />
+              {error}
+            </div>
+          ) : null}
+
+          <div className="mt-6 grid grid-cols-3 gap-4">
+            {DIGITS.map((digit) => (
               <button
-                key={key}
+                key={digit}
                 type="button"
-                onClick={() => handleDigit(key)}
+                onClick={() => handleDigit(digit)}
                 disabled={isSubmitting}
-                className="h-14 rounded-xl text-xl font-semibold text-gray-900 transition hover:bg-[#fff4ee] active:bg-[#f8e3d8] disabled:opacity-50"
+                className={keyClassName}
               >
-                {key}
+                {digit}
               </button>
-            );
-          })}
+            ))}
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={isSubmitting}
+              className={keyClassName}
+              aria-label="Delete"
+            >
+              <Delete className="size-8" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDigit("0")}
+              disabled={isSubmitting}
+              className={keyClassName}
+            >
+              0
+            </button>
+            <button
+              type="button"
+              onClick={submitPin}
+              disabled={isSubmitting || !canSubmit}
+              className="flex aspect-square items-center justify-center rounded-2xl bg-brand_accent text-white shadow-sm transition active:scale-95"
+              aria-label="Unlock"
+            >
+              <ArrowRight className="size-8" strokeWidth={2.25} />
+            </button>
+          </div>
         </div>
-
-        {pin.length >= STAFF_PIN_CODE_MIN_LENGTH &&
-        pin.length < STAFF_PIN_CODE_MAX_LENGTH ? (
-          <button
-            type="button"
-            onClick={() => submitPin(pin)}
-            disabled={isSubmitting}
-            className="mt-6 w-full rounded-xl bg-brand_accent px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand_accent/90 disabled:opacity-70"
-          >
-            Unlock
-          </button>
-        ) : null}
       </div>
     </div>
   );
