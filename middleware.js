@@ -65,6 +65,7 @@ export const config = {
     "/pos",
     "/pos/held",
     "/pos/register",
+    "/pos/register/session",
     "/order-history",
   ],
 };

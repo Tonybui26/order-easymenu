@@ -105,7 +105,7 @@ export default function PosRegister() {
   }
 
   function handleOpen() {
-    // UI only — persist opening float in a follow-up.
+    router.push("/pos/register/session");
   }
 
   const hasEnteredAmount = digits !== "";
