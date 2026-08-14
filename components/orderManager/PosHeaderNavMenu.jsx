@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  Banknote,
   Check,
   ChevronDown,
   Folder,
@@ -31,6 +32,14 @@ const NAV_ITEMS = [
     description: "Parked tickets waiting to resume",
     href: "/pos/held",
     Icon: Folder,
+    requiresPos: true,
+  },
+  {
+    id: "register",
+    label: "POS register",
+    description: "Open and close the till",
+    href: "/pos/register",
+    Icon: Banknote,
     requiresPos: true,
   },
   {
@@ -65,6 +74,12 @@ const NAV_ITEMS = [
 
 function resolveActiveItem(pathname, items) {
   const list = items.length > 0 ? items : NAV_ITEMS;
+  if (
+    pathname === "/pos/register" ||
+    pathname?.startsWith("/pos/register/")
+  ) {
+    return list.find((item) => item.id === "register") || list[0];
+  }
   if (pathname === "/pos/held" || pathname?.startsWith("/pos/held/")) {
     return list.find((item) => item.id === "held") || list[0];
   }
