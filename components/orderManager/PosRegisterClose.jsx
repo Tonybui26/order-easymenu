@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Delete } from "lucide-react";
+import { Delete, X } from "lucide-react";
 import { cn } from "@/lib/helper";
 
 const KEYPAD_ROWS = [
@@ -60,6 +60,7 @@ export default function PosRegisterClose() {
   const [selectedId, setSelectedId] = useState(null);
   const [digits, setDigits] = useState("");
   const [isFinalised, setIsFinalised] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   const selectedDenomination = CASH_DENOMINATIONS.find(
     (denomination) => denomination.id === selectedId,
@@ -105,7 +106,7 @@ export default function PosRegisterClose() {
   }
 
   function handleKey(key) {
-    if (!selectedId) return;
+    if (isFinalised || !selectedId) return;
     if (key === "backspace") {
       setDigits((prev) => prev.slice(0, -1));
       return;
@@ -118,29 +119,44 @@ export default function PosRegisterClose() {
   }
 
   function handleSelectDenomination(id) {
+    if (isFinalised) return;
     setSelectedId(id);
     setDigits(countToDigits(counts[id]));
   }
 
   function handleSubmit() {
-    if (!selectedId) return;
+    if (isFinalised || !selectedId) return;
     const count = parseCount(digits);
     setCounts((prev) => ({ ...prev, [selectedId]: count }));
     setDigits("");
   }
 
   function handleClear() {
+    if (isFinalised) return;
     setCounts({});
     setDigits("");
     setSelectedId(null);
-    setIsFinalised(false);
   }
 
-  function handleFinalise() {
+  function handleFinaliseClick() {
+    setIsConfirmOpen(true);
+  }
+
+  function handleConfirmFinalise() {
+    setIsConfirmOpen(false);
+    if (selectedId != null && digits !== "") {
+      const count = parseCount(digits);
+      setCounts((prev) => ({ ...prev, [selectedId]: count }));
+    }
     setIsFinalised(true);
   }
 
+  function handleCloseRegister() {
+    // UI only — persist close register in a follow-up.
+  }
+
   return (
+    <>
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-4 pb-4 min-[960px]:flex-row">
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-white shadow-[0_16px_40px_rgba(0,0,0,0.25)]">
         <div className="grid grid-cols-[minmax(0,1.6fr)_1fr_1fr_1fr] bg-neutral-200 px-4 py-2.5 text-sm font-bold text-neutral-900">
@@ -180,10 +196,15 @@ export default function PosRegisterClose() {
                 key={denomination.id}
                 type="button"
                 onClick={() => handleSelectDenomination(denomination.id)}
+                disabled={isFinalised}
                 aria-pressed={isSelected}
                 className={cn(
                   "grid w-full grid-cols-[minmax(0,1.6fr)_1fr_1fr_1fr] items-center border-b border-neutral-200 px-4 py-2.5 text-left text-sm transition-colors",
-                  isSelected ? "bg-brand_accent/10" : "hover:bg-neutral-50",
+                  isFinalised
+                    ? "cursor-default"
+                    : isSelected
+                      ? "bg-brand_accent/10"
+                      : "hover:bg-neutral-50",
                 )}
               >
                 <span
@@ -207,28 +228,47 @@ export default function PosRegisterClose() {
           })}
         </div>
 
-        <div className="grid shrink-0 grid-cols-2 gap-3 p-4">
-          <button
-            type="button"
-            onClick={handleClear}
-            className="flex min-h-[3.5rem] items-center justify-center rounded-md bg-[#ef3636] text-base font-bold uppercase tracking-wide text-white transition active:scale-[0.99]"
-          >
-            Clear
-          </button>
-          <button
-            type="button"
-            onClick={handleFinalise}
-            className="flex min-h-[3.5rem] items-center justify-center rounded-md bg-[#2563eb] text-base font-bold uppercase tracking-wide text-white transition active:scale-[0.99]"
-          >
-            Finalise
-          </button>
+        <div
+          className={cn(
+            "grid shrink-0 gap-3 p-4",
+            isFinalised ? "grid-cols-1" : "grid-cols-2",
+          )}
+        >
+          {isFinalised ? (
+            <button
+              type="button"
+              onClick={handleCloseRegister}
+              className="flex min-h-[3.5rem] items-center justify-center rounded-md bg-brand_accent text-base font-bold uppercase tracking-wide text-white transition active:scale-[0.99]"
+            >
+              Close Register
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={handleClear}
+                className="flex min-h-[3.5rem] items-center justify-center rounded-md bg-[#ef3636] text-base font-bold uppercase tracking-wide text-white transition active:scale-[0.99]"
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={handleFinaliseClick}
+                className="flex min-h-[3.5rem] items-center justify-center rounded-md bg-[#2563eb] text-base font-bold uppercase tracking-wide text-white transition active:scale-[0.99]"
+              >
+                Finalise
+              </button>
+            </>
+          )}
         </div>
       </section>
 
       <section className="mx-auto flex w-full max-w-sm shrink-0 flex-col justify-start min-[960px]:mx-0">
         <div className="rounded-3xl bg-white/[0.06] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.35)] ring-1 ring-white/10 sm:p-6">
           <p className="mb-4 flex min-h-[3rem] items-center justify-center text-center text-base leading-snug text-white/70">
-            {instruction}
+            {isFinalised
+              ? "Counts are locked. Close the register to finish."
+              : instruction}
           </p>
           <div
             className={cn(
@@ -247,7 +287,7 @@ export default function PosRegisterClose() {
                     key={key}
                     type="button"
                     onClick={() => handleKey(key)}
-                    disabled={!selectedId}
+                    disabled={isFinalised || !selectedId}
                     className={keyClassName}
                     aria-label="Delete"
                   >
@@ -261,7 +301,7 @@ export default function PosRegisterClose() {
                   key={key}
                   type="button"
                   onClick={() => handleKey(key)}
-                  disabled={!selectedId}
+                  disabled={isFinalised || !selectedId}
                   className={cn(
                     keyClassName,
                     QUICK_AMOUNTS.has(key) && "text-2xl sm:text-3xl",
@@ -276,7 +316,7 @@ export default function PosRegisterClose() {
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={!selectedId}
+            disabled={isFinalised || !selectedId}
             className="mt-5 flex min-h-[3.5rem] w-full items-center justify-center rounded-lg bg-brand_accent text-base font-semibold text-white shadow-sm transition active:scale-95 disabled:opacity-50"
           >
             Submit
@@ -284,5 +324,57 @@ export default function PosRegisterClose() {
         </div>
       </section>
     </div>
+
+    <dialog className={`modal ${isConfirmOpen ? "modal-open" : ""}`}>
+      <div className="modal-box w-[400px] max-w-md">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-neutral-900">
+            Confirm finalise
+          </h3>
+          <button
+            type="button"
+            onClick={() => setIsConfirmOpen(false)}
+            className="btn btn-circle btn-ghost btn-sm"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <p className="mb-2 text-sm text-neutral-600">
+          Are you sure the amount is correct? You won&apos;t be able to change
+          it later.
+        </p>
+        <div className="mb-6 rounded-lg bg-neutral-100 p-4 text-center">
+          <p className="text-sm font-medium text-neutral-500">Cash actual</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-neutral-900">
+            {formatMoney(cashActual)}
+          </p>
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => setIsConfirmOpen(false)}
+            className="flex-1 rounded-xl border border-neutral-300 px-4 py-3 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirmFinalise}
+            className="flex-1 rounded-xl bg-[#2563eb] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8]"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+      <form method="dialog" className="modal-backdrop">
+        <button type="submit" onClick={() => setIsConfirmOpen(false)}>
+          close
+        </button>
+      </form>
+    </dialog>
+    </>
   );
 }
