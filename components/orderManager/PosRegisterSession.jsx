@@ -3,6 +3,7 @@
 import { useState } from "react";
 import PosChromeHeader from "./PosChromeHeader";
 import PosRegisterClose from "./PosRegisterClose";
+import PosRegisterPayInOut from "./PosRegisterPayInOut";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 
 const SESSION_TABS = [
@@ -47,6 +48,7 @@ export default function PosRegisterSession() {
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {activeTab === "close" ? <PosRegisterClose /> : null}
+          {activeTab === "pay-in-out" ? <PosRegisterPayInOut /> : null}
         </div>
       </div>
     </div>
