@@ -5,13 +5,22 @@ import { getServerUserSession } from "@/lib/auth/serverSession";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getAuthRedirectUrl } from "@/lib/constants/auth";
+import { fetchGetMenuByOwnerEmail } from "@/lib/api/fetchApi";
 
 export default async function SignInPage({ searchParams }) {
   const callbackUrl = searchParams?.callbackUrl;
-  const redirectUrl = getAuthRedirectUrl(callbackUrl);
   const userSession = await getServerUserSession();
   if (userSession) {
-    redirect(redirectUrl); // Redirect to callback URL if provided or default
+    let posEnabled = false;
+    if (userSession.ownerEmail) {
+      try {
+        const menu = await fetchGetMenuByOwnerEmail(userSession.ownerEmail);
+        posEnabled = Boolean(menu?.config?.posEnabled);
+      } catch {
+        posEnabled = false;
+      }
+    }
+    redirect(getAuthRedirectUrl(callbackUrl, posEnabled));
   }
 
   return (

@@ -151,13 +151,13 @@ export default function PosRegister() {
       if (!result.success) {
         if (result.status === 409) {
           toast.error(result.error || "Register is already open");
-          router.replace("/pos/register/session");
+          router.replace("/pos");
           return;
         }
         toast.error(result.error || "Failed to open register");
         return;
       }
-      router.push("/pos/register/session");
+      router.push("/pos");
     } finally {
       setIsOpening(false);
     }

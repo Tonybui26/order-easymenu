@@ -13,6 +13,7 @@ import PrintToastHost from "@/components/print/PrintToastHost";
 import PosImmersiveHost from "@/components/orderManager/PosImmersiveHost";
 import { ActiveOperatorProvider } from "@/components/context/ActiveOperatorContext";
 import RequireActiveOperator from "@/components/auth/RequireActiveOperator";
+import RequireOpenRegister from "@/components/auth/RequireOpenRegister";
 
 const inter = Inter({
   weight: ["400", "500", "600", "700", "800", "900"],
@@ -59,9 +60,11 @@ export default async function RootLayout({ children }) {
             <MenuContextProvider data={menuData}>
               <ActiveOperatorProvider>
                 <RequireActiveOperator>
-                  {children}
-                  <PrintToastHost />
-                  <PosImmersiveHost />
+                  <RequireOpenRegister>
+                    {children}
+                    <PrintToastHost />
+                    <PosImmersiveHost />
+                  </RequireOpenRegister>
                 </RequireActiveOperator>
               </ActiveOperatorProvider>
             </MenuContextProvider>

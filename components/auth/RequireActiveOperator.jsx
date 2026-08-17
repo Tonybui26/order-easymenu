@@ -16,6 +16,7 @@ export default function RequireActiveOperator({ children }) {
   const { hydrated, activeOperator } = useActiveOperator();
   const { menuConfig, dataLoaded } = useMenuContext();
   const pinLockEnabled = isStaffPinLockEnabled(menuConfig);
+  const posEnabled = Boolean(menuConfig?.posEnabled);
 
   const isAuthPublicPath = AUTH_PUBLIC_PATHS.includes(pathname);
   const isLockPath = pathname === "/lock";
@@ -25,7 +26,9 @@ export default function RequireActiveOperator({ children }) {
     if (!dataLoaded || !hydrated) return;
 
     if (!pinLockEnabled) {
-      if (isLockPath) router.replace("/");
+      if (isLockPath) {
+        router.replace(posEnabled ? "/pos" : "/");
+      }
       return;
     }
 
@@ -37,6 +40,7 @@ export default function RequireActiveOperator({ children }) {
     isAuthPublicPath,
     isLockPath,
     pinLockEnabled,
+    posEnabled,
     router,
     status,
   ]);

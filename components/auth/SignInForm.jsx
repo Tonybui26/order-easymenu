@@ -1,16 +1,16 @@
 "use client";
 import { getSession, signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { Eye, EyeOff, AlertCircle } from "lucide-react";
-import Link from "next/link";
 import { getAuthRedirectUrl } from "@/lib/constants/auth";
 import {
   operatorFromSessionUser,
   writeActiveOperator,
 } from "@/lib/staff/activeOperatorStorage";
+import { fetchGetMenuByOwnerEmail } from "@/lib/api/fetchApi";
 
-export default function SignInForm() {
+function SignInFormInner() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [menuLink, setMenuLink] = useState("");
@@ -18,6 +18,8 @@ export default function SignInForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -37,12 +39,22 @@ export default function SignInForm() {
         setIsLoading(false);
         return;
       }
-      console.log(result);
       if (result?.ok) {
         const session = await getSession();
         const operator = operatorFromSessionUser(session?.user);
         if (operator) writeActiveOperator(operator);
-        router.push(getAuthRedirectUrl());
+
+        let posEnabled = false;
+        if (session?.user?.ownerEmail) {
+          try {
+            const menu = await fetchGetMenuByOwnerEmail(session.user.ownerEmail);
+            posEnabled = Boolean(menu?.config?.posEnabled);
+          } catch {
+            posEnabled = false;
+          }
+        }
+
+        router.push(getAuthRedirectUrl(callbackUrl, posEnabled));
         router.refresh();
       }
     } catch (error) {
@@ -135,32 +147,6 @@ export default function SignInForm() {
           </div>
         </div>
 
-        {/* <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <input
-              id="remember-me"
-              name="remember-me"
-              type="checkbox"
-              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-            />
-            <label
-              htmlFor="remember-me"
-              className="ml-2 block text-sm text-gray-700"
-            >
-              Remember me
-            </label>
-          </div>
-
-          <div className="text-sm">
-            <Link
-              href="/forgot-password"
-              className="font-medium text-primary hover:text-primary/80"
-            >
-              Forgot your password?
-            </Link>
-          </div>
-        </div> */}
-
         <div>
           <button
             type="submit"
@@ -192,17 +178,16 @@ export default function SignInForm() {
               "Sign in"
             )}
           </button>
-          {/* <p className="mt-2 text-center text-sm text-gray-600">
-            Or{" "}
-            <Link
-              href="/signup"
-              className="font-medium text-primary hover:text-primary/80"
-            >
-              create a new account
-            </Link>
-          </p> */}
         </div>
       </form>
     </>
+  );
+}
+
+export default function SignInForm() {
+  return (
+    <Suspense fallback={null}>
+      <SignInFormInner />
+    </Suspense>
   );
 }

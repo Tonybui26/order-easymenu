@@ -11,6 +11,7 @@ import {
   STAFF_PIN_CODE_MIN_LENGTH,
 } from "@/lib/staff/staffRoles";
 import { getAuthRedirectUrl } from "@/lib/constants/auth";
+import { useMenuContext } from "@/components/context/MenuContext";
 
 const DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
@@ -18,11 +19,13 @@ function LockScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { unlock } = useActiveOperator();
+  const { menuConfig } = useMenuContext();
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const callbackUrl = searchParams.get("callbackUrl");
+  const posEnabled = Boolean(menuConfig?.posEnabled);
   const canSubmit =
     pin.length >= STAFF_PIN_CODE_MIN_LENGTH &&
     pin.length <= STAFF_PIN_CODE_MAX_LENGTH;
@@ -43,7 +46,7 @@ function LockScreen() {
         setPin("");
         return;
       }
-      router.replace(getAuthRedirectUrl(callbackUrl));
+      router.replace(getAuthRedirectUrl(callbackUrl, posEnabled));
     } catch {
       setError("Unable to verify pin");
       setPin("");
