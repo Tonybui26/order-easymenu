@@ -1,8 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Delete, X } from "lucide-react";
+import toast from "react-hot-toast";
 import { cn } from "@/lib/helper";
+import {
+  closePosRegisterSession,
+  finalisePosRegisterSession,
+} from "@/lib/api/fetchApi";
+import { registerOperatorPayload } from "@/lib/pos/registerOperatorPayload";
+import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
 
 const KEYPAD_ROWS = [
   ["1", "2", "3", "backspace"],
@@ -13,7 +21,7 @@ const KEYPAD_ROWS = [
 
 const QUICK_AMOUNTS = new Set(["10", "20", "50"]);
 
-const CASH_DENOMINATIONS = [
+export const CASH_DENOMINATIONS = [
   { id: "100-notes", label: "$100 Notes", cents: 10000 },
   { id: "50-notes", label: "$50 Notes", cents: 5000 },
   { id: "20-notes", label: "$20 Notes", cents: 2000 },
@@ -52,30 +60,67 @@ function denominationAmount(denomination, count) {
   return (denomination.cents * count) / 100;
 }
 
+function countsFromSession(session) {
+  const next = {};
+  for (const row of session?.closingCounts || []) {
+    if (row?.denomId != null) next[row.denomId] = Number(row.count) || 0;
+  }
+  return next;
+}
+
+function buildCountsPayload(countsMap) {
+  return CASH_DENOMINATIONS.filter((d) => countsMap[d.id] != null).map((d) => ({
+    denomId: d.id,
+    label: d.label,
+    cents: d.cents,
+    count: Number(countsMap[d.id]) || 0,
+  }));
+}
+
 /**
- * Close Register — denomination counts on the left, count keypad on the right (UI only).
+ * Close Register — denomination counts + finalise / close.
  */
-export default function PosRegisterClose() {
-  const [counts, setCounts] = useState({});
+export default function PosRegisterClose({ session, onSessionUpdated }) {
+  const router = useRouter();
+  const { activeOperator } = useActiveOperator();
+  const [counts, setCounts] = useState(() => countsFromSession(session));
   const [selectedId, setSelectedId] = useState(null);
   const [digits, setDigits] = useState("");
-  const [isFinalised, setIsFinalised] = useState(false);
+  const [isFinalised, setIsFinalised] = useState(
+    Boolean(session?.countsFinalised),
+  );
+  const [cashExpected, setCashExpected] = useState(
+    session?.closingExpected ?? null,
+  );
+  const [cashVariance, setCashVariance] = useState(
+    session?.closingVariance ?? null,
+  );
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [isFinalising, setIsFinalising] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+
+  useEffect(() => {
+    if (!session?.countsFinalised) return;
+    setIsFinalised(true);
+    setCounts(countsFromSession(session));
+    setCashExpected(session.closingExpected);
+    setCashVariance(session.closingVariance);
+  }, [session]);
 
   const selectedDenomination = CASH_DENOMINATIONS.find(
     (denomination) => denomination.id === selectedId,
   );
-  const cashActual = useMemo(
-    () =>
-      CASH_DENOMINATIONS.reduce(
-        (sum, denomination) =>
-          sum + denominationAmount(denomination, counts[denomination.id]),
-        0,
-      ),
-    [counts],
-  );
-  const cashExpected = 0;
-  const cashVariance = cashActual - cashExpected;
+  const cashActual = useMemo(() => {
+    if (isFinalised && session?.closingActual != null) {
+      return Number(session.closingActual) || 0;
+    }
+    return CASH_DENOMINATIONS.reduce(
+      (sum, denomination) =>
+        sum + denominationAmount(denomination, counts[denomination.id]),
+      0,
+    );
+  }, [counts, isFinalised, session?.closingActual]);
+
   const hasEnteredCount = digits !== "";
   const instruction = selectedDenomination
     ? `Enter total number of ${selectedDenomination.label} in the drawer`
@@ -142,239 +187,293 @@ export default function PosRegisterClose() {
     setIsConfirmOpen(true);
   }
 
-  function handleConfirmFinalise() {
-    setIsConfirmOpen(false);
+  async function handleConfirmFinalise() {
+    if (isFinalising) return;
+
+    let nextCounts = counts;
     if (selectedId != null && digits !== "") {
       const count = parseCount(digits);
-      setCounts((prev) => ({ ...prev, [selectedId]: count }));
+      nextCounts = { ...counts, [selectedId]: count };
+      setCounts(nextCounts);
     }
-    setIsFinalised(true);
+
+    setIsFinalising(true);
+    try {
+      const result = await finalisePosRegisterSession({
+        counts: buildCountsPayload(nextCounts),
+        operator: registerOperatorPayload(activeOperator),
+      });
+      if (!result.success) {
+        toast.error(result.error || "Failed to finalise register");
+        return;
+      }
+      setIsConfirmOpen(false);
+      setIsFinalised(true);
+      setCashExpected(result.session?.closingExpected ?? null);
+      setCashVariance(result.session?.closingVariance ?? null);
+      if (result.session?.closingCounts?.length) {
+        setCounts(countsFromSession(result.session));
+      }
+      onSessionUpdated?.(result.session);
+      toast.success("Counts finalised");
+    } finally {
+      setIsFinalising(false);
+    }
   }
 
-  function handleCloseRegister() {
-    // UI only — persist close register in a follow-up.
+  async function handleCloseRegister() {
+    if (isClosing) return;
+    setIsClosing(true);
+    try {
+      const result = await closePosRegisterSession({
+        operator: registerOperatorPayload(activeOperator),
+      });
+      if (!result.success) {
+        toast.error(result.error || "Failed to close register");
+        return;
+      }
+      toast.success("Register closed");
+      router.push("/pos");
+    } finally {
+      setIsClosing(false);
+    }
   }
 
   return (
     <>
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-4 pb-4 min-[960px]:flex-row">
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-white shadow-[0_16px_40px_rgba(0,0,0,0.25)]">
-        <div className="grid grid-cols-[minmax(0,1.6fr)_1fr_1fr_1fr] bg-neutral-200 px-4 py-2.5 text-sm font-bold text-neutral-900">
-          <span>Tender Type</span>
-          <span className="text-right">Expected</span>
-          <span className="text-right">Variance</span>
-          <span className="text-right">Actual</span>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="grid grid-cols-[minmax(0,1.6fr)_1fr_1fr_1fr] items-center border-b border-neutral-200 px-4 py-3 text-sm font-semibold text-neutral-900">
-            <span>Cash</span>
-            <span className="text-right tabular-nums">
-              {isFinalised ? formatMoney(cashExpected) : ""}
-            </span>
-            <span
-              className={cn(
-                "text-right tabular-nums",
-                isFinalised && cashVariance !== 0 && "text-red-600",
-              )}
-            >
-              {isFinalised ? formatMoney(cashVariance) : ""}
-            </span>
-            <span className="text-right tabular-nums">
-              {formatMoney(cashActual)}
-            </span>
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-4 pb-4 min-[960px]:flex-row">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-white shadow-[0_16px_40px_rgba(0,0,0,0.25)]">
+          <div className="grid grid-cols-[minmax(0,1.6fr)_1fr_1fr_1fr] bg-neutral-200 px-4 py-2.5 text-sm font-bold text-neutral-900">
+            <span>Tender Type</span>
+            <span className="text-right">Expected</span>
+            <span className="text-right">Variance</span>
+            <span className="text-right">Actual</span>
           </div>
 
-          {CASH_DENOMINATIONS.map((denomination) => {
-            const isSelected = selectedId === denomination.id;
-            const count = counts[denomination.id];
-            const hasCount = count != null;
-            const actual = denominationAmount(denomination, count);
-
-            return (
-              <button
-                key={denomination.id}
-                type="button"
-                onClick={() => handleSelectDenomination(denomination.id)}
-                disabled={isFinalised}
-                aria-pressed={isSelected}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="grid grid-cols-[minmax(0,1.6fr)_1fr_1fr_1fr] items-center border-b border-neutral-200 px-4 py-3 text-sm font-semibold text-neutral-900">
+              <span>Cash</span>
+              <span className="text-right tabular-nums">
+                {isFinalised && cashExpected != null
+                  ? formatMoney(cashExpected)
+                  : ""}
+              </span>
+              <span
                 className={cn(
-                  "grid w-full grid-cols-[minmax(0,1.6fr)_1fr_1fr_1fr] items-center border-b border-neutral-200 px-4 py-2.5 text-left text-sm transition-colors",
-                  isFinalised
-                    ? "cursor-default"
-                    : isSelected
-                      ? "bg-brand_accent/10"
-                      : "hover:bg-neutral-50",
+                  "text-right tabular-nums",
+                  isFinalised &&
+                    cashVariance != null &&
+                    cashVariance !== 0 &&
+                    "text-red-600",
                 )}
               >
-                <span
+                {isFinalised && cashVariance != null
+                  ? formatMoney(cashVariance)
+                  : ""}
+              </span>
+              <span className="text-right tabular-nums">
+                {formatMoney(cashActual)}
+              </span>
+            </div>
+
+            {CASH_DENOMINATIONS.map((denomination) => {
+              const isSelected = selectedId === denomination.id;
+              const count = counts[denomination.id];
+              const hasCount = count != null;
+              const actual = denominationAmount(denomination, count);
+
+              return (
+                <button
+                  key={denomination.id}
+                  type="button"
+                  onClick={() => handleSelectDenomination(denomination.id)}
+                  disabled={isFinalised}
+                  aria-pressed={isSelected}
                   className={cn(
-                    "pl-6",
-                    isSelected
-                      ? "font-semibold text-neutral-900"
-                      : "text-neutral-700",
+                    "grid w-full grid-cols-[minmax(0,1.6fr)_1fr_1fr_1fr] items-center border-b border-neutral-200 px-4 py-2.5 text-left text-sm transition-colors",
+                    isFinalised
+                      ? "cursor-default"
+                      : isSelected
+                        ? "bg-brand_accent/10"
+                        : "hover:bg-neutral-50",
                   )}
                 >
-                  {denomination.label}
-                </span>
-                <span className="col-span-2 text-left text-neutral-700">
-                  {hasCount ? `Quantity: ${count}` : ""}
-                </span>
-                <span className="text-right tabular-nums text-neutral-900">
-                  {hasCount ? formatMoney(actual) : ""}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div
-          className={cn(
-            "grid shrink-0 gap-3 p-4",
-            isFinalised ? "grid-cols-1" : "grid-cols-2",
-          )}
-        >
-          {isFinalised ? (
-            <button
-              type="button"
-              onClick={handleCloseRegister}
-              className="flex min-h-[3.5rem] items-center justify-center rounded-md bg-brand_accent text-base font-bold uppercase tracking-wide text-white transition active:scale-[0.99]"
-            >
-              Close Register
-            </button>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={handleClear}
-                className="flex min-h-[3.5rem] items-center justify-center rounded-md bg-[#ef3636] text-base font-bold uppercase tracking-wide text-white transition active:scale-[0.99]"
-              >
-                Clear
-              </button>
-              <button
-                type="button"
-                onClick={handleFinaliseClick}
-                className="flex min-h-[3.5rem] items-center justify-center rounded-md bg-[#2563eb] text-base font-bold uppercase tracking-wide text-white transition active:scale-[0.99]"
-              >
-                Finalise
-              </button>
-            </>
-          )}
-        </div>
-      </section>
-
-      <section className="mx-auto flex w-full max-w-sm shrink-0 flex-col justify-start min-[960px]:mx-0">
-        <div className="rounded-3xl bg-white/[0.06] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.35)] ring-1 ring-white/10 sm:p-6">
-          <p className="mb-4 flex min-h-[3rem] items-center justify-center text-center text-base leading-snug text-white/70">
-            {isFinalised
-              ? "Counts are locked. Close the register to finish."
-              : instruction}
-          </p>
-          <div
-            className={cn(
-              "mb-5 flex h-16 items-center justify-center rounded-lg bg-[#ffffff5c] px-4 text-3xl font-semibold tabular-nums tracking-wide sm:text-4xl",
-              hasEnteredCount ? "text-gray-900" : "text-white/40",
-            )}
-          >
-            {formatCountDisplay(digits)}
+                  <span
+                    className={cn(
+                      "pl-6",
+                      isSelected
+                        ? "font-semibold text-neutral-900"
+                        : "text-neutral-700",
+                    )}
+                  >
+                    {denomination.label}
+                  </span>
+                  <span className="col-span-2 text-left text-neutral-700">
+                    {hasCount ? `Quantity: ${count}` : ""}
+                  </span>
+                  <span className="text-right tabular-nums text-neutral-900">
+                    {hasCount ? formatMoney(actual) : ""}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
-          <div className="grid grid-cols-4 gap-2.5 sm:gap-3">
-            {KEYPAD_ROWS.flat().map((key) => {
-              if (key === "backspace") {
+          <div
+            className={cn(
+              "grid shrink-0 gap-3 p-4",
+              isFinalised ? "grid-cols-1" : "grid-cols-2",
+            )}
+          >
+            {isFinalised ? (
+              <button
+                type="button"
+                onClick={handleCloseRegister}
+                disabled={isClosing}
+                className="flex min-h-[3.5rem] items-center justify-center rounded-md bg-brand_accent text-base font-bold uppercase tracking-wide text-white transition active:scale-[0.99] disabled:opacity-50"
+              >
+                {isClosing ? "Closing…" : "Close Register"}
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="flex min-h-[3.5rem] items-center justify-center rounded-md bg-[#ef3636] text-base font-bold uppercase tracking-wide text-white transition active:scale-[0.99]"
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={handleFinaliseClick}
+                  className="flex min-h-[3.5rem] items-center justify-center rounded-md bg-[#2563eb] text-base font-bold uppercase tracking-wide text-white transition active:scale-[0.99]"
+                >
+                  Finalise
+                </button>
+              </>
+            )}
+          </div>
+        </section>
+
+        <section className="mx-auto flex w-full max-w-sm shrink-0 flex-col justify-start min-[960px]:mx-0">
+          <div className="rounded-3xl bg-white/[0.06] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.35)] ring-1 ring-white/10 sm:p-6">
+            <p className="mb-4 flex min-h-[3rem] items-center justify-center text-center text-base leading-snug text-white/70">
+              {isFinalised
+                ? "Counts are locked. Close the register to finish."
+                : instruction}
+            </p>
+            <div
+              className={cn(
+                "mb-5 flex h-16 items-center justify-center rounded-lg bg-[#ffffff5c] px-4 text-3xl font-semibold tabular-nums tracking-wide sm:text-4xl",
+                hasEnteredCount ? "text-gray-900" : "text-white/40",
+              )}
+            >
+              {formatCountDisplay(digits)}
+            </div>
+
+            <div className="grid grid-cols-4 gap-2.5 sm:gap-3">
+              {KEYPAD_ROWS.flat().map((key) => {
+                if (key === "backspace") {
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => handleKey(key)}
+                      disabled={isFinalised || !selectedId}
+                      className={keyClassName}
+                      aria-label="Delete"
+                    >
+                      <Delete className="size-7 sm:size-8" strokeWidth={2} />
+                    </button>
+                  );
+                }
+
                 return (
                   <button
                     key={key}
                     type="button"
                     onClick={() => handleKey(key)}
                     disabled={isFinalised || !selectedId}
-                    className={keyClassName}
-                    aria-label="Delete"
+                    className={cn(
+                      keyClassName,
+                      QUICK_AMOUNTS.has(key) && "text-2xl sm:text-3xl",
+                    )}
                   >
-                    <Delete className="size-7 sm:size-8" strokeWidth={2} />
+                    {key}
                   </button>
                 );
-              }
+              })}
+            </div>
 
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => handleKey(key)}
-                  disabled={isFinalised || !selectedId}
-                  className={cn(
-                    keyClassName,
-                    QUICK_AMOUNTS.has(key) && "text-2xl sm:text-3xl",
-                  )}
-                >
-                  {key}
-                </button>
-              );
-            })}
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isFinalised || !selectedId}
+              className="mt-5 flex min-h-[3.5rem] w-full items-center justify-center rounded-lg bg-brand_accent text-base font-semibold text-white shadow-sm transition active:scale-95 disabled:opacity-50"
+            >
+              Submit
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <dialog className={`modal ${isConfirmOpen ? "modal-open" : ""}`}>
+        <div className="modal-box w-[400px] max-w-md">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-neutral-900">
+              Confirm finalise
+            </h3>
+            <button
+              type="button"
+              onClick={() => setIsConfirmOpen(false)}
+              disabled={isFinalising}
+              className="btn btn-circle btn-ghost btn-sm"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isFinalised || !selectedId}
-            className="mt-5 flex min-h-[3.5rem] w-full items-center justify-center rounded-lg bg-brand_accent text-base font-semibold text-white shadow-sm transition active:scale-95 disabled:opacity-50"
-          >
-            Submit
-          </button>
-        </div>
-      </section>
-    </div>
-
-    <dialog className={`modal ${isConfirmOpen ? "modal-open" : ""}`}>
-      <div className="modal-box w-[400px] max-w-md">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-neutral-900">
-            Confirm finalise
-          </h3>
-          <button
-            type="button"
-            onClick={() => setIsConfirmOpen(false)}
-            className="btn btn-circle btn-ghost btn-sm"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <p className="mb-2 text-sm text-neutral-600">
-          Are you sure the amount is correct? You won&apos;t be able to change
-          it later.
-        </p>
-        <div className="mb-6 rounded-lg bg-neutral-100 p-4 text-center">
-          <p className="text-sm font-medium text-neutral-500">Cash actual</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-neutral-900">
-            {formatMoney(cashActual)}
+          <p className="mb-2 text-sm text-neutral-600">
+            Are you sure the amount is correct? You won&apos;t be able to change
+            it later.
           </p>
-        </div>
+          <div className="mb-6 rounded-lg bg-neutral-100 p-4 text-center">
+            <p className="text-sm font-medium text-neutral-500">Cash actual</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-neutral-900">
+              {formatMoney(cashActual)}
+            </p>
+          </div>
 
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => setIsConfirmOpen(false)}
-            className="flex-1 rounded-xl border border-neutral-300 px-4 py-3 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleConfirmFinalise}
-            className="flex-1 rounded-xl bg-[#2563eb] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8]"
-          >
-            Confirm
-          </button>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setIsConfirmOpen(false)}
+              disabled={isFinalising}
+              className="flex-1 rounded-xl border border-neutral-300 px-4 py-3 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmFinalise}
+              disabled={isFinalising}
+              className="flex-1 rounded-xl bg-[#2563eb] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8] disabled:opacity-50"
+            >
+              {isFinalising ? "Finalising…" : "Confirm"}
+            </button>
+          </div>
         </div>
-      </div>
-      <form method="dialog" className="modal-backdrop">
-        <button type="submit" onClick={() => setIsConfirmOpen(false)}>
-          close
-        </button>
-      </form>
-    </dialog>
+        <form method="dialog" className="modal-backdrop">
+          <button
+            type="submit"
+            onClick={() => setIsConfirmOpen(false)}
+            disabled={isFinalising}
+          >
+            close
+          </button>
+        </form>
+      </dialog>
     </>
   );
 }
