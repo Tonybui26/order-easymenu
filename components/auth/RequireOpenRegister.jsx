@@ -24,6 +24,9 @@ function isRegisterGateExempt(pathname) {
   if (pathname === "/settings" || pathname.startsWith("/settings/")) {
     return true;
   }
+  if (pathname === "/tyro-test" || pathname.startsWith("/tyro-test/")) {
+    return true;
+  }
   return false;
 }
 

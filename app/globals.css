@@ -22,3 +22,26 @@ button {
 html {
   scroll-behavior: smooth;
 }
+
+/*
+  Tyro iClientWithUI mounts a Bootstrap 2 `.modal.tyro-iclient-modal`.
+  DaisyUI also defines `.modal` with pointer-events: none until `.modal-open`.
+  That combination shows the Tyro dialog but swallows YES/NO clicks.
+*/
+.tyro-iclient-modal.modal,
+.modal.tyro-iclient-modal {
+  pointer-events: auto !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  inset: auto;
+  height: auto;
+  width: auto;
+  max-height: none;
+  max-width: none;
+  display: block !important;
+  z-index: 1050 !important;
+}
+
+#iclient-headful-iframe {
+  pointer-events: auto !important;
+}

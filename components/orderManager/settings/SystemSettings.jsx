@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { useMenuContext } from "@/components/context/MenuContext";
 import SettingsToggleRow from "./SettingsToggleRow";
 
@@ -106,6 +108,31 @@ export default function SystemSettings({
           </div>
         )}
       </section>
+
+      {posEnabled ? (
+        <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+          <div className="border-b border-gray-100 px-6 py-3">
+            <h2 className="text-sm font-semibold text-neutral-900">
+              Tyro EFTPOS (dev)
+            </h2>
+          </div>
+          <Link
+            href="/tyro-test"
+            className="flex items-center justify-between gap-4 px-6 py-4 transition-colors duration-200 hover:bg-brand_accent/[0.1]"
+          >
+            <span className="min-w-0 flex-1">
+              <h3 className="text-base font-semibold uppercase tracking-wide text-neutral-900">
+                Simulator pairing / purchase test
+              </h3>
+              <span className="mt-1 block text-base text-neutral-600">
+                Isolated Tyro iClient spike. Does not mark orders paid or
+                change the live Card flow.
+              </span>
+            </span>
+            <ChevronRight className="h-5 w-5 shrink-0 text-neutral-400" />
+          </Link>
+        </section>
+      ) : null}
     </div>
   );
 }
