@@ -7,7 +7,7 @@ import {
   flattenModifierAvailabilityRows,
   modifierRowMatchesQuery,
 } from "@/lib/helper/modifierAvailabilityHelpers";
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import { Search, X } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -30,6 +30,7 @@ export default function PanelProductAvailability() {
     dataLoaded,
     patchItemSoldOut,
     patchModifierOptionAvailable,
+    refreshMenuAvailability,
   } = useMenuContext();
   const [selectedSectionId, setSelectedSectionId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -37,6 +38,26 @@ export default function PanelProductAvailability() {
   const [modalModifier, setModalModifier] = useState(null);
   const [draftSoldOut, setDraftSoldOut] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isSyncingAvailability, setIsSyncingAvailability] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function syncAvailability() {
+      setIsSyncingAvailability(true);
+      const result = await refreshMenuAvailability();
+      if (cancelled) return;
+      setIsSyncingAvailability(false);
+      if (!result.success && !result.skipped) {
+        toast.error("Could not load latest sold out status.");
+      }
+    }
+
+    syncAvailability();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshMenuAvailability]);
 
   const sections = useMemo(
     () => (menuContent || []).filter(sectionHasVisibleItems),
@@ -322,12 +343,14 @@ export default function PanelProductAvailability() {
     );
   }
 
-  if (!dataLoaded) {
+  if (!dataLoaded || isSyncingAvailability) {
     return (
       <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-neutral-700 bg-neutral-900/40 p-8">
         <div className="text-center">
           <span className="loading loading-spinner loading-lg text-brand_accent" />
-          <p className="mt-3 text-sm text-neutral-400">Loading menu…</p>
+          <p className="mt-3 text-sm text-neutral-400">
+            {dataLoaded ? "Updating sold out status…" : "Loading menu…"}
+          </p>
         </div>
       </div>
     );

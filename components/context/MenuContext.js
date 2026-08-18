@@ -66,6 +66,8 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
 
   // Get menu ID from menuData
   const menuId = menuData?._id || null;
+  // Ignore a stale availability refetch if the user saved sold-out while it was in flight.
+  const availabilityRefreshIdRef = useRef(0);
 
   // Fetch menu data client-side if not loaded from server
   useEffect(() => {
@@ -211,6 +213,31 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
     }
   };
 
+  const refreshMenuAvailability = useCallback(async () => {
+    if (!userData?.ownerEmail) {
+      return { success: false, error: "Missing owner email" };
+    }
+
+    const requestId = ++availabilityRefreshIdRef.current;
+    try {
+      const data = await fetchGetMenuByOwnerEmail(userData.ownerEmail);
+      if (requestId !== availabilityRefreshIdRef.current) {
+        return { success: true, skipped: true };
+      }
+      if (!data) {
+        return { success: false, error: "Menu not found" };
+      }
+
+      setMenuContent(data.menuContent || []);
+      setGlobalModifiers(data.globalModifiers || {});
+      setGlobalVariants(data.globalVariants || {});
+      return { success: true };
+    } catch (error) {
+      console.error("refreshMenuAvailability:", error);
+      return { success: false, error };
+    }
+  }, [userData?.ownerEmail]);
+
   const patchModifierOptionAvailable = useCallback(
     async (sourceType, groupKey, optionId, available) => {
       try {
@@ -220,6 +247,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
           optionId,
           available,
         );
+        availabilityRefreshIdRef.current += 1;
 
         if (sourceType === "variant") {
           setGlobalVariants((prev) => {
@@ -267,6 +295,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   const patchItemSoldOut = useCallback(async (menuItemId, soldOut) => {
     try {
       await updateMenuItemSoldOut(menuItemId, soldOut);
+      availabilityRefreshIdRef.current += 1;
       setMenuContent((prev) =>
         (prev || []).map((section) => ({
           ...section,
@@ -341,6 +370,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         globalVariants,
         patchItemSoldOut,
         patchModifierOptionAvailable,
+        refreshMenuAvailability,
         // Item groups (Food / Drink / Misc) — read-only in this app, used for
         // per-printer routing in handlePrintingOrder.
         itemGroups,
