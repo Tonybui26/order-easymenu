@@ -239,15 +239,18 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   }, [userData?.ownerEmail]);
 
   const patchModifierOptionAvailable = useCallback(
-    async (sourceType, groupKey, optionId, available) => {
+    async (sourceType, groupKey, optionId, available, restockTomorrow) => {
       try {
-        await updateModifierOptionAvailability(
+        const result = await updateModifierOptionAvailability(
           sourceType,
           groupKey,
           optionId,
           available,
+          restockTomorrow,
         );
         availabilityRefreshIdRef.current += 1;
+        const soldOutRestockOn =
+          available === false ? result?.soldOutRestockOn || null : null;
 
         if (sourceType === "variant") {
           setGlobalVariants((prev) => {
@@ -259,7 +262,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
                 ...group,
                 options: (group.options || []).map((option) =>
                   option.id === optionId
-                    ? { ...option, available: !!available }
+                    ? { ...option, available: !!available, soldOutRestockOn }
                     : option,
                 ),
               },
@@ -275,7 +278,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
                 ...group,
                 options: (group.options || []).map((option) =>
                   option.id === optionId
-                    ? { ...option, available: !!available }
+                    ? { ...option, available: !!available, soldOutRestockOn }
                     : option,
                 ),
               },
@@ -292,24 +295,36 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
     [],
   );
 
-  const patchItemSoldOut = useCallback(async (menuItemId, soldOut) => {
-    try {
-      await updateMenuItemSoldOut(menuItemId, soldOut);
-      availabilityRefreshIdRef.current += 1;
-      setMenuContent((prev) =>
-        (prev || []).map((section) => ({
-          ...section,
-          items: (section.items || []).map((item) =>
-            item.id === menuItemId ? { ...item, soldOut } : item,
-          ),
-        })),
-      );
-      return { success: true };
-    } catch (error) {
-      console.error("patchItemSoldOut:", error);
-      return { success: false, error };
-    }
-  }, []);
+  const patchItemSoldOut = useCallback(
+    async (menuItemId, soldOut, restockTomorrow) => {
+      try {
+        const result = await updateMenuItemSoldOut(
+          menuItemId,
+          soldOut,
+          restockTomorrow,
+        );
+        availabilityRefreshIdRef.current += 1;
+        const soldOutRestockOn = soldOut
+          ? result?.soldOutRestockOn || null
+          : null;
+        setMenuContent((prev) =>
+          (prev || []).map((section) => ({
+            ...section,
+            items: (section.items || []).map((item) =>
+              item.id === menuItemId
+                ? { ...item, soldOut, soldOutRestockOn }
+                : item,
+            ),
+          })),
+        );
+        return { success: true };
+      } catch (error) {
+        console.error("patchItemSoldOut:", error);
+        return { success: false, error };
+      }
+    },
+    [],
+  );
 
   // Create the saveMenuUpdate function
   const saveMenuConfig = async () => {

@@ -22,6 +22,10 @@ function itemMatchesQuery(item, q) {
   return textMatchesAvailabilityQuery(item.title, q);
 }
 
+function hasRestockDate(value) {
+  return typeof value === "string" && value.length > 0;
+}
+
 export default function PanelProductAvailability() {
   const {
     menuContent,
@@ -37,6 +41,7 @@ export default function PanelProductAvailability() {
   const [modalItem, setModalItem] = useState(null);
   const [modalModifier, setModalModifier] = useState(null);
   const [draftSoldOut, setDraftSoldOut] = useState(false);
+  const [draftRestockTomorrow, setDraftRestockTomorrow] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isSyncingAvailability, setIsSyncingAvailability] = useState(true);
 
@@ -152,26 +157,37 @@ export default function PanelProductAvailability() {
   const openProductModal = useCallback((item) => {
     setModalModifier(null);
     setModalItem(item);
-    setDraftSoldOut(item.soldOut === true);
+    const soldOut = item.soldOut === true;
+    setDraftSoldOut(soldOut);
+    setDraftRestockTomorrow(soldOut ? hasRestockDate(item.soldOutRestockOn) : true);
   }, []);
 
   const openModifierModal = useCallback((row) => {
     setModalItem(null);
     setModalModifier(row);
-    setDraftSoldOut(row.available === false);
+    const soldOut = row.available === false;
+    setDraftSoldOut(soldOut);
+    setDraftRestockTomorrow(soldOut ? hasRestockDate(row.soldOutRestockOn) : true);
   }, []);
 
   const closeModal = useCallback(() => {
     setModalItem(null);
     setModalModifier(null);
     setDraftSoldOut(false);
+    setDraftRestockTomorrow(true);
   }, []);
 
   const isProductDirty =
-    modalItem != null && draftSoldOut !== (modalItem.soldOut === true);
+    modalItem != null &&
+    (draftSoldOut !== (modalItem.soldOut === true) ||
+      (draftSoldOut &&
+        draftRestockTomorrow !== hasRestockDate(modalItem.soldOutRestockOn)));
   const isModifierDirty =
     modalModifier != null &&
-    draftSoldOut !== (modalModifier.available === false);
+    (draftSoldOut !== (modalModifier.available === false) ||
+      (draftSoldOut &&
+        draftRestockTomorrow !==
+          hasRestockDate(modalModifier.soldOutRestockOn)));
   const isDirty = isProductDirty || isModifierDirty;
 
   const handleSave = async () => {
@@ -180,13 +196,18 @@ export default function PanelProductAvailability() {
 
     let result;
     if (modalItem) {
-      result = await patchItemSoldOut(modalItem.id, draftSoldOut);
+      result = await patchItemSoldOut(
+        modalItem.id,
+        draftSoldOut,
+        draftSoldOut ? draftRestockTomorrow : false,
+      );
     } else if (modalModifier) {
       result = await patchModifierOptionAvailable(
         modalModifier.sourceType,
         modalModifier.groupKey,
         modalModifier.optionId,
         !draftSoldOut,
+        draftSoldOut ? draftRestockTomorrow : false,
       );
     } else {
       setSaving(false);
@@ -291,6 +312,11 @@ export default function PanelProductAvailability() {
                     {entry.section.sectionTitle}
                   </p>
                 ) : null}
+                {soldOut && hasRestockDate(item.soldOutRestockOn) ? (
+                  <p className="mt-1 text-center text-xs text-amber-400">
+                    Restocks tomorrow
+                  </p>
+                ) : null}
               </div>
             </button>
           );
@@ -335,6 +361,11 @@ export default function PanelProductAvailability() {
                 <p className="line-clamp-2 text-center text-sm font-medium text-white">
                   {row.optionName}
                 </p>
+                {soldOut && hasRestockDate(row.soldOutRestockOn) ? (
+                  <p className="mt-1 text-center text-xs text-amber-400">
+                    Restocks tomorrow
+                  </p>
+                ) : null}
               </div>
             </button>
           );
@@ -582,9 +613,34 @@ export default function PanelProductAvailability() {
               type="checkbox"
               className="toggle toggle-error"
               checked={draftSoldOut}
-              onChange={(e) => setDraftSoldOut(e.target.checked)}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setDraftSoldOut(checked);
+                if (checked) setDraftRestockTomorrow(true);
+              }}
             />
           </label>
+
+          {draftSoldOut ? (
+            <label className="mt-3 flex cursor-pointer items-start justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-5">
+              <span>
+                <span className="block text-base font-semibold">
+                  Restock tomorrow
+                </span>
+                <span className="mt-1 block text-sm text-gray-500">
+                  {draftRestockTomorrow
+                    ? "Available again at the start of the next day."
+                    : "Stays sold out until you restock it."}
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                className="toggle toggle-success mt-1 shrink-0"
+                checked={draftRestockTomorrow}
+                onChange={(e) => setDraftRestockTomorrow(e.target.checked)}
+              />
+            </label>
+          ) : null}
 
           <div className="modal-action mt-6">
             <button
