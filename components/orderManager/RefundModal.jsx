@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import DropDownList from "@/components/DropDownList";
+import { useMenuContext } from "@/components/context/MenuContext";
 import { cn } from "@/lib/helper";
 import { refundOrder } from "@/lib/api/fetchApi";
 import {
   buildRefundMethodOptions,
+  canRefundPosOrderOnCard,
   getRefundMethodHelpText,
+  REFUND_METHODS,
   REFUND_METHOD_LABELS,
   resolveDefaultRefundMethod,
 } from "@/lib/helper/refundMethodOptions";
@@ -15,6 +18,18 @@ import {
   POS_CANCEL_LINE_REASONS,
   POS_CANCEL_OTHER_REASON,
 } from "@/lib/pos/posCancelLineReasons";
+import {
+  isTyroPosCardReady,
+  resolvePosPaymentsConfig,
+} from "@/lib/pos/posPaymentsConfig";
+import {
+  buildTyroRefundParams,
+  dollarsToTyroCents,
+  getTyroIClientWithUI,
+  getTyroRefundStatusMessage,
+  initiateTyroRefund,
+  isTyroRefundApproved,
+} from "@/lib/tyro/iclient";
 import SideDrawer from "./SideDrawer";
 
 const refundTypeOptions = [
@@ -43,12 +58,29 @@ export default function RefundModal({
   order,
   onRefundSuccess,
 }) {
+  const { menuConfig } = useMenuContext();
   const [refundType, setRefundType] = useState("");
   const [refundMethod, setRefundMethod] = useState("");
   const [selectedReason, setSelectedReason] = useState("");
   const [otherReason, setOtherReason] = useState("");
   const [partialAmount, setPartialAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [tyroRefundApproved, setTyroRefundApproved] = useState(false);
+  const refundLockRef = useRef(false);
+
+  const tyroConfig = useMemo(
+    () => resolvePosPaymentsConfig(menuConfig).tyro,
+    [menuConfig],
+  );
+  const tyroCardReady = isTyroPosCardReady(menuConfig);
+  const refundMethodContext = useMemo(
+    () => ({ tyroCardReady }),
+    [tyroCardReady],
+  );
+  const posCardRefundReady = canRefundPosOrderOnCard(
+    order,
+    refundMethodContext,
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -57,21 +89,37 @@ export default function RefundModal({
       setSelectedReason("");
       setOtherReason("");
       setPartialAmount("");
+      setTyroRefundApproved(false);
+      refundLockRef.current = false;
       return;
     }
 
-    setRefundMethod(resolveDefaultRefundMethod(order));
-  }, [isOpen, order?._id]);
+    setRefundMethod(resolveDefaultRefundMethod(order, refundMethodContext));
+  }, [isOpen, order?._id, refundMethodContext]);
+
+  useEffect(() => {
+    if (!isOpen || !posCardRefundReady) return;
+    getTyroIClientWithUI().catch(() => {});
+  }, [isOpen, posCardRefundReady]);
 
   if (!order) return null;
 
-  const refundMethodOptions = buildRefundMethodOptions(order);
-  const refundMethodHelpText = getRefundMethodHelpText(order);
+  const refundMethodOptions = buildRefundMethodOptions(
+    order,
+    refundMethodContext,
+  );
+  const refundMethodHelpText = getRefundMethodHelpText(
+    order,
+    refundMethodContext,
+  );
   const orderIdShort = order._id?.slice(-6).toUpperCase();
+  const orderTotal = Number(order.total) || 0;
   const refundAmountPreview =
     refundType === "full"
-      ? Number(order.total)
+      ? orderTotal
       : parseFloat(partialAmount) || 0;
+  const needsTyroRefund =
+    posCardRefundReady && refundMethod === REFUND_METHODS.CARD;
 
   const resolvedRefundReason =
     selectedReason === POS_CANCEL_OTHER_REASON
@@ -83,6 +131,8 @@ export default function RefundModal({
   };
 
   const handleConfirm = async () => {
+    if (refundLockRef.current) return;
+
     if (!refundType) {
       toast.error("Select a refund type.");
       return;
@@ -93,11 +143,19 @@ export default function RefundModal({
       return;
     }
 
+    const refundAmount =
+      refundType === "full" ? orderTotal : parseFloat(partialAmount);
+
     if (
       refundType === "partial" &&
-      (!partialAmount || parseFloat(partialAmount) <= 0)
+      (!Number.isFinite(refundAmount) || refundAmount <= 0)
     ) {
       toast.error("Enter a valid partial refund amount.");
+      return;
+    }
+
+    if (refundAmount > orderTotal) {
+      toast.error("Refund amount cannot exceed the order total.");
       return;
     }
 
@@ -106,20 +164,51 @@ export default function RefundModal({
       return;
     }
 
+    refundLockRef.current = true;
     setIsProcessing(true);
+    let terminalRefundApproved = tyroRefundApproved;
     try {
+      if (needsTyroRefund && !terminalRefundApproved) {
+        const iclient = await getTyroIClientWithUI();
+        const requestParams = buildTyroRefundParams({
+          amount: dollarsToTyroCents(refundAmount),
+          mid: tyroConfig?.mid,
+          tid: tyroConfig?.tid,
+          integrationKey: tyroConfig?.integrationKey,
+          integratedReceipt: Boolean(tyroConfig?.integratedReceipt),
+        });
+
+        if (!requestParams) {
+          toast.error("Invalid amount for card refund");
+          return;
+        }
+
+        const result = await initiateTyroRefund(iclient, requestParams);
+        if (!isTyroRefundApproved(result)) {
+          toast.error(getTyroRefundStatusMessage(result));
+          return;
+        }
+
+        terminalRefundApproved = true;
+        setTyroRefundApproved(true);
+      }
+
       const result = await refundOrder({
         orderId: order._id,
         refundType,
         refundMethod,
         refundReason: resolvedRefundReason || undefined,
-        amount:
-          refundType === "full" ? order.total : parseFloat(partialAmount),
-        originalAmount: order.total,
+        amount: refundAmount,
+        originalAmount: orderTotal,
       });
 
       if (!result?.success) {
-        toast.error(result?.error || "Refund failed.");
+        toast.error(
+          terminalRefundApproved
+            ? result?.error ||
+                "Card was refunded on the terminal but the order could not be updated. Do not refund again."
+            : result?.error || "Refund failed.",
+        );
         return;
       }
 
@@ -129,8 +218,13 @@ export default function RefundModal({
       }
       onClose();
     } catch (error) {
-      toast.error(error?.message || "Refund failed.");
+      toast.error(
+        terminalRefundApproved
+          ? "Card was refunded on the terminal but the order could not be updated. Do not refund again."
+          : error?.message || "Refund failed.",
+      );
     } finally {
+      refundLockRef.current = false;
       setIsProcessing(false);
     }
   };
@@ -141,6 +235,12 @@ export default function RefundModal({
     !(refundType === "partial" && !partialAmount) &&
     !(selectedReason === POS_CANCEL_OTHER_REASON && !otherReason.trim()) &&
     !isProcessing;
+
+  const confirmLabel = isProcessing
+    ? needsTyroRefund && !tyroRefundApproved
+      ? "Waiting for EFTPOS…"
+      : "Processing…"
+    : "Confirm refund";
 
   return (
     <SideDrawer
@@ -167,7 +267,7 @@ export default function RefundModal({
             onClick={handleConfirm}
             className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-neutral-300"
           >
-            {isProcessing ? "Processing…" : "Confirm refund"}
+            {confirmLabel}
           </button>
         </div>
       }
