@@ -10,19 +10,25 @@ import {
   XCircle,
 } from "lucide-react";
 import PosChromeHeader from "@/components/orderManager/PosChromeHeader";
+import SettingsSaveBar from "@/components/orderManager/settings/SettingsSaveBar";
 import { usePosOpenCashDrawer } from "@/components/orderManager/usePosOpenCashDrawer";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import { fetchGetMenuByOwnerEmail } from "@/lib/api/fetchApi";
 import {
   buildMenuConfigWithTyroPairing,
+  buildMenuConfigWithTyroSettings,
   isTyroPosPaymentPaired,
+  pickTyroSettingsDraft,
   resolvePosPaymentsConfig,
+  tyroSettingsDraftEquals,
 } from "@/lib/pos/posPaymentsConfig";
 import {
   createTyroIClientWithUI,
   hasTyroTransactionCredentials,
   loadTyroIClientScript,
+  TYRO_ICLIENT_LOGS_URL,
+  TYRO_POS_PRODUCT_DATA,
 } from "@/lib/tyro/iclient";
 
 const DEFAULT_MID = "2187";
@@ -33,6 +39,45 @@ function formatPairedAt(iso) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
   return date.toLocaleString();
+}
+
+function SettingsToggle({
+  title,
+  description,
+  checked,
+  onChange,
+  disabled = false,
+}) {
+  return (
+    <div className="form-control px-6 py-3">
+      <label
+        className={`label cursor-pointer justify-between gap-4 py-0 ${
+          disabled ? "cursor-not-allowed opacity-60" : ""
+        }`}
+      >
+        <span className="min-w-0 flex-1">
+          <span className="label-text font-medium text-neutral-800">
+            {title}
+          </span>
+          {description ? (
+            <span className="mt-0.5 block text-xs text-gray-500">
+              {description}
+            </span>
+          ) : null}
+        </span>
+        <input
+          type="checkbox"
+          className="toggle toggle-primary shrink-0"
+          checked={checked}
+          disabled={disabled}
+          onChange={(event) => {
+            if (disabled) return;
+            onChange?.(event.target.checked);
+          }}
+        />
+      </label>
+    </div>
+  );
 }
 
 function StatusValue({ variant = "neutral", children }) {
@@ -75,6 +120,10 @@ export default function TyroPaymentSettingsPage() {
     () => resolvePosPaymentsConfig(menuConfig).tyro,
     [menuConfig],
   );
+  const savedTyroSettings = useMemo(
+    () => pickTyroSettingsDraft(savedTyro),
+    [savedTyro],
+  );
 
   const [scriptStatus, setScriptStatus] = useState("loading");
   const [scriptError, setScriptError] = useState("");
@@ -83,9 +132,16 @@ export default function TyroPaymentSettingsPage() {
   const [isAuthorising, setIsAuthorising] = useState(false);
   const [authStatus, setAuthStatus] = useState("");
   const [authMessage, setAuthMessage] = useState("");
+  const [draftTyroSettings, setDraftTyroSettings] = useState(savedTyroSettings);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [showLogsFrame, setShowLogsFrame] = useState(false);
 
   const isPaired = isTyroPosPaymentPaired(savedTyro);
   const pairedAtLabel = formatPairedAt(savedTyro.pairedAt);
+  const isSettingsDirty = !tyroSettingsDraftEquals(
+    draftTyroSettings,
+    savedTyroSettings,
+  );
 
   const getClient = useCallback(async () => {
     if (iclientRef.current) return iclientRef.current;
@@ -102,6 +158,12 @@ export default function TyroPaymentSettingsPage() {
     setMid(storedMid || DEFAULT_MID);
     setTid(storedTid || DEFAULT_TID);
   }, [dataLoaded, savedTyro.mid, savedTyro.tid]);
+
+  useEffect(() => {
+    if (!isSettingsDirty) {
+      setDraftTyroSettings(savedTyroSettings);
+    }
+  }, [savedTyroSettings, isSettingsDirty]);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,6 +186,10 @@ export default function TyroPaymentSettingsPage() {
     };
   }, [getClient]);
 
+  function updateDraftTyroSettings(patch) {
+    setDraftTyroSettings((prev) => ({ ...prev, ...patch }));
+  }
+
   async function persistPairing({ integrationKey }) {
     if (!userData?.ownerEmail) {
       throw new Error("Store account not loaded");
@@ -140,6 +206,31 @@ export default function TyroPaymentSettingsPage() {
     const result = await saveMenuConfigExplicit(configToSave);
     if (!result?.success) {
       throw new Error("Failed to save Tyro pairing to this store");
+    }
+  }
+
+  async function handleSaveSettings() {
+    if (!isSettingsDirty || isSavingSettings || !userData?.ownerEmail) return;
+
+    setIsSavingSettings(true);
+    try {
+      const latestData = await fetchGetMenuByOwnerEmail(userData.ownerEmail);
+      const freshConfig = latestData?.config || {};
+      const configToSave = buildMenuConfigWithTyroSettings(
+        freshConfig,
+        draftTyroSettings,
+      );
+
+      const result = await saveMenuConfigExplicit(configToSave);
+      if (result?.success) {
+        toast.success("Tyro settings saved");
+      } else {
+        toast.error("Failed to save Tyro settings");
+      }
+    } catch (error) {
+      toast.error(error?.message || "Failed to save Tyro settings");
+    } finally {
+      setIsSavingSettings(false);
     }
   }
 
@@ -216,7 +307,11 @@ export default function TyroPaymentSettingsPage() {
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       <PosChromeHeader onOpenCashDrawer={handleOpenCashDrawer} />
 
-      <div className="min-h-0 flex-1 overflow-y-auto bg-gray-50 pb-[env(safe-area-inset-bottom)]">
+      <div
+        className={`min-h-0 flex-1 overflow-y-auto bg-gray-50 ${
+          isSettingsDirty ? "pb-24" : "pb-[env(safe-area-inset-bottom)]"
+        }`}
+      >
         <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
           <div>
             <p className="text-sm text-neutral-500">
@@ -233,7 +328,8 @@ export default function TyroPaymentSettingsPage() {
               Tyro EFTPOS
             </h1>
             <p className="mt-0.5 text-sm text-neutral-500">
-              Pair your in-store terminal so card payments can run through Tyro.
+              Pair your terminal and configure card payment options for this
+              store.
             </p>
           </div>
 
@@ -247,12 +343,9 @@ export default function TyroPaymentSettingsPage() {
                 <section className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
                   <p className="font-medium">Tyro is not enabled for this store</p>
                   <p className="mt-1">
-                    You can still authorise a terminal here during development.
-                    Card payments will only use Tyro once{" "}
-                    <code className="rounded bg-amber-100 px-1">
-                      posPayments.tyro.enabled
-                    </code>{" "}
-                    is turned on for this menu.
+                    You can still configure and authorise a terminal here during
+                    development. Card payments will only use Tyro once Tyro is
+                    enabled for this menu in the admin backoffice.
                   </p>
                 </section>
               ) : null}
@@ -327,7 +420,61 @@ export default function TyroPaymentSettingsPage() {
                       )}
                     </dd>
                   </div>
+                  <div className="sm:col-span-2">
+                    <dt className="text-neutral-500">POS product</dt>
+                    <dd className="font-medium text-neutral-900">
+                      {TYRO_POS_PRODUCT_DATA.posProductVendor} ·{" "}
+                      {TYRO_POS_PRODUCT_DATA.posProductName} · v
+                      {TYRO_POS_PRODUCT_DATA.posProductVersion}
+                    </dd>
+                  </div>
                 </dl>
+              </section>
+
+              <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                <div className="border-b border-gray-100 px-6 py-3">
+                  <h2 className="text-sm font-semibold text-neutral-900">
+                    Card payment options
+                  </h2>
+                  <p className="mt-0.5 text-sm text-neutral-500">
+                    Applied to POS credit card purchases and card refunds on
+                    this device.
+                  </p>
+                </div>
+                <div className="divide-y divide-gray-100/80">
+                  <SettingsToggle
+                    title="Integrated receipts"
+                    description="When on, Tyro receipt text is returned to EasyMenu for printing on your POS printer instead of the EFTPOS terminal."
+                    checked={draftTyroSettings.integratedReceipt}
+                    onChange={(checked) => {
+                      updateDraftTyroSettings({
+                        integratedReceipt: checked,
+                        ...(checked ? {} : { printMerchantCopy: false }),
+                      });
+                    }}
+                    disabled={isSavingSettings}
+                  />
+                  <SettingsToggle
+                    title="Tyro surcharge"
+                    description="When on, Tyro dynamic surcharge is applied to card purchases and shown as Surcharge on the sale total and receipt."
+                    checked={draftTyroSettings.enableSurcharge}
+                    onChange={(checked) =>
+                      updateDraftTyroSettings({ enableSurcharge: checked })
+                    }
+                    disabled={isSavingSettings}
+                  />
+                  <SettingsToggle
+                    title="Print merchant copy"
+                    description="When integrated receipts are on, also print the Tyro merchant copy from the POS printer (except signature-verification copies, which always print)."
+                    checked={draftTyroSettings.printMerchantCopy}
+                    onChange={(checked) =>
+                      updateDraftTyroSettings({ printMerchantCopy: checked })
+                    }
+                    disabled={
+                      isSavingSettings || !draftTyroSettings.integratedReceipt
+                    }
+                  />
+                </div>
               </section>
 
               <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -408,10 +555,45 @@ export default function TyroPaymentSettingsPage() {
                   ) : null}
                 </div>
               </section>
+
+              <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                <div className="border-b border-gray-100 px-6 py-3">
+                  <h2 className="text-sm font-semibold text-neutral-900">
+                    iClient logs
+                  </h2>
+                  <p className="mt-0.5 text-sm text-neutral-500">
+                    Transaction and pairing activity for Tyro support
+                    troubleshooting.
+                  </p>
+                </div>
+                <div className="space-y-4 px-6 py-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowLogsFrame((open) => !open)}
+                    className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+                  >
+                    {showLogsFrame ? "Hide logs" : "View iClient logs"}
+                  </button>
+
+                  {showLogsFrame ? (
+                    <iframe
+                      title="Tyro iClient logs"
+                      src={TYRO_ICLIENT_LOGS_URL}
+                      className="h-[420px] w-full rounded-md border border-gray-200 bg-white"
+                    />
+                  ) : null}
+                </div>
+              </section>
             </>
           )}
         </div>
       </div>
+
+      <SettingsSaveBar
+        isVisible={isSettingsDirty}
+        isSaving={isSavingSettings}
+        onSave={handleSaveSettings}
+      />
     </div>
   );
 }
