@@ -46,6 +46,10 @@ import { printKitchenOrder } from "@/lib/helper/printKitchenOrder";
 import { buildTaxInvoiceReceiptFromPosCheck } from "@/lib/printers/receipt/buildTaxInvoiceReceiptFromPosCheck";
 import { printTaxInvoiceReceipt } from "@/lib/printers/printTaxInvoiceReceipt";
 import { resolvePosConfig } from "@/lib/pos/posConfig";
+import {
+  isTyroPosCardReady,
+  resolvePosPaymentsConfig,
+} from "@/lib/pos/posPaymentsConfig";
 import { buildTrainingKitchenOrder } from "@/lib/pos/buildTrainingKitchenOrder";
 import { formatPosItemDisplayName } from "@/lib/helper/printNameAlias";
 
@@ -219,6 +223,11 @@ export default function PosTerminal() {
   const [isVoidingLine, setIsVoidingLine] = useState(false);
   const { handleOpenCashDrawer } = usePosOpenCashDrawer(showDismissibleToast);
   const posConfig = useMemo(() => resolvePosConfig(menuConfig), [menuConfig]);
+  const tyroPayments = useMemo(
+    () => resolvePosPaymentsConfig(menuConfig).tyro,
+    [menuConfig],
+  );
+  const tyroCardEnabled = isTyroPosCardReady(menuConfig);
   const isTrainingMode = Boolean(posConfig.trainingModeEnabled);
   const useKitchenPrintAliases = Boolean(
     posConfig.showKitchenPrintAliasesOnPos,
@@ -889,9 +898,7 @@ export default function PosTerminal() {
     }
   }
 
-  async function handleCompleteSale(paymentSummary) {
-    if (isTrainingMode) return;
-
+  async function persistPosSale(paymentSummary) {
     const orderIdsToComplete =
       checkOrderIds.length > 0
         ? checkOrderIds
@@ -900,38 +907,77 @@ export default function PosTerminal() {
           : [];
 
     if (orderIdsToComplete.length === 0) {
-      showDismissibleToast("Send the order before completing payment");
-      return;
+      return {
+        success: false,
+        error: "Send the order before completing payment",
+      };
     }
-    if (!paymentSummary?.method || isCompletingSale) return;
+    if (!paymentSummary?.method) {
+      return { success: false, error: "Payment method is required" };
+    }
+
+    return completePosSaleBatch({
+      orderIds: orderIdsToComplete,
+      method: paymentSummary.method,
+      amountTendered: Number(paymentSummary.amountTendered || 0),
+      changeDue: Number(paymentSummary.change || 0),
+    });
+  }
+
+  function resetAfterSale() {
+    setCartLines([]);
+    setActiveOrderId(null);
+    setCheckOrderIds([]);
+    setPosCheckId(null);
+    setTaxInvoiceNo("");
+    setIsCheckPaid(false);
+    setIsResumedCheck(false);
+    setTableNumber("");
+    setOrderType(null);
+    setKeypadDrawer(null);
+    resumeLoadedRef.current = null;
+    closeCustomization();
+    setIsPaymentDrawerOpen(false);
+  }
+
+  async function handlePersistSale(paymentSummary) {
+    if (isTrainingMode) return { success: false };
 
     setIsCompletingSale(true);
     try {
-      const result = await completePosSaleBatch({
-        orderIds: orderIdsToComplete,
-        method: paymentSummary.method,
-        amountTendered: Number(paymentSummary.amountTendered || 0),
-        changeDue: Number(paymentSummary.change || 0),
-      });
+      const result = await persistPosSale(paymentSummary);
+      if (!result?.success) {
+        showDismissibleToast(result?.error || "Failed to complete sale");
+        return { success: false };
+      }
+      toast.success("Sale completed");
+      return { success: true };
+    } catch (error) {
+      showDismissibleToast(error?.message || "Failed to complete sale");
+      return { success: false };
+    } finally {
+      setIsCompletingSale(false);
+    }
+  }
 
+  function handleFinishPaidSale() {
+    resetAfterSale();
+  }
+
+  async function handleCompleteSale(paymentSummary) {
+    if (isTrainingMode) return;
+
+    if (isCompletingSale) return;
+
+    setIsCompletingSale(true);
+    try {
+      const result = await persistPosSale(paymentSummary);
       if (!result?.success) {
         showDismissibleToast(result?.error || "Failed to complete sale");
         return;
       }
 
-      setCartLines([]);
-      setActiveOrderId(null);
-      setCheckOrderIds([]);
-      setPosCheckId(null);
-      setTaxInvoiceNo("");
-      setIsCheckPaid(false);
-      setIsResumedCheck(false);
-      setTableNumber("");
-      setOrderType(null);
-      setKeypadDrawer(null);
-      resumeLoadedRef.current = null;
-      closeCustomization();
-      setIsPaymentDrawerOpen(false);
+      resetAfterSale();
       toast.success("Sale completed");
     } catch (error) {
       showDismissibleToast(error?.message || "Failed to complete sale");
@@ -1096,10 +1142,15 @@ export default function PosTerminal() {
               onClose={() => setIsPaymentDrawerOpen(false)}
               amountDue={cartSubtotal}
               onCompleteSale={handleCompleteSale}
+              onPersistSale={handlePersistSale}
+              onFinishPaidSale={handleFinishPaidSale}
               onPrintReceipt={handlePrintReceipt}
               isPrintingReceipt={isPrintingReceipt}
+              isCompletingSale={isCompletingSale}
               trainingMode={isTrainingMode}
               onTrainingDone={handleTrainingPaymentDone}
+              tyroCardEnabled={tyroCardEnabled}
+              tyroConfig={tyroPayments}
             />
 
             <div

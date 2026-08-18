@@ -1,8 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Banknote, CreditCard, Delete, HandCoins } from "lucide-react";
+import toast from "react-hot-toast";
 import { cn } from "@/lib/helper";
+import {
+  buildTyroPurchaseParams,
+  dollarsToTyroCents,
+  getTyroIClientWithUI,
+  getTyroPurchaseStatusMessage,
+  initiateTyroPurchase,
+  isTyroPurchaseApproved,
+} from "@/lib/tyro/iclient";
 import SideDrawer from "./SideDrawer";
 
 const KEYPAD_ROWS = [
@@ -49,24 +58,43 @@ export default function PosPaymentDrawer({
   onClose,
   amountDue = 0,
   onCompleteSale,
+  onPersistSale,
+  onFinishPaidSale,
   onPrintReceipt,
   isPrintingReceipt = false,
+  isCompletingSale = false,
   trainingMode = false,
   onTrainingDone,
+  tyroCardEnabled = false,
+  tyroConfig = null,
 }) {
   const [digits, setDigits] = useState("");
   const [step, setStep] = useState("tender"); // tender | finalise
   const [paymentSummary, setPaymentSummary] = useState(null);
+  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [isSalePersisted, setIsSalePersisted] = useState(false);
+  const [tyroApproved, setTyroApproved] = useState(false);
+  const purchaseLockRef = useRef(false);
   const amountDueLabel = Number(amountDue || 0)
     .toFixed(2)
     .replace(/\.00$/, "");
+  const useTyroCard = Boolean(tyroCardEnabled) && !trainingMode;
 
   useEffect(() => {
     if (!isOpen) return;
     setDigits("");
     setStep("tender");
     setPaymentSummary(null);
+    setIsPurchasing(false);
+    setIsSalePersisted(false);
+    setTyroApproved(false);
+    purchaseLockRef.current = false;
   }, [isOpen, amountDue]);
+
+  useEffect(() => {
+    if (!isOpen || !useTyroCard) return;
+    getTyroIClientWithUI().catch(() => {});
+  }, [isOpen, useTyroCard]);
 
   function appendToken(token) {
     setDigits((prev) => {
@@ -118,10 +146,71 @@ export default function PosPaymentDrawer({
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
+  async function runTyroCardPurchase(due) {
+    if (purchaseLockRef.current) return;
+    purchaseLockRef.current = true;
+    setIsPurchasing(true);
+
+    try {
+      const iclient = await getTyroIClientWithUI();
+      const requestParams = buildTyroPurchaseParams({
+        amount: dollarsToTyroCents(due),
+        mid: tyroConfig?.mid,
+        tid: tyroConfig?.tid,
+        integrationKey: tyroConfig?.integrationKey,
+        integratedReceipt: Boolean(tyroConfig?.integratedReceipt),
+        enableSurcharge: tyroConfig?.enableSurcharge !== false,
+      });
+
+      if (!requestParams) {
+        toast.error("Invalid amount for card payment");
+        return;
+      }
+
+      const result = await initiateTyroPurchase(iclient, requestParams);
+      if (!isTyroPurchaseApproved(result)) {
+        toast.error(getTyroPurchaseStatusMessage(result));
+        return;
+      }
+
+      const summary = {
+        method: "credit-card",
+        amountDue: due,
+        amountTendered: due,
+        change: 0,
+      };
+      setPaymentSummary(summary);
+      setStep("finalise");
+      setTyroApproved(true);
+
+      const persist = await onPersistSale?.(summary);
+      if (persist?.success) {
+        setIsSalePersisted(true);
+      }
+    } catch (error) {
+      toast.error(error?.message || "Card payment failed");
+    } finally {
+      purchaseLockRef.current = false;
+      setIsPurchasing(false);
+    }
+  }
+
   function handleSelectPayment(methodId) {
+    if (isPurchasing || isCompletingSale) return;
+
     const due = Number(amountDue) || 0;
     const tendered = resolvedAmount();
     const change = Math.max(0, Math.round((tendered - due) * 100) / 100);
+
+    if (methodId === "credit-card" && Boolean(tyroConfig?.enabled) && !trainingMode) {
+      if (!useTyroCard) {
+        toast.error("Authorise the Tyro terminal in Settings first");
+        return;
+      }
+      runTyroCardPurchase(due);
+      return;
+    }
+
     setPaymentSummary({
       method: methodId,
       amountDue: due,
@@ -132,10 +221,15 @@ export default function PosPaymentDrawer({
   }
 
   function handleCompleteSale() {
+    if (isSalePersisted) {
+      onFinishPaidSale?.();
+      return;
+    }
     onCompleteSale?.(paymentSummary);
   }
 
   function handleClose() {
+    if (isPurchasing || tyroApproved) return;
     setStep("tender");
     setPaymentSummary(null);
     onClose?.();
@@ -153,6 +247,7 @@ export default function PosPaymentDrawer({
       showHeader={false}
       side="right"
       zIndex={40}
+      closeDisabled={isPurchasing || tyroApproved}
       panelClassName="bg-[#984B28]"
       bodyClassName=""
       contentKey="pos-payment-drawer"
@@ -166,6 +261,8 @@ export default function PosPaymentDrawer({
           onCompleteSale={handleCompleteSale}
           onPrintReceipt={onPrintReceipt}
           isPrintingReceipt={isPrintingReceipt}
+          isCompletingSale={isCompletingSale}
+          isSalePersisted={isSalePersisted}
           trainingMode={trainingMode}
           onTrainingDone={onTrainingDone}
         />
@@ -201,7 +298,8 @@ export default function PosPaymentDrawer({
                     key={key}
                     type="button"
                     onClick={() => handleKey(key)}
-                    className="flex h-16 items-center justify-center rounded-md bg-white text-2xl font-semibold text-neutral-900 shadow-sm transition-transform active:scale-95"
+                    disabled={isPurchasing || isCompletingSale}
+                    className="flex h-16 items-center justify-center rounded-md bg-white text-2xl font-semibold text-neutral-900 shadow-sm transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
                     aria-label="Delete"
                   >
                     <Delete size={20} strokeWidth={2.25} />
@@ -213,7 +311,8 @@ export default function PosPaymentDrawer({
                   key={key}
                   type="button"
                   onClick={() => handleKey(key)}
-                  className="flex h-16 items-center justify-center rounded-md bg-white text-2xl font-semibold text-neutral-900 shadow-sm transition-transform active:scale-95"
+                  disabled={isPurchasing || isCompletingSale}
+                  className="flex h-16 items-center justify-center rounded-md bg-white text-2xl font-semibold text-neutral-900 shadow-sm transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {key}
                 </button>
@@ -222,20 +321,24 @@ export default function PosPaymentDrawer({
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            {PAYMENT_METHODS.map(({ id, label, Icon, className }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => handleSelectPayment(id)}
-                className={cn(
-                  "flex min-h-[5.5rem] flex-col items-center justify-center gap-1.5 rounded-lg px-3 py-3 text-sm font-bold uppercase tracking-wide shadow-sm transition-colors",
-                  className,
-                )}
-              >
-                <Icon size={28} strokeWidth={1.75} />
-                {label}
-              </button>
-            ))}
+            {PAYMENT_METHODS.map(({ id, label, Icon, className }) => {
+              const isCardWaiting = id === "credit-card" && isPurchasing;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  disabled={isPurchasing || isCompletingSale}
+                  onClick={() => handleSelectPayment(id)}
+                  className={cn(
+                    "flex min-h-[5.5rem] flex-col items-center justify-center gap-1.5 rounded-lg px-3 py-3 text-sm font-bold uppercase tracking-wide shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-70",
+                    className,
+                  )}
+                >
+                  <Icon size={28} strokeWidth={1.75} />
+                  {isCardWaiting ? "Waiting for EFTPOS…" : label}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -250,9 +353,17 @@ function FinaliseSaleStep({
   onCompleteSale,
   onPrintReceipt,
   isPrintingReceipt = false,
+  isCompletingSale = false,
+  isSalePersisted = false,
   trainingMode = false,
   onTrainingDone,
 }) {
+  const completeLabel = isSalePersisted
+    ? "Done"
+    : isCompletingSale
+      ? "Saving…"
+      : "Complete Sale";
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5">
       <div className="flex flex-1 flex-col items-center justify-center text-center">
@@ -306,9 +417,10 @@ function FinaliseSaleStep({
         <button
           type="button"
           onClick={onCompleteSale}
-          className="mt-6 flex min-h-[3.75rem] w-full items-center justify-center rounded-lg bg-[#ef3636] text-base font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24]"
+          disabled={isCompletingSale}
+          className="mt-6 flex min-h-[3.75rem] w-full items-center justify-center rounded-lg bg-[#ef3636] text-base font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24] disabled:cursor-not-allowed disabled:opacity-70"
         >
-          Complete Sale
+          {completeLabel}
         </button>
       )}
     </div>
