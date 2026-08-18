@@ -921,6 +921,7 @@ export default function PosTerminal() {
       method: paymentSummary.method,
       amountTendered: Number(paymentSummary.amountTendered || 0),
       changeDue: Number(paymentSummary.change || 0),
+      processingFee: Number(paymentSummary.processingFee || 0),
     });
   }
 

@@ -11,6 +11,7 @@ import {
   getTyroPurchaseStatusMessage,
   initiateTyroPurchase,
   isTyroPurchaseApproved,
+  parseTyroSurchargeDollars,
 } from "@/lib/tyro/iclient";
 import SideDrawer from "./SideDrawer";
 
@@ -173,11 +174,15 @@ export default function PosPaymentDrawer({
         return;
       }
 
+      const processingFee = parseTyroSurchargeDollars(result);
+      const charged = Math.round((due + processingFee) * 100) / 100;
+
       const summary = {
         method: "credit-card",
         amountDue: due,
-        amountTendered: due,
+        amountTendered: charged,
         change: 0,
+        processingFee,
       };
       setPaymentSummary(summary);
       setStep("finalise");
@@ -258,6 +263,7 @@ export default function PosPaymentDrawer({
           paymentSummary={paymentSummary}
           amountTendered={paymentSummary.amountTendered}
           change={paymentSummary.change}
+          processingFee={Number(paymentSummary.processingFee || 0)}
           onCompleteSale={handleCompleteSale}
           onPrintReceipt={onPrintReceipt}
           isPrintingReceipt={isPrintingReceipt}
@@ -350,6 +356,7 @@ function FinaliseSaleStep({
   paymentSummary,
   amountTendered,
   change,
+  processingFee = 0,
   onCompleteSale,
   onPrintReceipt,
   isPrintingReceipt = false,
@@ -363,6 +370,8 @@ function FinaliseSaleStep({
     : isCompletingSale
       ? "Saving…"
       : "Complete Sale";
+  const isCard = paymentSummary?.method === "credit-card";
+  const hasCardFee = isCard && Number(processingFee) > 0;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5">
@@ -370,15 +379,27 @@ function FinaliseSaleStep({
         <h2 className="text-2xl font-bold text-white">
           {trainingMode ? "Training Payment" : "Finalise Sale!"}
         </h2>
-        <p className="mt-2 text-base font-medium text-white/95">
-          Change required from: {formatMoney(amountTendered)}
-        </p>
+        {isCard ? (
+          <p className="mt-2 text-base font-medium text-white/95">
+            Amount charged
+          </p>
+        ) : (
+          <p className="mt-2 text-base font-medium text-white/95">
+            Change required from: {formatMoney(amountTendered)}
+          </p>
+        )}
 
         <div className="mt-8 flex min-h-[4.5rem] w-full max-w-sm items-center justify-center rounded-lg bg-white px-4 py-5">
           <span className="text-4xl font-bold tabular-nums text-neutral-900">
-            {formatMoney(change)}
+            {formatMoney(isCard ? amountTendered : change)}
           </span>
         </div>
+
+        {hasCardFee ? (
+          <p className="mt-3 text-sm font-medium text-white/90">
+            Includes surcharge {formatMoney(processingFee)}
+          </p>
+        ) : null}
 
         {trainingMode ? (
           <p className="mt-5 max-w-sm text-sm text-white/85">

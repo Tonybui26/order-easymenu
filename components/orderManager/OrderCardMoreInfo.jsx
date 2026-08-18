@@ -124,6 +124,7 @@ export default function OrderCardMoreInfo({
   const deliveryAddress = isDelivery ? formatDeliveryAddress(order) : null;
   const subtotal = Number(order.subtotal ?? order.total ?? 0);
   const surchargeTotal = Number(order.surchargeTotal ?? 0);
+  const processingFee = Number(order.processingFee ?? 0);
   const total = Number(order.total ?? 0);
 
   const hasCustomerSection =
@@ -180,6 +181,12 @@ export default function OrderCardMoreInfo({
         <InfoRow label="Subtotal" value={`$${subtotal.toFixed(2)}`} />
         {surchargeTotal > 0 && (
           <InfoRow label="Surcharges" value={`$${surchargeTotal.toFixed(2)}`} />
+        )}
+        {processingFee > 0 && (
+          <InfoRow
+            label="Payment surcharge"
+            value={`$${processingFee.toFixed(2)}`}
+          />
         )}
         <InfoRow
           label="Total"
