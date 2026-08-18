@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/helper";
+import SettingsOnOffBadge from "./SettingsOnOffBadge";
 
 /**
  * Single boolean setting row for SystemSettings and future settings sections.
@@ -37,16 +38,7 @@ export default function SettingsToggleRow({
           >
             {title}
           </h3>
-          <span
-            className={cn(
-              "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-              checked
-                ? "bg-brand_accent/15 text-brand_accent"
-                : "bg-neutral-200/80 text-neutral-500",
-            )}
-          >
-            {checked ? "On" : "Off"}
-          </span>
+          <SettingsOnOffBadge checked={checked} />
         </span>
         <span
           className={cn(
