@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Folder,
   History,
+  Map,
   MonitorSmartphone,
   Printer,
   QrCode,
@@ -24,6 +25,14 @@ const NAV_ITEMS = [
     description: "Counter point of sale",
     href: "/pos",
     Icon: MonitorSmartphone,
+    requiresPos: true,
+  },
+  {
+    id: "table-map",
+    label: "Table Map",
+    description: "Floor plan for table service",
+    href: "/pos/table-map",
+    Icon: Map,
     requiresPos: true,
   },
   {
@@ -82,6 +91,12 @@ function resolveActiveItem(pathname, items) {
   }
   if (pathname === "/pos/held" || pathname?.startsWith("/pos/held/")) {
     return list.find((item) => item.id === "held") || list[0];
+  }
+  if (
+    pathname === "/pos/table-map" ||
+    pathname?.startsWith("/pos/table-map/")
+  ) {
+    return list.find((item) => item.id === "table-map") || list[0];
   }
   if (pathname === "/pos" || pathname?.startsWith("/pos/")) {
     return list.find((item) => item.id === "pos") || list[0];

@@ -64,6 +64,7 @@ export const config = {
     "/lock",
     "/pos",
     "/pos/held",
+    "/pos/table-map",
     "/pos/register",
     "/pos/register/session",
     "/order-history",

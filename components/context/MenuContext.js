@@ -49,6 +49,9 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   const [posLayouts, setPosLayouts] = useState(
     (menuData && menuData.posLayouts) || [],
   );
+  const [posTableMaps, setPosTableMaps] = useState(
+    (menuData && menuData.posTableMaps) || [],
+  );
   const [storeProfile, setStoreProfile] = useState({
     storeName: (menuData && menuData.storeName) || "",
     storeLogo: (menuData && menuData.storeProfileImage) || "",
@@ -87,6 +90,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
           setGlobalVariants(data.globalVariants || {});
           setItemGroups(data.itemGroups || []);
           setPosLayouts(data.posLayouts || []);
+          setPosTableMaps(data.posTableMaps || []);
           setStoreProfile({
             storeName: data.storeName || "",
             storeLogo: data.storeProfileImage || "",
@@ -165,6 +169,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         setGlobalVariants(data.globalVariants || {});
         setItemGroups(data.itemGroups || []);
         setPosLayouts(data.posLayouts || []);
+        setPosTableMaps(data.posTableMaps || []);
         setStoreProfile({
           storeName: data.storeName || "",
           storeLogo: data.storeProfileImage || "",
@@ -390,6 +395,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         // per-printer routing in handlePrintingOrder.
         itemGroups,
         posLayouts,
+        posTableMaps,
         menuId,
         storeProfile,
         setStoreProfile,
