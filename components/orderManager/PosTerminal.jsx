@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Plus } from "lucide-react";
@@ -52,6 +52,13 @@ import {
 } from "@/lib/pos/posPaymentsConfig";
 import { buildTrainingKitchenOrder } from "@/lib/pos/buildTrainingKitchenOrder";
 import { formatPosItemDisplayName } from "@/lib/helper/printNameAlias";
+
+function resolveOrderTypeFromParam(value) {
+  if (value === "takeaway") return "takeaway";
+  if (value === "buzzer") return "buzzer";
+  if (value === "delivery") return "delivery";
+  return "dine-in";
+}
 
 function mapPosOrderType(orderType) {
   if (orderType === "dine-in") return "dine-in";
@@ -173,7 +180,14 @@ export default function PosTerminal() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const resumeParam = searchParams.get("resume");
+  const tableParam = searchParams.get("table");
+  const orderTypeParam = searchParams.get("orderType");
   const resumeLoadedRef = useRef(null);
+  const tablePrefilledRef = useRef(null);
+  const tableNameFromUrl = resumeParam ? "" : String(tableParam || "").trim();
+  const orderTypeFromUrl = tableNameFromUrl
+    ? resolveOrderTypeFromParam(orderTypeParam)
+    : null;
   const {
     menuContent,
     posLayouts,
@@ -217,6 +231,7 @@ export default function PosTerminal() {
   const [selectedModifiers, setSelectedModifiers] = useState({});
   const [isOrderTypeMissing, setIsOrderTypeMissing] = useState(false);
   const [tableFieldShakeKey, setTableFieldShakeKey] = useState(0);
+  const [isTablePrefilled, setIsTablePrefilled] = useState(false);
   const [cancelSentLineDrawer, setCancelSentLineDrawer] = useState(
     POS_CANCEL_SENT_LINE_DRAWER_CLOSED,
   );
@@ -312,6 +327,16 @@ export default function PosTerminal() {
     };
   }, [resumeParam, menuContent, router, isTrainingMode]);
 
+  useLayoutEffect(() => {
+    if (!tableNameFromUrl) return;
+
+    setTableNumber(tableNameFromUrl);
+    setOrderType(orderTypeFromUrl);
+    setIsTablePrefilled(true);
+    setIsOrderTypeMissing(false);
+    tablePrefilledRef.current = tableNameFromUrl;
+  }, [tableNameFromUrl, orderTypeFromUrl]);
+
   useEffect(() => {
     if (tabs.length === 0) {
       setSelectedTabId(null);
@@ -341,21 +366,31 @@ export default function PosTerminal() {
   const selectedTabIndex = tabs.findIndex((tab) => tab.id === selectedTabId);
   const selectedRows = selectedTab?.rows || [];
   const isViewOnly = isCheckPaid;
-  const isTableFieldLocked = isViewOnly || isResumedCheck;
-  const awaitingOrderType = !orderType && !isTableFieldLocked;
+  const resolvedTableNumber = tableNameFromUrl || tableNumber;
+  const resolvedOrderType = orderTypeFromUrl || orderType;
+  const isTableFromMap = Boolean(tableNameFromUrl);
+  const isTableFieldLocked =
+    isViewOnly || isResumedCheck || isTablePrefilled || isTableFromMap;
+  const awaitingOrderType = !resolvedOrderType && !isTableFieldLocked;
 
   const tableLabel = (() => {
-    if (!orderType) {
+    if (!resolvedOrderType) {
       if (isOrderTypeMissing) return "SELECT ORDER TYPE";
       return "DINE IN or TAKE AWAY";
     }
-    if (orderType === "dine-in") return `TABLE: ${tableNumber || "--"}`;
-    if (orderType === "buzzer") return `BUZZER: ${tableNumber || "--"}`;
-    if (orderType === "takeaway")
-      return `TAKEAWAY${tableNumber ? `: ${tableNumber}` : ""}`;
-    if (orderType === "delivery")
-      return `DELIVERY${tableNumber ? `: ${tableNumber}` : ""}`;
-    return `TABLE: ${tableNumber || "--"}`;
+    if (resolvedOrderType === "dine-in") {
+      return `TABLE: ${resolvedTableNumber || "--"}`;
+    }
+    if (resolvedOrderType === "buzzer") {
+      return `BUZZER: ${resolvedTableNumber || "--"}`;
+    }
+    if (resolvedOrderType === "takeaway") {
+      return `TAKEAWAY${resolvedTableNumber ? `: ${resolvedTableNumber}` : ""}`;
+    }
+    if (resolvedOrderType === "delivery") {
+      return `DELIVERY${resolvedTableNumber ? `: ${resolvedTableNumber}` : ""}`;
+    }
+    return `TABLE: ${resolvedTableNumber || "--"}`;
   })();
 
   function addConfiguredLine(
@@ -755,9 +790,11 @@ export default function PosTerminal() {
     handleClearOrder();
     setTableNumber("");
     setOrderType(null);
+    setIsTablePrefilled(false);
+    tablePrefilledRef.current = null;
     setKeypadDrawer(null);
     setIsPaymentDrawerOpen(false);
-    router.replace("/pos");
+    router.replace("/pos", { scroll: false });
   }
 
   async function handleSendOrder() {
@@ -769,7 +806,7 @@ export default function PosTerminal() {
       return;
     }
 
-    const mappedOrderType = mapPosOrderType(orderType);
+    const mappedOrderType = mapPosOrderType(resolvedOrderType);
     if (!mappedOrderType) {
       nudgeTableFieldForMissingOrderType();
       return;
@@ -782,8 +819,8 @@ export default function PosTerminal() {
       if (isTrainingMode) {
         const mockOrder = buildTrainingKitchenOrder({
           lines: unsentLines,
-          orderType,
-          tableNumber,
+          orderType: resolvedOrderType,
+          tableNumber: resolvedTableNumber,
         });
 
         try {
@@ -812,7 +849,7 @@ export default function PosTerminal() {
         orderType: mappedOrderType,
         items: buildPosSendItems(unsentLines),
       };
-      if (tableNumber) payload.table = tableNumber;
+      if (resolvedTableNumber) payload.table = resolvedTableNumber;
       if (posCheckId) payload.posCheckId = posCheckId;
 
       const result = await sendPosOrder(payload);
@@ -878,8 +915,8 @@ export default function PosTerminal() {
       const payload = buildTaxInvoiceReceiptFromPosCheck({
         storeProfile,
         cartLines: printableLines,
-        orderType,
-        tableNumber,
+        orderType: resolvedOrderType,
+        tableNumber: resolvedTableNumber,
         paymentSummary,
         taxInvoiceNo,
       });
@@ -935,6 +972,8 @@ export default function PosTerminal() {
     setIsResumedCheck(false);
     setTableNumber("");
     setOrderType(null);
+    setIsTablePrefilled(false);
+    tablePrefilledRef.current = null;
     setKeypadDrawer(null);
     resumeLoadedRef.current = null;
     closeCustomization();
@@ -1068,7 +1107,7 @@ export default function PosTerminal() {
   const keypadInitialNumber =
     keypadDrawer?.mode === "quantity"
       ? keypadDrawer.initialNumber
-      : tableNumber;
+      : resolvedTableNumber;
 
   const activeCartLine = customizingLineId
     ? cartLines.find((line) => line.lineId === customizingLineId)

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/helper";
+import { findPosHeldOrderForTable } from "@/lib/pos/posTableMapHeld";
 import {
   TABLE_MAP_DEFAULT_FONT_COLOR,
   TABLE_MAP_DEFAULT_FONT_SIZE,
@@ -8,13 +10,18 @@ import {
   getTableMapBackgroundColor,
   getTableMapCanvasSize,
   getTableMapFloorStyle,
+  getTableMapTableName,
   getTableMapViewportLayout,
   isTableMapPartition,
   isTableMapTable,
 } from "@/lib/pos/posTableMaps";
 import { TableMapElementGraphic } from "./posTableMapIcons";
 
-export default function PosTableMapFloor({ tableMap }) {
+export default function PosTableMapFloor({
+  tableMap,
+  heldOrders = [],
+  onTableSelect,
+}) {
   const containerRef = useRef(null);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const canvasSize = getTableMapCanvasSize(tableMap);
@@ -58,29 +65,59 @@ export default function PosTableMapFloor({ tableMap }) {
               ...getTableMapFloorStyle(),
             }}
           >
-            {objects.map((object) => (
-              <div
-                key={object.id}
-                className="absolute"
-                style={{
-                  left: object.x,
-                  top: object.y,
-                  width: object.width,
-                  height: object.height,
-                  transform: `rotate(${object.rotation || 0}deg)`,
-                }}
-              >
-                <div className="relative h-full w-full overflow-visible">
-                  <TableMapElementGraphic
-                    type={object.type}
-                    fillColor={getTableMapBackgroundColor(object)}
-                  />
-                  {shouldShowObjectLabel(object) ? (
-                    <ObjectLabel object={object} />
-                  ) : null}
+            {objects.map((object) => {
+              const isTable = isTableMapTable(object);
+              const tableName = getTableMapTableName(object);
+              const isInteractive = isTable && Boolean(tableName);
+              const hasOpenOrder =
+                isInteractive &&
+                Boolean(findPosHeldOrderForTable(heldOrders, tableName));
+
+              return (
+                <div
+                  key={object.id}
+                  className="absolute"
+                  style={{
+                    left: object.x,
+                    top: object.y,
+                    width: object.width,
+                    height: object.height,
+                    transform: `rotate(${object.rotation || 0}deg)`,
+                  }}
+                >
+                  <button
+                    type="button"
+                    disabled={!isInteractive}
+                    onClick={() => {
+                      if (!isInteractive) return;
+                      onTableSelect?.(object);
+                    }}
+                    className={cn(
+                      "relative h-full w-full overflow-visible border-0 bg-transparent p-0",
+                      isInteractive
+                        ? "cursor-pointer touch-manipulation"
+                        : "cursor-default",
+                    )}
+                    aria-label={
+                      isInteractive
+                        ? `Table ${tableName}${hasOpenOrder ? ", open order" : ""}`
+                        : undefined
+                    }
+                  >
+                    <TableMapElementGraphic
+                      type={object.type}
+                      fillColor={getTableMapBackgroundColor(object)}
+                    />
+                    {shouldShowObjectLabel(object) ? (
+                      <ObjectLabel object={object} />
+                    ) : null}
+                    {hasOpenOrder ? (
+                      <span className="absolute right-1 top-1 size-2.5 rounded-full bg-brand_accent ring-2 ring-white" />
+                    ) : null}
+                  </button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ) : null}
