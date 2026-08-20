@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { fetchPosRegisterSession } from "@/lib/api/fetchApi";
+import { getPosHomePath } from "@/lib/pos/posConfig";
+import { useMenuContext } from "@/components/context/MenuContext";
 import PosChromeHeader from "./PosChromeHeader";
 import PosRegisterClose from "./PosRegisterClose";
 import PosRegisterPayInOut from "./PosRegisterPayInOut";
@@ -20,6 +22,8 @@ const SESSION_TABS = [
 export default function PosRegisterSession() {
   const router = useRouter();
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
+  const { menuConfig } = useMenuContext();
+  const posHomePath = getPosHomePath(menuConfig);
   const [activeTab, setActiveTab] = useState("close");
   const [session, setSession] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,7 +38,7 @@ export default function PosRegisterSession() {
 
       if (!result.success) {
         toast.error(result.error || "Failed to load register session");
-        router.replace("/pos");
+        router.replace(posHomePath);
         return;
       }
 
@@ -51,7 +55,7 @@ export default function PosRegisterSession() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, posHomePath]);
 
   function handleSessionUpdated(nextSession) {
     setSession(nextSession);

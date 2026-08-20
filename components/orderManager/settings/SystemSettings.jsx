@@ -79,6 +79,14 @@ export default function SystemSettings({
         ) : (
           <div className="divide-y divide-gray-100/80">
             <SettingsToggleRow
+              title="Restaurant mode"
+              description="When on, the table map is the POS home. Staff land on the floor plan after unlock, the logo returns there, and Table Map appears in the header menu. Open a table from the map to take orders."
+              checked={Boolean(draftPosConfig?.restaurantModeEnabled)}
+              onChange={(checked) =>
+                updatePosDraft({ restaurantModeEnabled: checked })
+              }
+            />
+            <SettingsToggleRow
               title="Mark all dockets served when paid"
               description="For pay-at-counter stores: when the customer pays, every kitchen docket on the check is marked delivered. Leave off for pay-first stores where food is served after payment."
               checked={Boolean(

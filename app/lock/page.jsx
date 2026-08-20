@@ -12,6 +12,7 @@ import {
 } from "@/lib/staff/staffRoles";
 import { getAuthRedirectUrl } from "@/lib/constants/auth";
 import { useMenuContext } from "@/components/context/MenuContext";
+import { resolvePosConfig } from "@/lib/pos/posConfig";
 
 const DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
@@ -26,6 +27,9 @@ function LockScreen() {
 
   const callbackUrl = searchParams.get("callbackUrl");
   const posEnabled = Boolean(menuConfig?.posEnabled);
+  const restaurantModeEnabled = Boolean(
+    resolvePosConfig(menuConfig).restaurantModeEnabled,
+  );
   const canSubmit =
     pin.length >= STAFF_PIN_CODE_MIN_LENGTH &&
     pin.length <= STAFF_PIN_CODE_MAX_LENGTH;
@@ -46,7 +50,9 @@ function LockScreen() {
         setPin("");
         return;
       }
-      router.replace(getAuthRedirectUrl(callbackUrl, posEnabled));
+      router.replace(
+        getAuthRedirectUrl(callbackUrl, posEnabled, restaurantModeEnabled),
+      );
     } catch {
       setError("Unable to verify pin");
       setPin("");

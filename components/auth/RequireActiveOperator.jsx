@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { isStaffPinLockEnabled } from "@/lib/staff/staffRoles";
+import { getPosHomePath } from "@/lib/pos/posConfig";
 
 const AUTH_PUBLIC_PATHS = ["/signin", "/signup"];
 
@@ -27,7 +28,7 @@ export default function RequireActiveOperator({ children }) {
 
     if (!pinLockEnabled) {
       if (isLockPath) {
-        router.replace(posEnabled ? "/pos" : "/");
+        router.replace(posEnabled ? getPosHomePath(menuConfig) : "/");
       }
       return;
     }
@@ -41,6 +42,7 @@ export default function RequireActiveOperator({ children }) {
     isLockPath,
     pinLockEnabled,
     posEnabled,
+    menuConfig,
     router,
     status,
   ]);

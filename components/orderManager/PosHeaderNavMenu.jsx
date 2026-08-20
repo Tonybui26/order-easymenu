@@ -17,22 +17,24 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { cn } from "@/lib/helper";
+import { isRestaurantModeEnabled } from "@/lib/pos/posConfig";
 
 const NAV_ITEMS = [
-  {
-    id: "pos",
-    label: "Point of Sale",
-    description: "Counter point of sale",
-    href: "/pos",
-    Icon: MonitorSmartphone,
-    requiresPos: true,
-  },
   {
     id: "table-map",
     label: "Table Map",
     description: "Floor plan for table service",
     href: "/pos/table-map",
     Icon: Map,
+    requiresPos: true,
+    requiresRestaurantMode: true,
+  },
+  {
+    id: "pos",
+    label: "Point of Sale",
+    description: "Counter point of sale",
+    href: "/pos",
+    Icon: MonitorSmartphone,
     requiresPos: true,
   },
   {
@@ -131,9 +133,12 @@ export default function PosHeaderNavMenu({ className }) {
   const rootRef = useRef(null);
 
   const posEnabled = Boolean(menuConfig?.posEnabled);
-  const navItems = NAV_ITEMS.filter(
-    (item) => !item.requiresPos || posEnabled,
-  );
+  const restaurantMode = isRestaurantModeEnabled(menuConfig);
+  const navItems = NAV_ITEMS.filter((item) => {
+    if (item.requiresPos && !posEnabled) return false;
+    if (item.requiresRestaurantMode && !restaurantMode) return false;
+    return true;
+  });
   const current = resolveActiveItem(pathname, navItems);
 
   useEffect(() => {

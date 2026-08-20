@@ -10,7 +10,9 @@ import {
   finalisePosRegisterSession,
 } from "@/lib/api/fetchApi";
 import { registerOperatorPayload } from "@/lib/pos/registerOperatorPayload";
+import { getPosHomePath } from "@/lib/pos/posConfig";
 import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
+import { useMenuContext } from "@/components/context/MenuContext";
 
 const KEYPAD_ROWS = [
   ["1", "2", "3", "backspace"],
@@ -83,6 +85,8 @@ function buildCountsPayload(countsMap) {
 export default function PosRegisterClose({ session, onSessionUpdated }) {
   const router = useRouter();
   const { activeOperator } = useActiveOperator();
+  const { menuConfig } = useMenuContext();
+  const posHomePath = getPosHomePath(menuConfig);
   const [counts, setCounts] = useState(() => countsFromSession(session));
   const [selectedId, setSelectedId] = useState(null);
   const [digits, setDigits] = useState("");
@@ -233,7 +237,7 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
         return;
       }
       toast.success("Register closed");
-      router.push("/pos");
+      router.push(posHomePath);
     } finally {
       setIsClosing(false);
     }

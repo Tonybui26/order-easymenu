@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@/lib/helper";
 import SideDrawer from "./SideDrawer";
 
 function formatMoney(amount) {
@@ -41,13 +42,24 @@ export default function PosTableMapTableDrawer({
       }
       closeDisabled={isProcessing}
       contentKey={`table-map-drawer-${tableName}`}
-      footer={
-        <div className="flex flex-col gap-3">
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-neutral-600">
+          Load order to add items or take payment. Print bill sends a bill
+          receipt for this table without opening the register.
+        </p>
+
+        <div className="grid grid-cols-1 gap-2 rounded-xl border border-neutral-100 bg-neutral-50/80 p-3">
           <button
             type="button"
             disabled={isProcessing || !heldOrder?.orderIds?.length}
             onClick={onLoadOrder}
-            className="w-full rounded-xl bg-brand_accent px-4 py-3.5 text-base font-semibold text-white transition-colors hover:bg-brand_accent/90 disabled:cursor-not-allowed disabled:bg-neutral-300"
+            className={cn(
+              "rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
+              isProcessing
+                ? "cursor-not-allowed opacity-50"
+                : "hover:bg-blue-700 active:bg-blue-800",
+            )}
           >
             Load order
           </button>
@@ -55,17 +67,17 @@ export default function PosTableMapTableDrawer({
             type="button"
             disabled={isProcessing || !heldOrder?.orderIds?.length}
             onClick={onPrintBill}
-            className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-3.5 text-base font-semibold text-neutral-800 transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className={cn(
+              "rounded-xl bg-teal-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
+              isProcessing
+                ? "cursor-not-allowed opacity-50"
+                : "hover:bg-teal-700 active:bg-teal-800",
+            )}
           >
-            {isProcessing ? "Printing…" : "Print bill"}
+            {isProcessing ? "Printing..." : "Print bill"}
           </button>
         </div>
-      }
-    >
-      <p className="text-sm text-neutral-600">
-        Load order to add items or take payment. Print bill sends a bill receipt
-        for this table without opening the register.
-      </p>
+      </div>
     </SideDrawer>
   );
 }

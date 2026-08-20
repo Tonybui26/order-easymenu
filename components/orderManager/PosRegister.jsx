@@ -10,7 +10,9 @@ import {
   openPosRegisterSession,
 } from "@/lib/api/fetchApi";
 import { registerOperatorPayload } from "@/lib/pos/registerOperatorPayload";
+import { getPosHomePath } from "@/lib/pos/posConfig";
 import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
+import { useMenuContext } from "@/components/context/MenuContext";
 import PosChromeHeader from "./PosChromeHeader";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 
@@ -60,6 +62,8 @@ export default function PosRegister() {
   const router = useRouter();
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
   const { activeOperator } = useActiveOperator();
+  const { menuConfig } = useMenuContext();
+  const posHomePath = getPosHomePath(menuConfig);
   const [digits, setDigits] = useState("");
   const [now, setNow] = useState(null);
   const [isChecking, setIsChecking] = useState(true);
@@ -137,7 +141,7 @@ export default function PosRegister() {
   }
 
   function handleCancel() {
-    router.push("/pos");
+    router.push(posHomePath);
   }
 
   async function handleOpen() {
@@ -151,13 +155,13 @@ export default function PosRegister() {
       if (!result.success) {
         if (result.status === 409) {
           toast.error(result.error || "Register is already open");
-          router.replace("/pos");
+          router.replace(posHomePath);
           return;
         }
         toast.error(result.error || "Failed to open register");
         return;
       }
-      router.push("/pos");
+      router.push(posHomePath);
     } finally {
       setIsOpening(false);
     }

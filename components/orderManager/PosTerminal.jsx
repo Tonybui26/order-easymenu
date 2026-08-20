@@ -45,7 +45,7 @@ import DismissibleToast, {
 import { printKitchenOrder } from "@/lib/helper/printKitchenOrder";
 import { buildTaxInvoiceReceiptFromPosCheck } from "@/lib/printers/receipt/buildTaxInvoiceReceiptFromPosCheck";
 import { printTaxInvoiceReceipt } from "@/lib/printers/printTaxInvoiceReceipt";
-import { resolvePosConfig } from "@/lib/pos/posConfig";
+import { resolvePosConfig, getPosHomePath, isRestaurantModeEnabled } from "@/lib/pos/posConfig";
 import {
   isTyroPosCardReady,
   resolvePosPaymentsConfig,
@@ -54,6 +54,7 @@ import { buildTrainingKitchenOrder } from "@/lib/pos/buildTrainingKitchenOrder";
 import { formatPosItemDisplayName } from "@/lib/helper/printNameAlias";
 
 function resolveOrderTypeFromParam(value) {
+  if (!value) return null;
   if (value === "takeaway") return "takeaway";
   if (value === "buzzer") return "buzzer";
   if (value === "delivery") return "delivery";
@@ -184,10 +185,6 @@ export default function PosTerminal() {
   const orderTypeParam = searchParams.get("orderType");
   const resumeLoadedRef = useRef(null);
   const tablePrefilledRef = useRef(null);
-  const tableNameFromUrl = resumeParam ? "" : String(tableParam || "").trim();
-  const orderTypeFromUrl = tableNameFromUrl
-    ? resolveOrderTypeFromParam(orderTypeParam)
-    : null;
   const {
     menuContent,
     posLayouts,
@@ -197,6 +194,16 @@ export default function PosTerminal() {
     itemGroups,
     menuConfig,
   } = useMenuContext();
+  const tableNameFromUrl = resumeParam ? "" : String(tableParam || "").trim();
+  const restaurantMode = isRestaurantModeEnabled(menuConfig);
+  const orderTypeFromUrl = (() => {
+    if (!tableNameFromUrl) return null;
+    const fromParam = resolveOrderTypeFromParam(orderTypeParam);
+    if (fromParam) return fromParam;
+    // Restaurant mode: opening a table defaults to dine-in.
+    if (restaurantMode) return "dine-in";
+    return null;
+  })();
   const {
     toast: dismissibleToast,
     showToast: showDismissibleToast,
@@ -306,10 +313,18 @@ export default function PosTerminal() {
         setPosCheckId(resumeState.posCheckId);
         setTaxInvoiceNo(resumeState.taxInvoiceNo || "");
         setTableNumber(resumeState.tableNumber);
-        setOrderType(resumeState.orderType);
+        // Restaurant mode table checks open as dine-in; staff can switch to takeaway per fire.
+        const nextOrderType =
+          restaurantMode && resumeState.tableNumber
+            ? "dine-in"
+            : resumeState.orderType;
+        setOrderType(nextOrderType);
         setIsCheckPaid(resumeState.isCheckPaid);
         setIsResumedCheck(true);
         setIsOrderTypeMissing(false);
+        if (restaurantMode && resumeState.tableNumber) {
+          setIsTablePrefilled(true);
+        }
         router.replace("/pos");
       } catch (error) {
         if (!cancelled) {
@@ -325,7 +340,7 @@ export default function PosTerminal() {
     return () => {
       cancelled = true;
     };
-  }, [resumeParam, menuContent, router, isTrainingMode]);
+  }, [resumeParam, menuContent, router, isTrainingMode, restaurantMode]);
 
   useLayoutEffect(() => {
     if (!tableNameFromUrl) return;
@@ -369,13 +384,16 @@ export default function PosTerminal() {
   const resolvedTableNumber = tableNameFromUrl || tableNumber;
   const resolvedOrderType = orderTypeFromUrl || orderType;
   const isTableFromMap = Boolean(tableNameFromUrl);
-  const isTableFieldLocked =
-    isViewOnly || isResumedCheck || isTablePrefilled || isTableFromMap;
+  const isTableNumberLocked = isTablePrefilled || isTableFromMap;
+  const disableTableNumberInput =
+    isTableNumberLocked || (isResumedCheck && Boolean(resolvedTableNumber));
+  const isTableFieldLocked = isViewOnly;
   const awaitingOrderType = !resolvedOrderType && !isTableFieldLocked;
 
   const tableLabel = (() => {
     if (!resolvedOrderType) {
       if (isOrderTypeMissing) return "SELECT ORDER TYPE";
+      if (resolvedTableNumber) return `TABLE: ${resolvedTableNumber}`;
       return "DINE IN or TAKE AWAY";
     }
     if (resolvedOrderType === "dine-in") {
@@ -700,8 +718,11 @@ export default function PosTerminal() {
   }
 
   function handleTableConfirm({ number, orderType: nextOrderType }) {
-    if (isTableFieldLocked) return;
-    setTableNumber(number || "");
+    if (isViewOnly) return;
+    const nextTableNumber = disableTableNumberInput
+      ? resolvedTableNumber
+      : number;
+    setTableNumber(nextTableNumber || "");
     setOrderType(nextOrderType || null);
     if (nextOrderType) setIsOrderTypeMissing(false);
   }
@@ -794,7 +815,7 @@ export default function PosTerminal() {
     tablePrefilledRef.current = null;
     setKeypadDrawer(null);
     setIsPaymentDrawerOpen(false);
-    router.replace("/pos", { scroll: false });
+    router.replace(getPosHomePath(menuConfig), { scroll: false });
   }
 
   async function handleSendOrder() {
@@ -978,6 +999,9 @@ export default function PosTerminal() {
     resumeLoadedRef.current = null;
     closeCustomization();
     setIsPaymentDrawerOpen(false);
+    if (restaurantMode) {
+      router.replace(getPosHomePath(menuConfig));
+    }
   }
 
   async function handlePersistSale(paymentSummary) {
@@ -1146,7 +1170,11 @@ export default function PosTerminal() {
                 type="button"
                 onClick={() => {
                   if (isTableFieldLocked) return;
-                  setKeypadDrawer({ mode: "table" });
+                  setKeypadDrawer({
+                    mode: "table",
+                    disableNumberInput: disableTableNumberInput,
+                    initialNumber: resolvedTableNumber,
+                  });
                 }}
                 disabled={isTableFieldLocked}
                 initial={{ x: 0 }}
@@ -1174,6 +1202,7 @@ export default function PosTerminal() {
               mode={keypadDrawer?.mode || "table"}
               onClose={() => setKeypadDrawer(null)}
               initialNumber={keypadInitialNumber}
+              disableNumberInput={Boolean(keypadDrawer?.disableNumberInput)}
               onConfirm={handleKeypadConfirm}
             />
 

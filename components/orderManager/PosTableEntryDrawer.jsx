@@ -33,6 +33,7 @@ export default function PosTableEntryDrawer({
   onClose,
   mode = "table",
   initialNumber = "",
+  disableNumberInput = false,
   onConfirm,
 }) {
   const [digits, setDigits] = useState("");
@@ -49,6 +50,7 @@ export default function PosTableEntryDrawer({
   }, [isOpen, initialNumber]);
 
   function appendDigit(digit) {
+    if (disableNumberInput) return;
     setIsNumberMissing(false);
     setDigits((prev) => {
       if (digit === ".") {
@@ -62,6 +64,7 @@ export default function PosTableEntryDrawer({
   }
 
   function handleKey(key) {
+    if (disableNumberInput) return;
     if (key === "backspace") {
       setDigits((prev) => prev.slice(0, -1));
       return;
@@ -175,8 +178,9 @@ export default function PosTableEntryDrawer({
                 <button
                   key={key}
                   type="button"
+                  disabled={disableNumberInput}
                   onClick={() => handleKey(key)}
-                  className="flex h-16 items-center justify-center rounded-md bg-white text-neutral-800 shadow-sm transition-transform active:scale-95"
+                  className="flex h-16 items-center justify-center rounded-md bg-white text-neutral-800 shadow-sm transition-transform active:scale-95 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 disabled:shadow-none"
                   aria-label="Delete"
                 >
                   <Delete size={18} strokeWidth={2.25} />
@@ -187,14 +191,21 @@ export default function PosTableEntryDrawer({
               <button
                 key={key}
                 type="button"
+                disabled={disableNumberInput}
                 onClick={() => handleKey(key)}
-                className="flex h-16 items-center justify-center rounded-md bg-white text-xl font-semibold text-neutral-900 shadow-sm transition-transform active:scale-95"
+                className="flex h-16 items-center justify-center rounded-md bg-white text-xl font-semibold text-neutral-900 shadow-sm transition-transform active:scale-95 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 disabled:shadow-none"
               >
                 {key}
               </button>
             );
           })}
         </div>
+
+        {!isQuantityMode && disableNumberInput ? (
+          <p className="mb-3 text-center text-xs font-medium text-white/75">
+            Table number is locked from the table map.
+          </p>
+        ) : null}
 
         {isQuantityMode ? (
           <button

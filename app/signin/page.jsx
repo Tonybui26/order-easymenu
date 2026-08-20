@@ -6,21 +6,29 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getAuthRedirectUrl } from "@/lib/constants/auth";
 import { fetchGetMenuByOwnerEmail } from "@/lib/api/fetchApi";
+import { resolvePosConfig } from "@/lib/pos/posConfig";
 
 export default async function SignInPage({ searchParams }) {
   const callbackUrl = searchParams?.callbackUrl;
   const userSession = await getServerUserSession();
   if (userSession) {
     let posEnabled = false;
+    let restaurantModeEnabled = false;
     if (userSession.ownerEmail) {
       try {
         const menu = await fetchGetMenuByOwnerEmail(userSession.ownerEmail);
         posEnabled = Boolean(menu?.config?.posEnabled);
+        restaurantModeEnabled = Boolean(
+          resolvePosConfig(menu?.config).restaurantModeEnabled,
+        );
       } catch {
         posEnabled = false;
+        restaurantModeEnabled = false;
       }
     }
-    redirect(getAuthRedirectUrl(callbackUrl, posEnabled));
+    redirect(
+      getAuthRedirectUrl(callbackUrl, posEnabled, restaurantModeEnabled),
+    );
   }
 
   return (

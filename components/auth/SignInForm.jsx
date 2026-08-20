@@ -9,6 +9,7 @@ import {
   writeActiveOperator,
 } from "@/lib/staff/activeOperatorStorage";
 import { fetchGetMenuByOwnerEmail } from "@/lib/api/fetchApi";
+import { resolvePosConfig } from "@/lib/pos/posConfig";
 
 function SignInFormInner() {
   const [username, setUsername] = useState("");
@@ -45,16 +46,23 @@ function SignInFormInner() {
         if (operator) writeActiveOperator(operator);
 
         let posEnabled = false;
+        let restaurantModeEnabled = false;
         if (session?.user?.ownerEmail) {
           try {
             const menu = await fetchGetMenuByOwnerEmail(session.user.ownerEmail);
             posEnabled = Boolean(menu?.config?.posEnabled);
+            restaurantModeEnabled = Boolean(
+              resolvePosConfig(menu?.config).restaurantModeEnabled,
+            );
           } catch {
             posEnabled = false;
+            restaurantModeEnabled = false;
           }
         }
 
-        router.push(getAuthRedirectUrl(callbackUrl, posEnabled));
+        router.push(
+          getAuthRedirectUrl(callbackUrl, posEnabled, restaurantModeEnabled),
+        );
         router.refresh();
       }
     } catch (error) {

@@ -10,6 +10,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useMenuContext } from "@/components/context/MenuContext";
+import { getPosHomePath } from "@/lib/pos/posConfig";
 import PosHeaderNavMenu from "./PosHeaderNavMenu";
 import PosHeaderUserPanel from "./PosHeaderUserPanel";
 import Logo from "../../public/images/logo.svg";
@@ -47,7 +48,7 @@ const POS_HEADER_ACTIONS = [
   },
 ];
 
-const POS_HOME_PATH = "/pos";
+const POS_TABLE_MAP_PATH = "/pos/table-map";
 
 /**
  * Shared POS chrome header: EasyMenu logo, shortcut icons, feature switcher.
@@ -58,6 +59,9 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
   const pathname = usePathname();
   const { menuConfig } = useMenuContext();
   const posEnabled = Boolean(menuConfig?.posEnabled);
+  const homePath = posEnabled ? getPosHomePath(menuConfig) : "/";
+  const logoAriaLabel =
+    homePath === POS_TABLE_MAP_PATH ? "Table map" : "Point of sale";
 
   const headerActions = POS_HEADER_ACTIONS.filter(
     (action) => !action.hidden && (!action.requiresPos || posEnabled),
@@ -65,7 +69,6 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
 
   function handleLogoClick() {
     onLogoClick?.();
-    const homePath = posEnabled ? POS_HOME_PATH : "/";
     if (pathname !== homePath) {
       router.push(homePath);
     }
@@ -76,7 +79,7 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
       <button
         type="button"
         onClick={handleLogoClick}
-        aria-label="Point of sale"
+        aria-label={logoAriaLabel}
         className="flex items-center gap-1.5 rounded-lg transition-colors active:bg-white/10"
       >
         <Image
