@@ -87,6 +87,14 @@ export default function SystemSettings({
               }
             />
             <SettingsToggleRow
+              title="Track food served on table map"
+              description="When on, tables show Waiting to serve while kitchen food is outstanding (instead of Order sent), and stay colored after payment until all tickets are served. Aimed at pay-first; also usable on pay-later if you want serve visibility. Best with Mark all dockets served when paid off. When off, paid tables go Available immediately."
+              checked={Boolean(draftPosConfig?.trackFoodServedOnTableMap)}
+              onChange={(checked) =>
+                updatePosDraft({ trackFoodServedOnTableMap: checked })
+              }
+            />
+            <SettingsToggleRow
               title="Mark all dockets served when paid"
               description="For pay-at-counter stores: when the customer pays, every kitchen docket on the check is marked delivered. Leave off for pay-first stores where food is served after payment."
               checked={Boolean(

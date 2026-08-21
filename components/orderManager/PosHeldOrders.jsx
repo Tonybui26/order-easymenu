@@ -7,6 +7,7 @@ import {
   fetchPosHeldOrders,
   fetchPosResumeOrders,
   updatePosHeldCheckStatus,
+  markPosBillPrinted,
 } from "@/lib/api/fetchApi";
 import { useMenuContext } from "@/components/context/MenuContext";
 import {
@@ -251,6 +252,14 @@ export default function PosHeldOrders() {
 
       if (result.success) {
         toast.success(result.message || "Bill printed");
+        const markResult = await markPosBillPrinted(heldEntry.orderIds || []);
+        if (!markResult?.success) {
+          showDismissibleToast(
+            markResult?.error || "Bill printed, but status was not updated",
+          );
+        } else {
+          await loadHeldOrders({ silent: true });
+        }
       } else {
         showDismissibleToast(result.message || "Failed to print bill");
       }

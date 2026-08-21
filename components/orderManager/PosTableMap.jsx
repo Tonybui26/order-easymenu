@@ -8,10 +8,19 @@ import { useMenuContext } from "@/components/context/MenuContext";
 import {
   fetchPosHeldOrders,
   fetchPosResumeOrders,
+  markPosBillPrinted,
 } from "@/lib/api/fetchApi";
 import { findPosHeldOrderForTable } from "@/lib/pos/posTableMapHeld";
 import { printBillForHeldCheck } from "@/lib/pos/posHeldOrderPrint";
+import { resolvePosConfig } from "@/lib/pos/posConfig";
 import {
+  getPosTableMapLegendStatuses,
+  getPosTableMapStatusFill,
+  POS_TABLE_MAP_STATUS,
+  POS_TABLE_MAP_STATUS_LABEL,
+} from "@/lib/pos/posTableMapStatus";
+import {
+  TABLE_MAP_DEFAULT_TABLE_BACKGROUND,
   TABLE_MAP_FLOOR_COLOR,
   getTableMapTableName,
 } from "@/lib/pos/posTableMaps";
@@ -28,7 +37,14 @@ const HELD_ORDERS_POLL_MS = 10000;
 export default function PosTableMap() {
   const router = useRouter();
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
-  const { posTableMaps, storeProfile } = useMenuContext();
+  const { posTableMaps, storeProfile, menuConfig } = useMenuContext();
+  const trackFoodServedOnTableMap = Boolean(
+    resolvePosConfig(menuConfig).trackFoodServedOnTableMap,
+  );
+  const legendStatuses = useMemo(
+    () => getPosTableMapLegendStatuses(trackFoodServedOnTableMap),
+    [trackFoodServedOnTableMap],
+  );
   const {
     toast: dismissibleToast,
     showToast: showDismissibleToast,
@@ -126,6 +142,14 @@ export default function PosTableMap() {
 
       if (printResult.success) {
         toast.success(printResult.message || "Bill printed");
+        const markResult = await markPosBillPrinted(drawerHeldOrder.orderIds);
+        if (!markResult?.success) {
+          showDismissibleToast(
+            markResult?.error || "Bill printed, but status was not updated",
+          );
+        } else {
+          await loadHeldOrders();
+        }
         handleCloseDrawer();
       } else {
         showDismissibleToast(printResult.message || "Failed to print bill");
@@ -172,9 +196,33 @@ export default function PosTableMap() {
                 </div>
               </div>
             ) : null}
+            <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2">
+              <div className="pointer-events-auto flex items-center gap-3 rounded-xl bg-[#402e22]/95 px-3 py-2 shadow-sm ring-1 ring-white/10">
+                {legendStatuses.map((status) => {
+                  const fill =
+                    status === POS_TABLE_MAP_STATUS.available
+                      ? TABLE_MAP_DEFAULT_TABLE_BACKGROUND
+                      : getPosTableMapStatusFill(status);
+                  return (
+                    <div
+                      key={status}
+                      className="flex items-center gap-1.5 text-xs font-medium text-white/90"
+                    >
+                      <span
+                        className="size-3 shrink-0 rounded-sm ring-1 ring-black/20"
+                        style={{ backgroundColor: fill }}
+                        aria-hidden
+                      />
+                      <span>{POS_TABLE_MAP_STATUS_LABEL[status]}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
             <PosTableMapFloor
               tableMap={selectedMap}
               heldOrders={heldOrders}
+              trackFoodServedOnTableMap={trackFoodServedOnTableMap}
               onTableSelect={handleTableSelect}
             />
           </div>

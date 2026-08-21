@@ -4,6 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/helper";
 import { findPosHeldOrderForTable } from "@/lib/pos/posTableMapHeld";
 import {
+  getPosTableMapStatusFill,
+  POS_TABLE_MAP_STATUS,
+  POS_TABLE_MAP_STATUS_LABEL,
+  resolvePosTableMapStatus,
+} from "@/lib/pos/posTableMapStatus";
+import {
   TABLE_MAP_DEFAULT_FONT_COLOR,
   TABLE_MAP_DEFAULT_FONT_SIZE,
   TABLE_MAP_FLOOR_COLOR,
@@ -20,6 +26,7 @@ import { TableMapElementGraphic } from "./posTableMapIcons";
 export default function PosTableMapFloor({
   tableMap,
   heldOrders = [],
+  trackFoodServedOnTableMap = false,
   onTableSelect,
 }) {
   const containerRef = useRef(null);
@@ -69,9 +76,19 @@ export default function PosTableMapFloor({
               const isTable = isTableMapTable(object);
               const tableName = getTableMapTableName(object);
               const isInteractive = isTable && Boolean(tableName);
-              const hasOpenOrder =
-                isInteractive &&
-                Boolean(findPosHeldOrderForTable(heldOrders, tableName));
+              const heldOrder = isInteractive
+                ? findPosHeldOrderForTable(heldOrders, tableName)
+                : null;
+              const status = resolvePosTableMapStatus(heldOrder, {
+                trackFoodServedOnTableMap,
+              });
+              const statusFill = getPosTableMapStatusFill(status);
+              const fillColor =
+                statusFill || getTableMapBackgroundColor(object);
+              const statusLabel =
+                status !== POS_TABLE_MAP_STATUS.available
+                  ? POS_TABLE_MAP_STATUS_LABEL[status]
+                  : null;
 
               return (
                 <div
@@ -100,19 +117,16 @@ export default function PosTableMapFloor({
                     )}
                     aria-label={
                       isInteractive
-                        ? `Table ${tableName}${hasOpenOrder ? ", open order" : ""}`
+                        ? `Table ${tableName}${statusLabel ? `, ${statusLabel}` : ""}`
                         : undefined
                     }
                   >
                     <TableMapElementGraphic
                       type={object.type}
-                      fillColor={getTableMapBackgroundColor(object)}
+                      fillColor={fillColor}
                     />
                     {shouldShowObjectLabel(object) ? (
                       <ObjectLabel object={object} />
-                    ) : null}
-                    {hasOpenOrder ? (
-                      <span className="absolute right-1 top-1 size-2.5 rounded-full bg-brand_accent ring-2 ring-white" />
                     ) : null}
                   </button>
                 </div>
