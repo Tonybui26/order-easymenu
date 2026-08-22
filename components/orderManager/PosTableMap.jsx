@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Map } from "lucide-react";
+import { Map as MapIcon } from "lucide-react";
 import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
 import {
@@ -12,6 +12,7 @@ import {
 } from "@/lib/api/fetchApi";
 import { findPosHeldOrderForTable } from "@/lib/pos/posTableMapHeld";
 import { printBillForHeldCheck } from "@/lib/pos/posHeldOrderPrint";
+import { buildCartLinesFromResumeOrders } from "@/lib/pos/posResumeOrder";
 import { resolvePosConfig } from "@/lib/pos/posConfig";
 import {
   getPosTableMapLegendStatuses,
@@ -33,6 +34,16 @@ import DismissibleToast, {
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 
 const HELD_ORDERS_POLL_MS = 10000;
+
+function orderIdsCacheKey(orderIds) {
+  return (orderIds || []).map(String).join(",");
+}
+
+function previewLinesFromResumeOrders(orders) {
+  return buildCartLinesFromResumeOrders(orders).filter(
+    (line) => String(line.kitchenStatus || "").trim() !== "cancelled",
+  );
+}
 
 export default function PosTableMap() {
   const router = useRouter();
@@ -60,6 +71,11 @@ export default function PosTableMap() {
   const [drawerTableName, setDrawerTableName] = useState(null);
   const [drawerHeldOrder, setDrawerHeldOrder] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [previewLines, setPreviewLines] = useState([]);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState(null);
+  /** @type {React.MutableRefObject<Map<string, object[]>>} */
+  const resumeOrdersCacheRef = useRef(new Map());
 
   useEffect(() => {
     if (!tableMaps.length) {
@@ -87,6 +103,84 @@ export default function PosTableMap() {
     return () => clearInterval(id);
   }, [loadHeldOrders]);
 
+  // Drop resume caches for checks that are no longer held (or whose ticket set changed).
+  useEffect(() => {
+    const validKeys = new Set(
+      (heldOrders || [])
+        .map((entry) => orderIdsCacheKey(entry?.orderIds))
+        .filter(Boolean),
+    );
+    for (const key of [...resumeOrdersCacheRef.current.keys()]) {
+      if (!validKeys.has(key)) resumeOrdersCacheRef.current.delete(key);
+    }
+  }, [heldOrders]);
+
+  // Keep open drawer entry in sync when held poll refreshes this table.
+  useEffect(() => {
+    if (!drawerTableName) return;
+    const latest = findPosHeldOrderForTable(heldOrders, drawerTableName);
+    if (!latest) {
+      if (!isProcessing) {
+        setDrawerTableName(null);
+        setDrawerHeldOrder(null);
+      }
+      return;
+    }
+    setDrawerHeldOrder((prev) => {
+      if (
+        prev &&
+        orderIdsCacheKey(prev.orderIds) === orderIdsCacheKey(latest.orderIds) &&
+        Number(prev.total) === Number(latest.total) &&
+        Boolean(prev.allPaid) === Boolean(latest.allPaid)
+      ) {
+        return prev;
+      }
+      return latest;
+    });
+  }, [heldOrders, drawerTableName, isProcessing]);
+
+  const drawerOrderIdsKey = orderIdsCacheKey(drawerHeldOrder?.orderIds);
+
+  useEffect(() => {
+    if (!drawerTableName || !drawerOrderIdsKey) {
+      setPreviewLines([]);
+      setPreviewError(null);
+      setIsPreviewLoading(false);
+      return;
+    }
+
+    const orderIds = drawerOrderIdsKey.split(",");
+    const cached = resumeOrdersCacheRef.current.get(drawerOrderIdsKey);
+    if (cached) {
+      setPreviewLines(previewLinesFromResumeOrders(cached));
+      setPreviewError(null);
+      setIsPreviewLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsPreviewLoading(true);
+    setPreviewError(null);
+
+    (async () => {
+      const result = await fetchPosResumeOrders(orderIds);
+      if (cancelled) return;
+      if (!result?.success || !result.orders?.length) {
+        setPreviewLines([]);
+        setPreviewError(result?.error || "Could not load items");
+        setIsPreviewLoading(false);
+        return;
+      }
+      resumeOrdersCacheRef.current.set(drawerOrderIdsKey, result.orders);
+      setPreviewLines(previewLinesFromResumeOrders(result.orders));
+      setIsPreviewLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [drawerTableName, drawerOrderIdsKey]);
+
   const selectedMap =
     tableMaps.find((map) => map.id === selectedMapId) || tableMaps[0] || null;
 
@@ -94,6 +188,9 @@ export default function PosTableMap() {
     if (isProcessing) return;
     setDrawerTableName(null);
     setDrawerHeldOrder(null);
+    setPreviewLines([]);
+    setPreviewError(null);
+    setIsPreviewLoading(false);
   }
 
   function handleTableSelect(object) {
@@ -115,6 +212,17 @@ export default function PosTableMap() {
 
     setDrawerTableName(tableName);
     setDrawerHeldOrder(heldOrder);
+    const cacheKey = orderIdsCacheKey(heldOrder.orderIds);
+    const cached = resumeOrdersCacheRef.current.get(cacheKey);
+    if (cached) {
+      setPreviewLines(previewLinesFromResumeOrders(cached));
+      setPreviewError(null);
+      setIsPreviewLoading(false);
+    } else {
+      setPreviewLines([]);
+      setPreviewError(null);
+      setIsPreviewLoading(true);
+    }
   }
 
   function handleLoadOrder() {
@@ -129,13 +237,21 @@ export default function PosTableMap() {
 
     setIsProcessing(true);
     try {
-      const result = await fetchPosResumeOrders(drawerHeldOrder.orderIds);
-      if (!result?.success || !result.orders?.length) {
-        showDismissibleToast(result?.error || "Could not load check");
-        return;
+      const cacheKey = orderIdsCacheKey(drawerHeldOrder.orderIds);
+      let orders = resumeOrdersCacheRef.current.get(cacheKey);
+      if (!orders?.length) {
+        const result = await fetchPosResumeOrders(drawerHeldOrder.orderIds);
+        if (!result?.success || !result.orders?.length) {
+          showDismissibleToast(result?.error || "Could not load check");
+          return;
+        }
+        orders = result.orders;
+        resumeOrdersCacheRef.current.set(cacheKey, orders);
+        setPreviewLines(previewLinesFromResumeOrders(orders));
+        setPreviewError(null);
       }
 
-      const printResult = await printBillForHeldCheck(result.orders, {
+      const printResult = await printBillForHeldCheck(orders, {
         storeProfile,
         heldEntry: drawerHeldOrder,
       });
@@ -233,7 +349,7 @@ export default function PosTableMap() {
           >
             <div className="flex max-w-md flex-col items-center text-center">
               <div className="mb-4 flex size-12 items-center justify-center rounded-lg border border-gray-200 bg-white">
-                <Map className="size-5 text-gray-400" aria-hidden />
+                <MapIcon className="size-5 text-gray-400" aria-hidden />
               </div>
               <h1 className="text-xl font-bold text-neutral-900">Table Map</h1>
               <p className="mt-2 text-sm text-neutral-500">
@@ -252,6 +368,9 @@ export default function PosTableMap() {
         onLoadOrder={handleLoadOrder}
         onPrintBill={handlePrintBill}
         isProcessing={isProcessing}
+        previewLines={previewLines}
+        isPreviewLoading={isPreviewLoading}
+        previewError={previewError}
       />
     </>
   );
