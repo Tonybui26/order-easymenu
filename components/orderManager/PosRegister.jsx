@@ -5,14 +5,12 @@ import { useRouter } from "next/navigation";
 import { Delete } from "lucide-react";
 import toast from "react-hot-toast";
 import { cn } from "@/lib/helper";
-import {
-  fetchPosRegisterSession,
-  openPosRegisterSession,
-} from "@/lib/api/fetchApi";
+import { openPosRegisterSession } from "@/lib/api/fetchApi";
 import { registerOperatorPayload } from "@/lib/pos/registerOperatorPayload";
 import { getPosHomePath } from "@/lib/pos/posConfig";
 import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
 import { useMenuContext } from "@/components/context/MenuContext";
+import { usePosRegisterSession } from "@/components/context/PosRegisterSessionContext";
 import PosChromeHeader from "./PosChromeHeader";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 
@@ -63,6 +61,11 @@ export default function PosRegister() {
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
   const { activeOperator } = useActiveOperator();
   const { menuConfig } = useMenuContext();
+  const {
+    isOpen,
+    refreshRegisterSession,
+    setRegisterOpen,
+  } = usePosRegisterSession();
   const posHomePath = getPosHomePath(menuConfig);
   const [digits, setDigits] = useState("");
   const [now, setNow] = useState(null);
@@ -76,13 +79,23 @@ export default function PosRegister() {
   }, []);
 
   useEffect(() => {
+    if (isOpen === true) {
+      router.replace("/pos/register/session");
+      return;
+    }
+
+    if (isOpen === false) {
+      setIsChecking(false);
+      return;
+    }
+
     let cancelled = false;
 
     async function checkExistingSession() {
       setIsChecking(true);
-      const result = await fetchPosRegisterSession();
+      const result = await refreshRegisterSession();
       if (cancelled) return;
-      if (result.success && result.session) {
+      if (result.ok && result.isOpen) {
         router.replace("/pos/register/session");
         return;
       }
@@ -93,7 +106,7 @@ export default function PosRegister() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [isOpen, refreshRegisterSession, router]);
 
   function appendToken(token) {
     setDigits((prev) => {
@@ -155,12 +168,18 @@ export default function PosRegister() {
       if (!result.success) {
         if (result.status === 409) {
           toast.error(result.error || "Register is already open");
+          if (result.session) {
+            setRegisterOpen(result.session);
+          } else {
+            await refreshRegisterSession();
+          }
           router.replace(posHomePath);
           return;
         }
         toast.error(result.error || "Failed to open register");
         return;
       }
+      setRegisterOpen(result.session);
       router.push(posHomePath);
     } finally {
       setIsOpening(false);

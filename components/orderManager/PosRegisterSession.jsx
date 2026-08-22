@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { fetchPosRegisterSession } from "@/lib/api/fetchApi";
 import { getPosHomePath } from "@/lib/pos/posConfig";
 import { useMenuContext } from "@/components/context/MenuContext";
+import { usePosRegisterSession } from "@/components/context/PosRegisterSessionContext";
 import PosChromeHeader from "./PosChromeHeader";
 import PosRegisterClose from "./PosRegisterClose";
 import PosRegisterPayInOut from "./PosRegisterPayInOut";
@@ -23,42 +23,67 @@ export default function PosRegisterSession() {
   const router = useRouter();
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
   const { menuConfig } = useMenuContext();
+  const {
+    session: cachedSession,
+    refreshRegisterSession,
+    setRegisterOpen,
+  } = usePosRegisterSession();
   const posHomePath = getPosHomePath(menuConfig);
   const [activeTab, setActiveTab] = useState("close");
-  const [session, setSession] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [session, setSession] = useState(cachedSession);
+  const [isLoading, setIsLoading] = useState(!cachedSession);
+  const initialFetchStartedRef = useRef(false);
 
   useEffect(() => {
-    let cancelled = false;
+    if (cachedSession) {
+      setSession(cachedSession);
+      setIsLoading(false);
+    }
+  }, [cachedSession]);
 
-    async function loadSession() {
-      setIsLoading(true);
-      const result = await fetchPosRegisterSession();
-      if (cancelled) return;
-
-      if (!result.success) {
+  const applySessionFetchResult = useCallback(
+    (result) => {
+      if (!result.ok) {
         toast.error(result.error || "Failed to load register session");
         router.replace(posHomePath);
-        return;
+        return false;
       }
 
-      if (!result.session) {
+      if (!result.isOpen) {
         router.replace("/pos/register");
-        return;
+        return false;
       }
 
       setSession(result.session);
       setIsLoading(false);
+      return true;
+    },
+    [posHomePath, router],
+  );
+
+  useEffect(() => {
+    if (cachedSession) return;
+    if (initialFetchStartedRef.current) return;
+    initialFetchStartedRef.current = true;
+
+    let cancelled = false;
+
+    async function loadSession() {
+      setIsLoading(true);
+      const result = await refreshRegisterSession();
+      if (cancelled) return;
+      applySessionFetchResult(result);
     }
 
     loadSession();
     return () => {
       cancelled = true;
     };
-  }, [router, posHomePath]);
+  }, [applySessionFetchResult, cachedSession, refreshRegisterSession]);
 
   function handleSessionUpdated(nextSession) {
     setSession(nextSession);
+    setRegisterOpen(nextSession);
   }
 
   const countsFinalised = Boolean(session?.countsFinalised);
