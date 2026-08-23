@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   FileText,
+  FolderOpen,
   Loader2,
   MoreHorizontal,
   Printer,
@@ -191,10 +192,11 @@ export default function PosTableMapTableDrawer({
         {showLoadOrder ? (
           <PosActionButton
             tone="blue"
+            icon={FolderOpen}
             disabled={actionsDisabled}
             onClick={onLoadOrder}
           >
-            Load order
+            Open
           </PosActionButton>
         ) : null}
         {showPrintBill ? (
