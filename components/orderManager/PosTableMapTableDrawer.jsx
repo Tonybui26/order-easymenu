@@ -9,6 +9,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/helper";
+import PosActionButton from "./PosActionButton";
 import SideDrawer from "./SideDrawer";
 
 function formatMoney(amount) {
@@ -67,19 +68,19 @@ const TABLE_MORE_ACTIONS = [
     id: "print-bill",
     label: "Print Bill",
     icon: FileText,
-    className: "bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white",
+    tone: "teal",
   },
   {
     id: "reprint-order",
     label: "Reprint Order",
     icon: Printer,
-    className: "bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white",
+    tone: "blue",
   },
   {
     id: "delete",
     label: "Delete",
     icon: Trash2,
-    className: "bg-red-600 hover:bg-red-700 active:bg-red-800 text-white",
+    tone: "red",
   },
 ];
 
@@ -126,6 +127,9 @@ export default function PosTableMapTableDrawer({
     subtitleParts.push("Paid");
   }
 
+  const hasTickets = Boolean(heldOrder?.orderIds?.length);
+  const actionsDisabled = isProcessing || !hasTickets;
+
   const visibleMoreActions = TABLE_MORE_ACTIONS.filter((action) => {
     // Don't repeat actions already shown as primary footer buttons.
     if (action.id === "print-bill") return !showPrintBill;
@@ -139,15 +143,14 @@ export default function PosTableMapTableDrawer({
         type="button"
         aria-label={`More actions for table ${tableName}`}
         aria-expanded={showMoreActions}
-        disabled={isProcessing || !heldOrder?.orderIds?.length}
+        disabled={actionsDisabled}
         onClick={() => setShowMoreActions((open) => !open)}
         className={cn(
           "absolute left-1/2 top-0 z-30 flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border bg-white shadow-sm transition-colors",
           showMoreActions
             ? "border-neutral-300 text-neutral-800"
             : "border-neutral-200/90 text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700 active:bg-neutral-100",
-          (isProcessing || !heldOrder?.orderIds?.length) &&
-            "cursor-not-allowed opacity-50",
+          actionsDisabled && "cursor-not-allowed opacity-50",
         )}
       >
         <MoreHorizontal size={18} strokeWidth={2} aria-hidden />
@@ -162,64 +165,41 @@ export default function PosTableMapTableDrawer({
         )}
       >
         {showLoadOrder ? (
-          <button
-            type="button"
-            disabled={isProcessing || !heldOrder?.orderIds?.length}
+          <PosActionButton
+            tone="blue"
+            disabled={actionsDisabled}
             onClick={onLoadOrder}
-            className={cn(
-              "rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
-              isProcessing
-                ? "cursor-not-allowed opacity-50"
-                : "hover:bg-blue-700 active:bg-blue-800",
-            )}
           >
             Load order
-          </button>
+          </PosActionButton>
         ) : null}
         {showPrintBill ? (
-          <button
-            type="button"
-            disabled={isProcessing || !heldOrder?.orderIds?.length}
+          <PosActionButton
+            tone="teal"
+            icon={FileText}
+            disabled={actionsDisabled}
             onClick={onPrintBill}
-            className={cn(
-              "rounded-xl bg-teal-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
-              isProcessing
-                ? "cursor-not-allowed opacity-50"
-                : "hover:bg-teal-700 active:bg-teal-800",
-            )}
           >
-            {isProcessing ? "Printing..." : "Print bill"}
-          </button>
+            {isProcessing ? "Printing..." : "Print Bill"}
+          </PosActionButton>
         ) : null}
         {showAllServed ? (
-          <button
-            type="button"
-            disabled={isProcessing || !heldOrder?.orderIds?.length}
+          <PosActionButton
+            tone="green"
+            disabled={actionsDisabled}
             onClick={onAllServed}
-            className={cn(
-              "rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold tracking-wide text-white transition-colors",
-              isProcessing
-                ? "cursor-not-allowed opacity-50"
-                : "hover:bg-green-700 active:bg-green-800",
-            )}
           >
             {isProcessing ? "Updating…" : "All Served"}
-          </button>
+          </PosActionButton>
         ) : null}
         {showComplete ? (
-          <button
-            type="button"
-            disabled={isProcessing || !heldOrder?.orderIds?.length}
+          <PosActionButton
+            tone="purple"
+            disabled={actionsDisabled}
             onClick={onComplete}
-            className={cn(
-              "rounded-xl bg-purple-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
-              isProcessing
-                ? "cursor-not-allowed opacity-50"
-                : "hover:bg-purple-700 active:bg-purple-800",
-            )}
           >
             {isProcessing ? "Updating…" : "Complete"}
-          </button>
+          </PosActionButton>
         ) : null}
       </div>
     </div>
@@ -227,30 +207,22 @@ export default function PosTableMapTableDrawer({
 
   const moreActionsPanel = showMoreActions ? (
     <div className="flex flex-col gap-2 p-3 pb-6">
-      {visibleMoreActions.map((action) => {
-        const Icon = action.icon;
-        return (
-          <button
-            key={action.id}
-            type="button"
-            disabled={isProcessing}
-            onClick={() => {
-              setShowMoreActions(false);
-              if (action.id === "print-bill") onPrintBill?.();
-              if (action.id === "reprint-order") onReprintOrder?.();
-              if (action.id === "delete") onDelete?.();
-            }}
-            className={cn(
-              "flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-base font-semibold tracking-wide transition-colors",
-              action.className,
-              isProcessing && "cursor-not-allowed opacity-50",
-            )}
-          >
-            <Icon size={16} strokeWidth={2} aria-hidden />
-            {action.label}
-          </button>
-        );
-      })}
+      {visibleMoreActions.map((action) => (
+        <PosActionButton
+          key={action.id}
+          tone={action.tone}
+          icon={action.icon}
+          disabled={isProcessing}
+          onClick={() => {
+            setShowMoreActions(false);
+            if (action.id === "print-bill") onPrintBill?.();
+            if (action.id === "reprint-order") onReprintOrder?.();
+            if (action.id === "delete") onDelete?.();
+          }}
+        >
+          {action.label}
+        </PosActionButton>
+      ))}
     </div>
   ) : null;
 

@@ -11,6 +11,7 @@ import {
   User,
 } from "lucide-react";
 import { cn } from "@/lib/helper";
+import PosActionButton from "./PosActionButton";
 import {
   getHeldAggregateStatusLabel,
   getPosHeldCardActions,
@@ -118,19 +119,19 @@ const HELD_MORE_ACTIONS = [
     id: "print-bill",
     label: "Print Bill",
     icon: FileText,
-    className: "bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white",
+    tone: "teal",
   },
   {
     id: "reprint-order",
     label: "Reprint Order",
     icon: Printer,
-    className: "bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white",
+    tone: "blue",
   },
   {
     id: "delete",
     label: "Delete",
     icon: Trash2,
-    className: "bg-red-600 hover:bg-red-700 active:bg-red-800 text-white",
+    tone: "red",
   },
 ];
 
@@ -329,60 +330,42 @@ export default function PosHeldOrderCard({
           {hasActions ? (
             <div className="grid grid-cols-1 gap-2 border-t border-neutral-100 bg-neutral-50/80 p-3">
               {showAllItemsServed ? (
-                <button
-                  type="button"
+                <PosActionButton
+                  tone="green"
                   disabled={isProcessing}
                   onClick={(event) => {
                     event.stopPropagation();
                     onAllItemsServed?.(order);
                   }}
-                  className={cn(
-                    "rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold tracking-wide text-white transition-colors",
-                    isProcessing
-                      ? "cursor-not-allowed opacity-50"
-                      : "hover:bg-green-700 active:bg-green-800",
-                  )}
                 >
                   {isProcessing
                     ? "Updating…"
                     : allItemsServedLabel || "All Served"}
-                </button>
+                </PosActionButton>
               ) : null}
               {showReady ? (
-                <button
-                  type="button"
+                <PosActionButton
+                  tone="green"
                   disabled={isProcessing}
                   onClick={(event) => {
                     event.stopPropagation();
                     onReady?.(order);
                   }}
-                  className={cn(
-                    "rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
-                    isProcessing
-                      ? "cursor-not-allowed opacity-50"
-                      : "hover:bg-green-700 active:bg-green-800",
-                  )}
                 >
                   {isProcessing ? "Updating…" : "Ready"}
-                </button>
+                </PosActionButton>
               ) : null}
               {showComplete ? (
-                <button
-                  type="button"
+                <PosActionButton
+                  tone="purple"
                   disabled={isProcessing}
                   onClick={(event) => {
                     event.stopPropagation();
                     onComplete?.(order);
                   }}
-                  className={cn(
-                    "rounded-xl bg-purple-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
-                    isProcessing
-                      ? "cursor-not-allowed opacity-50"
-                      : "hover:bg-purple-700 active:bg-purple-800",
-                  )}
                 >
                   {isProcessing ? "Updating…" : completeLabel || "Complete"}
-                </button>
+                </PosActionButton>
               ) : null}
             </div>
           ) : null}
@@ -398,41 +381,29 @@ export default function PosHeldOrderCard({
               transition={{ type: "spring", damping: 28, stiffness: 320 }}
               className="absolute inset-x-0 bottom-0 z-20 flex flex-col gap-2 rounded-b-2xl border-t border-neutral-100 bg-white p-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]"
             >
-              {visibleMoreActions.map((action) => {
-                const Icon = action.icon;
-                return (
-                  <button
-                    key={action.id}
-                    type="button"
-                    disabled={
-                      isProcessing &&
-                      (action.id === "print-bill" ||
-                        action.id === "reprint-order" ||
-                        action.id === "delete")
-                    }
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setShowMoreActions(false);
-                      if (action.id === "print-bill") onPrintBill?.(order);
-                      if (action.id === "reprint-order")
-                        onReprintOrder?.(order);
-                      if (action.id === "delete") onDelete?.(order);
-                    }}
-                    className={cn(
-                      "flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-base font-semibold tracking-wide transition-colors",
-                      action.className,
-                      isProcessing &&
-                        (action.id === "print-bill" ||
-                          action.id === "reprint-order" ||
-                          action.id === "delete") &&
-                        "cursor-not-allowed opacity-50",
-                    )}
-                  >
-                    <Icon size={16} strokeWidth={2} aria-hidden />
-                    {action.label}
-                  </button>
-                );
-              })}
+              {visibleMoreActions.map((action) => (
+                <PosActionButton
+                  key={action.id}
+                  tone={action.tone}
+                  icon={action.icon}
+                  disabled={
+                    isProcessing &&
+                    (action.id === "print-bill" ||
+                      action.id === "reprint-order" ||
+                      action.id === "delete")
+                  }
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setShowMoreActions(false);
+                    if (action.id === "print-bill") onPrintBill?.(order);
+                    if (action.id === "reprint-order")
+                      onReprintOrder?.(order);
+                    if (action.id === "delete") onDelete?.(order);
+                  }}
+                >
+                  {action.label}
+                </PosActionButton>
+              ))}
             </motion.div>
           ) : null}
         </AnimatePresence>
