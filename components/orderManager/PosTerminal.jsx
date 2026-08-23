@@ -1076,16 +1076,21 @@ export default function PosTerminal() {
       return { success: false, error: "Payment method is required" };
     }
 
-    return completePosSaleBatch({
+    const payload = {
       orderIds: orderIdsToComplete,
       method: paymentSummary.method,
       amountTendered: Number(paymentSummary.amountTendered || 0),
       changeDue: Number(paymentSummary.change || 0),
       processingFee: Number(paymentSummary.processingFee || 0),
-      discountAmount: checkDiscount?.discountAmount ?? 0,
-      discountPercent: checkDiscount?.discountPercent ?? null,
-      discountType: checkDiscount?.discountType ?? null,
-    });
+    };
+
+    if (checkDiscount?.discountAmount > 0 && checkDiscount?.discountType) {
+      payload.discountAmount = checkDiscount.discountAmount;
+      payload.discountPercent = checkDiscount.discountPercent ?? null;
+      payload.discountType = checkDiscount.discountType;
+    }
+
+    return completePosSaleBatch(payload);
   }
 
   function resetAfterSale() {

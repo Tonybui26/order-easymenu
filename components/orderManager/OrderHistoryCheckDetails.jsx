@@ -6,7 +6,12 @@ import {
   formatOrderHistoryShortOrderId,
   formatRefundMethodLabel,
   formatRefundTypeLabel,
+  formatOrderHistoryDiscountLabel,
+  pickOrderGroupProcessingFee,
+  sumOrderGroupSubtotal,
+  computeOrderGroupCheckTotal,
 } from "@/lib/helper/orderHistoryDisplay";
+import { pickCheckDiscountFromOrders } from "@/lib/pos/posResumeOrder";
 
 function formatCurrency(amount) {
   return `$${Number(amount || 0).toFixed(2)}`;
@@ -136,17 +141,14 @@ export default function OrderHistoryCheckDetails({ row }) {
   if (tickets.length === 0) return null;
 
   const refundSummary = row?.refundSummary;
-  const grossTotal = refundSummary?.grossTotal ?? row?.grossTotal ?? 0;
-  const netTotal = refundSummary?.netTotal ?? grossTotal;
   const hasRefund = Boolean(refundSummary?.hasRefund);
-
-  const combinedSubtotal =
-    Math.round(
-      tickets.reduce(
-        (sum, order) => sum + Number(order.subtotal ?? order.total ?? 0),
-        0,
-      ) * 100,
-    ) / 100;
+  const combinedSubtotal = sumOrderGroupSubtotal(tickets);
+  const checkDiscount = pickCheckDiscountFromOrders(tickets);
+  const discountLabel = formatOrderHistoryDiscountLabel(checkDiscount);
+  const processingFee = pickOrderGroupProcessingFee(tickets);
+  const checkTotal = computeOrderGroupCheckTotal(tickets);
+  const grossTotal = refundSummary?.grossTotal ?? checkTotal;
+  const netTotal = refundSummary?.netTotal ?? checkTotal;
 
   return (
     <div className="space-y-4">
@@ -162,6 +164,18 @@ export default function OrderHistoryCheckDetails({ row }) {
             <span>Subtotal</span>
             <span>{formatCurrency(combinedSubtotal)}</span>
           </div>
+          {discountLabel ? (
+            <div className="flex justify-between font-medium text-gray-600">
+              <span>Discount</span>
+              <span>{discountLabel}</span>
+            </div>
+          ) : null}
+          {processingFee > 0 ? (
+            <div className="flex justify-between text-gray-600">
+              <span>Card surcharge</span>
+              <span>{formatCurrency(processingFee)}</span>
+            </div>
+          ) : null}
           {hasRefund ? (
             <>
               <div className="flex justify-between text-gray-600">
