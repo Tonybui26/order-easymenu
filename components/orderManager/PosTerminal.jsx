@@ -13,6 +13,7 @@ import {
   fetchPosResumeOrders,
   sendPosOrder,
   cancelPosOrderItem,
+  applyPosCheckDiscount,
 } from "@/lib/api/fetchApi";
 import {
   buildDefaultModifierSelections,
@@ -30,6 +31,7 @@ import {
   buildPosResumeState,
 } from "@/lib/pos/posResumeOrder";
 import PosTableEntryDrawer from "./PosTableEntryDrawer";
+import PosDiscountDrawer from "./PosDiscountDrawer";
 import PosPaymentDrawer from "./PosPaymentDrawer";
 import PosOrderPanelFooter from "./PosOrderPanelFooter";
 import PosItemCustomizePanel from "./PosItemCustomizePanel";
@@ -231,6 +233,8 @@ export default function PosTerminal() {
   const [isPrintingReceipt, setIsPrintingReceipt] = useState(false);
   const [isResumingOrder, setIsResumingOrder] = useState(false);
   const [keypadDrawer, setKeypadDrawer] = useState(null);
+  const [isDiscountDrawerOpen, setIsDiscountDrawerOpen] = useState(false);
+  const [checkDiscount, setCheckDiscount] = useState(null);
   const [isPaymentDrawerOpen, setIsPaymentDrawerOpen] = useState(false);
   const [tableNumber, setTableNumber] = useState("");
   const [orderType, setOrderType] = useState(null);
@@ -330,6 +334,7 @@ export default function PosTerminal() {
         setOrderType(nextOrderType);
         setIsCheckPaid(resumeState.isCheckPaid);
         setIsResumedCheck(true);
+        setCheckDiscount(resumeState.checkDiscount || null);
         setIsOrderTypeMissing(false);
         if (restaurantMode && resumeState.tableNumber) {
           setIsTablePrefilled(true);
@@ -794,8 +799,63 @@ export default function PosTerminal() {
     setIsCheckPaid(false);
     setIsResumedCheck(false);
     setIsOrderTypeMissing(false);
+    setCheckDiscount(null);
+    setIsDiscountDrawerOpen(false);
     resumeLoadedRef.current = null;
     closeCustomization();
+  }
+
+  function handleOpenDiscountDrawer() {
+    if (isViewOnly) return;
+    if (cartLines.length === 0) {
+      showDismissibleToast("Add items before applying a discount");
+      return;
+    }
+    setIsDiscountDrawerOpen(true);
+  }
+
+  function resolveCheckOrderIds() {
+    return checkOrderIds.length > 0
+      ? checkOrderIds
+      : activeOrderId
+        ? [activeOrderId]
+        : [];
+  }
+
+  async function syncCheckDiscountToServer(discount) {
+    const orderIds = resolveCheckOrderIds();
+    if (orderIds.length === 0) return { success: true };
+
+    return applyPosCheckDiscount({
+      orderIds,
+      discountAmount: discount?.discountAmount ?? 0,
+      discountPercent: discount?.discountPercent ?? null,
+      discountType: discount?.discountType ?? null,
+    });
+  }
+
+  async function handleDiscountConfirm({
+    discountAmount,
+    discountPercent,
+    discountType,
+  }) {
+    const previousDiscount = checkDiscount;
+    const nextDiscount =
+      discountAmount == null || Number(discountAmount) <= 0
+        ? null
+        : { discountAmount, discountPercent, discountType };
+
+    setCheckDiscount(nextDiscount);
+    setIsDiscountDrawerOpen(false);
+
+    const orderIds = resolveCheckOrderIds();
+    if (orderIds.length === 0) return;
+
+    const result = await syncCheckDiscountToServer(nextDiscount);
+    if (!result?.success) {
+      setCheckDiscount(previousDiscount);
+      showDismissibleToast(result?.error || "Failed to save discount");
+    }
   }
 
   function handleGoToHeldOrders() {
@@ -913,7 +973,8 @@ export default function PosTerminal() {
       if (nextCheckId) setPosCheckId(nextCheckId);
       const nextTaxInvoiceNo = String(result.order?.taxInvoiceNo || "").trim();
       if (nextTaxInvoiceNo) setTaxInvoiceNo(nextTaxInvoiceNo);
-      setCheckOrderIds((prev) => appendCheckOrderId(prev, newOrderId));
+      const nextCheckOrderIds = appendCheckOrderId(checkOrderIds, newOrderId);
+      setCheckOrderIds(nextCheckOrderIds);
       setCartLines((prev) =>
         prev.map((line) =>
           sentLineIds.has(line.lineId)
@@ -925,6 +986,20 @@ export default function PosTerminal() {
         closeCustomization();
       }
       toast.success("Order sent to kitchen");
+
+      if (checkDiscount) {
+        const discountResult = await applyPosCheckDiscount({
+          orderIds: nextCheckOrderIds,
+          discountAmount: checkDiscount.discountAmount ?? 0,
+          discountPercent: checkDiscount.discountPercent ?? null,
+          discountType: checkDiscount.discountType ?? null,
+        });
+        if (!discountResult?.success) {
+          showDismissibleToast(
+            discountResult?.error || "Discount could not be saved to the check",
+          );
+        }
+      }
 
       // Each Send creates one kitchen order with only this fire's items — print that ticket.
       try {
@@ -966,6 +1041,7 @@ export default function PosTerminal() {
         tableNumber: resolvedTableNumber,
         paymentSummary,
         taxInvoiceNo,
+        discount: footerDiscount,
       });
 
       const result = await printTaxInvoiceReceipt(payload);
@@ -1006,6 +1082,9 @@ export default function PosTerminal() {
       amountTendered: Number(paymentSummary.amountTendered || 0),
       changeDue: Number(paymentSummary.change || 0),
       processingFee: Number(paymentSummary.processingFee || 0),
+      discountAmount: checkDiscount?.discountAmount ?? 0,
+      discountPercent: checkDiscount?.discountPercent ?? null,
+      discountType: checkDiscount?.discountType ?? null,
     });
   }
 
@@ -1022,6 +1101,8 @@ export default function PosTerminal() {
     setIsTablePrefilled(false);
     tablePrefilledRef.current = null;
     setKeypadDrawer(null);
+    setCheckDiscount(null);
+    setIsDiscountDrawerOpen(false);
     resumeLoadedRef.current = null;
     closeCustomization();
     setIsPaymentDrawerOpen(false);
@@ -1170,6 +1251,34 @@ export default function PosTerminal() {
     if (isCancelledCartLine(line)) return sum;
     return sum + Number(line.price || 0) * (line.quantity || 1);
   }, 0);
+  const discountAmount =
+    checkDiscount?.discountAmount != null &&
+    Number(checkDiscount.discountAmount) > 0
+      ? Number(checkDiscount.discountAmount)
+      : null;
+  const footerDiscount =
+    discountAmount != null
+      ? {
+          amount: discountAmount,
+          type: checkDiscount?.discountType || null,
+          percent:
+            checkDiscount?.discountType === "percent"
+              ? checkDiscount?.discountPercent
+              : null,
+        }
+      : null;
+  const cartTotalAfterDiscount = Math.max(
+    0,
+    cartSubtotal - (discountAmount || 0),
+  );
+  const discountInitialDigits =
+    checkDiscount?.discountType === "percent" &&
+    checkDiscount?.discountPercent != null
+      ? String(checkDiscount.discountPercent)
+      : checkDiscount?.discountType === "dollar" &&
+          checkDiscount?.discountAmount != null
+        ? String(checkDiscount.discountAmount)
+        : "";
   const hasUnsentLines = cartLines.some(isOpenCartLine);
   const hasSentLines = cartLines.some(isSentCartLine);
 
@@ -1232,10 +1341,18 @@ export default function PosTerminal() {
               onConfirm={handleKeypadConfirm}
             />
 
+            <PosDiscountDrawer
+              isOpen={isDiscountDrawerOpen}
+              onClose={() => setIsDiscountDrawerOpen(false)}
+              subtotal={cartSubtotal}
+              initialDigits={discountInitialDigits}
+              onConfirm={handleDiscountConfirm}
+            />
+
             <PosPaymentDrawer
               isOpen={isPaymentDrawerOpen}
               onClose={() => setIsPaymentDrawerOpen(false)}
-              amountDue={cartSubtotal}
+              amountDue={cartTotalAfterDiscount}
               onCompleteSale={handleCompleteSale}
               onPersistSale={handlePersistSale}
               onFinishPaidSale={handleFinishPaidSale}
@@ -1288,12 +1405,14 @@ export default function PosTerminal() {
 
             <PosOrderPanelFooter
               subtotal={cartSubtotal}
+              discount={footerDiscount}
               taxPercentage={storeProfile.taxPercentage}
               hasUnsentItems={hasUnsentLines}
               viewOnly={isViewOnly}
               onClear={handleClearOrder}
               onHold={handleFooterHold}
               onSend={handleSendOrder}
+              onDiscount={handleOpenDiscountDrawer}
               className={cn(
                 "transition-opacity duration-300",
                 awaitingOrderType && "pointer-events-none opacity-35",

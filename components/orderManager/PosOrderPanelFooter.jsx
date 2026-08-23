@@ -11,13 +11,29 @@ function formatMoney(amount) {
   return `$${Number(amount || 0).toFixed(2)}`;
 }
 
+function formatDiscountLabel(discount) {
+  if (
+    discount?.amount == null ||
+    Number(discount.amount) <= 0 ||
+    !discount?.type
+  ) {
+    return "-";
+  }
+
+  if (discount.type === "percent" && discount.percent != null) {
+    return `-${Number(discount.percent).toFixed(2)}%`;
+  }
+
+  return `-${formatMoney(discount.amount)}`;
+}
+
 /**
  * Fixed footer for the POS order panel: totals + Clear / Hold|Send / Discount.
  * Middle action is Send when there are cart lines not yet sent to kitchen.
  */
 export default function PosOrderPanelFooter({
   subtotal = 0,
-  discountAmount = null,
+  discount = null,
   taxPercentage = DEFAULT_TAX_PERCENTAGE,
   hasUnsentItems = false,
   viewOnly = false,
@@ -28,11 +44,11 @@ export default function PosOrderPanelFooter({
   className,
 }) {
   const safeSubtotal = Math.max(0, Number(subtotal) || 0);
-  const discount =
-    discountAmount == null || Number(discountAmount) <= 0
+  const discountAmount =
+    discount?.amount == null || Number(discount.amount) <= 0
       ? null
-      : Number(discountAmount);
-  const total = Math.max(0, safeSubtotal - (discount || 0));
+      : Number(discount.amount);
+  const total = Math.max(0, safeSubtotal - (discountAmount || 0));
   const taxAmount = computeIncludedTaxFromInclusiveTotal(total, taxPercentage);
   const showSend = Boolean(hasUnsentItems) && !viewOnly;
 
@@ -49,7 +65,7 @@ export default function PosOrderPanelFooter({
             <div className="flex items-baseline justify-between gap-2">
               <span className="text-neutral-400">Discount</span>
               <span className="tabular-nums text-neutral-600">
-                {discount == null ? "-" : `-${formatMoney(discount)}`}
+                {formatDiscountLabel(discount)}
               </span>
             </div>
             <div className="flex items-baseline justify-between gap-2">
