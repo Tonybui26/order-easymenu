@@ -12,8 +12,14 @@ import {
   updatePosHeldCheckStatus,
 } from "@/lib/api/fetchApi";
 import { findPosHeldOrderForTable } from "@/lib/pos/posTableMapHeld";
-import { getTicketIdsNotDelivered } from "@/lib/pos/posHeldOrder";
-import { printBillForHeldCheck } from "@/lib/pos/posHeldOrderPrint";
+import {
+  getAllTicketIds,
+  getTicketIdsNotDelivered,
+} from "@/lib/pos/posHeldOrder";
+import {
+  printBillForHeldCheck,
+  reprintHeldCheckKitchen,
+} from "@/lib/pos/posHeldOrderPrint";
 import { buildCartLinesFromResumeOrders } from "@/lib/pos/posResumeOrder";
 import { resolvePosConfig } from "@/lib/pos/posConfig";
 import {
@@ -30,6 +36,7 @@ import {
 import PosChromeHeader from "./PosChromeHeader";
 import PosTableMapFloor from "./PosTableMapFloor";
 import PosTableMapTableDrawer from "./PosTableMapTableDrawer";
+import DeleteOrderDrawer from "./DeleteOrderDrawer";
 import DismissibleToast, {
   useDismissibleToast,
 } from "@/components/orderManager/DismissibleToast";
@@ -50,7 +57,8 @@ function previewLinesFromResumeOrders(orders) {
 export default function PosTableMap() {
   const router = useRouter();
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
-  const { posTableMaps, storeProfile, menuConfig } = useMenuContext();
+  const { posTableMaps, storeProfile, menuConfig, itemGroups } =
+    useMenuContext();
   const trackFoodServedOnTableMap = Boolean(
     resolvePosConfig(menuConfig).trackFoodServedOnTableMap,
   );
@@ -76,6 +84,9 @@ export default function PosTableMap() {
   const [previewLines, setPreviewLines] = useState([]);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(null);
+  const [deleteDrawerOpen, setDeleteDrawerOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   /** @type {React.MutableRefObject<Map<string, object[]>>} */
   const resumeOrdersCacheRef = useRef(new Map());
 
@@ -234,24 +245,32 @@ export default function PosTableMap() {
     );
   }
 
+  async function loadDrawerCheckOrders() {
+    if (!drawerHeldOrder?.orderIds?.length) return null;
+
+    const cacheKey = orderIdsCacheKey(drawerHeldOrder.orderIds);
+    let orders = resumeOrdersCacheRef.current.get(cacheKey);
+    if (orders?.length) return orders;
+
+    const result = await fetchPosResumeOrders(drawerHeldOrder.orderIds);
+    if (!result?.success || !result.orders?.length) {
+      showDismissibleToast(result?.error || "Could not load check");
+      return null;
+    }
+    orders = result.orders;
+    resumeOrdersCacheRef.current.set(cacheKey, orders);
+    setPreviewLines(previewLinesFromResumeOrders(orders));
+    setPreviewError(null);
+    return orders;
+  }
+
   async function handlePrintBill() {
     if (!drawerHeldOrder?.orderIds?.length || isProcessing) return;
 
     setIsProcessing(true);
     try {
-      const cacheKey = orderIdsCacheKey(drawerHeldOrder.orderIds);
-      let orders = resumeOrdersCacheRef.current.get(cacheKey);
-      if (!orders?.length) {
-        const result = await fetchPosResumeOrders(drawerHeldOrder.orderIds);
-        if (!result?.success || !result.orders?.length) {
-          showDismissibleToast(result?.error || "Could not load check");
-          return;
-        }
-        orders = result.orders;
-        resumeOrdersCacheRef.current.set(cacheKey, orders);
-        setPreviewLines(previewLinesFromResumeOrders(orders));
-        setPreviewError(null);
-      }
+      const orders = await loadDrawerCheckOrders();
+      if (!orders) return;
 
       const printResult = await printBillForHeldCheck(orders, {
         storeProfile,
@@ -275,6 +294,111 @@ export default function PosTableMap() {
     } catch (error) {
       showDismissibleToast(error?.message || "Failed to print bill");
     } finally {
+      setIsProcessing(false);
+    }
+  }
+
+  async function handleReprintOrder() {
+    if (!drawerHeldOrder?.orderIds?.length || isProcessing) return;
+
+    setIsProcessing(true);
+    try {
+      const orders = await loadDrawerCheckOrders();
+      if (!orders) return;
+
+      const result = await reprintHeldCheckKitchen(orders, {
+        storeProfile,
+        itemGroups,
+        menuConfig,
+      });
+
+      if (result.success) {
+        toast.success(result.message || "Kitchen ticket reprinted");
+      } else {
+        showDismissibleToast(result.message || "Failed to reprint order");
+      }
+    } catch (error) {
+      showDismissibleToast(error?.message || "Failed to reprint order");
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
+  function buildTableDeleteTarget(order) {
+    const ticketIds = getAllTicketIds(order);
+    const table = String(order?.table || drawerTableName || "").trim();
+    const taxInvoiceNo = String(order?.taxInvoiceNo || "").trim();
+    const title = table
+      ? `Delete Table ${table}`
+      : taxInvoiceNo
+        ? `Delete invoice ${taxInvoiceNo}`
+        : "Delete held check";
+
+    const subtitleParts = [];
+    if (ticketIds.length > 1) {
+      subtitleParts.push(`${ticketIds.length} tickets`);
+    }
+    if (order?.total != null) {
+      subtitleParts.push(`$${Number(order.total).toFixed(2)} unpaid`);
+    }
+
+    return {
+      id: order.id,
+      title,
+      subtitle: subtitleParts.join(" · ") || "This will cancel the open check.",
+      orderIds: ticketIds,
+      ticketCount: ticketIds.length,
+    };
+  }
+
+  function handleDeleteOrder() {
+    if (!drawerHeldOrder || isProcessing || isDeleting) return;
+
+    if (drawerHeldOrder.allPaid) {
+      showDismissibleToast("Paid checks cannot be deleted");
+      return;
+    }
+
+    const ticketIds = getAllTicketIds(drawerHeldOrder);
+    if (ticketIds.length === 0) {
+      showDismissibleToast("No tickets on this check");
+      return;
+    }
+
+    setDeleteTarget(buildTableDeleteTarget(drawerHeldOrder));
+    setDeleteDrawerOpen(true);
+  }
+
+  async function handleConfirmDeleteOrder(cancelReason) {
+    if (!deleteTarget?.orderIds?.length || isDeleting) return;
+
+    setIsDeleting(true);
+    setIsProcessing(true);
+    try {
+      const result = await updatePosHeldCheckStatus({
+        orderIds: deleteTarget.orderIds,
+        status: "cancelled",
+        cancelReason,
+        requireCancelReason: true,
+      });
+      if (!result?.success) {
+        showDismissibleToast(result?.error || "Failed to delete check");
+        return;
+      }
+
+      toast.success(
+        deleteTarget.orderIds.length === 1
+          ? "Held order deleted"
+          : "Held check deleted",
+      );
+      setDeleteDrawerOpen(false);
+      setDeleteTarget(null);
+      handleCloseDrawer();
+      await loadHeldOrders();
+    } catch (error) {
+      showDismissibleToast(error?.message || "Failed to delete check");
+    } finally {
+      setIsDeleting(false);
       setIsProcessing(false);
     }
   }
@@ -416,14 +540,28 @@ export default function PosTableMap() {
         heldOrder={drawerHeldOrder}
         onLoadOrder={handleLoadOrder}
         onPrintBill={handlePrintBill}
+        onReprintOrder={handleReprintOrder}
+        onDelete={handleDeleteOrder}
         onAllServed={handleAllServed}
         onComplete={handleComplete}
-        isProcessing={isProcessing}
+        isProcessing={isProcessing || isDeleting}
         previewLines={previewLines}
         isPreviewLoading={isPreviewLoading}
         previewError={previewError}
         showAllServed={showAllServed}
         showComplete={showComplete}
+      />
+
+      <DeleteOrderDrawer
+        isOpen={deleteDrawerOpen}
+        onClose={() => {
+          if (isDeleting) return;
+          setDeleteDrawerOpen(false);
+          setDeleteTarget(null);
+        }}
+        target={deleteTarget}
+        onConfirm={handleConfirmDeleteOrder}
+        isProcessing={isDeleting}
       />
     </>
   );

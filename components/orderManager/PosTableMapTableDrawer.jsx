@@ -1,6 +1,13 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  FileText,
+  Loader2,
+  MoreHorizontal,
+  Printer,
+  Trash2,
+} from "lucide-react";
 import { cn } from "@/lib/helper";
 import SideDrawer from "./SideDrawer";
 
@@ -55,6 +62,27 @@ function PreviewLine({ line }) {
   );
 }
 
+const TABLE_MORE_ACTIONS = [
+  {
+    id: "print-bill",
+    label: "Print Bill",
+    icon: FileText,
+    className: "bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white",
+  },
+  {
+    id: "reprint-order",
+    label: "Reprint Order",
+    icon: Printer,
+    className: "bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white",
+  },
+  {
+    id: "delete",
+    label: "Delete",
+    icon: Trash2,
+    className: "bg-red-600 hover:bg-red-700 active:bg-red-800 text-white",
+  },
+];
+
 export default function PosTableMapTableDrawer({
   isOpen,
   onClose,
@@ -62,6 +90,8 @@ export default function PosTableMapTableDrawer({
   heldOrder,
   onLoadOrder,
   onPrintBill,
+  onReprintOrder,
+  onDelete,
   onAllServed,
   onComplete,
   isProcessing = false,
@@ -71,6 +101,12 @@ export default function PosTableMapTableDrawer({
   showAllServed = false,
   showComplete = false,
 }) {
+  const [showMoreActions, setShowMoreActions] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) setShowMoreActions(false);
+  }, [isOpen, tableName]);
+
   if (!tableName) return null;
 
   const ticketCount = heldOrder?.orderIds?.length || 0;
@@ -90,6 +126,134 @@ export default function PosTableMapTableDrawer({
     subtitleParts.push("Paid");
   }
 
+  const visibleMoreActions = TABLE_MORE_ACTIONS.filter((action) => {
+    // Don't repeat actions already shown as primary footer buttons.
+    if (action.id === "print-bill") return !showPrintBill;
+    if (action.id === "delete") return !allPaid;
+    return true;
+  });
+
+  const actionButtons = (
+    <div className="relative pt-2">
+      <button
+        type="button"
+        aria-label={`More actions for table ${tableName}`}
+        aria-expanded={showMoreActions}
+        disabled={isProcessing || !heldOrder?.orderIds?.length}
+        onClick={() => setShowMoreActions((open) => !open)}
+        className={cn(
+          "absolute left-1/2 top-0 z-30 flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border bg-white shadow-sm transition-colors",
+          showMoreActions
+            ? "border-neutral-300 text-neutral-800"
+            : "border-neutral-200/90 text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700 active:bg-neutral-100",
+          (isProcessing || !heldOrder?.orderIds?.length) &&
+            "cursor-not-allowed opacity-50",
+        )}
+      >
+        <MoreHorizontal size={18} strokeWidth={2} aria-hidden />
+      </button>
+
+      <div
+        className={cn(
+          "grid gap-2",
+          showLoadOrder && (showPrintBill || showAllServed)
+            ? "grid-cols-2"
+            : "grid-cols-1",
+        )}
+      >
+        {showLoadOrder ? (
+          <button
+            type="button"
+            disabled={isProcessing || !heldOrder?.orderIds?.length}
+            onClick={onLoadOrder}
+            className={cn(
+              "rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
+              isProcessing
+                ? "cursor-not-allowed opacity-50"
+                : "hover:bg-blue-700 active:bg-blue-800",
+            )}
+          >
+            Load order
+          </button>
+        ) : null}
+        {showPrintBill ? (
+          <button
+            type="button"
+            disabled={isProcessing || !heldOrder?.orderIds?.length}
+            onClick={onPrintBill}
+            className={cn(
+              "rounded-xl bg-teal-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
+              isProcessing
+                ? "cursor-not-allowed opacity-50"
+                : "hover:bg-teal-700 active:bg-teal-800",
+            )}
+          >
+            {isProcessing ? "Printing..." : "Print bill"}
+          </button>
+        ) : null}
+        {showAllServed ? (
+          <button
+            type="button"
+            disabled={isProcessing || !heldOrder?.orderIds?.length}
+            onClick={onAllServed}
+            className={cn(
+              "rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold tracking-wide text-white transition-colors",
+              isProcessing
+                ? "cursor-not-allowed opacity-50"
+                : "hover:bg-green-700 active:bg-green-800",
+            )}
+          >
+            {isProcessing ? "Updating…" : "All Served"}
+          </button>
+        ) : null}
+        {showComplete ? (
+          <button
+            type="button"
+            disabled={isProcessing || !heldOrder?.orderIds?.length}
+            onClick={onComplete}
+            className={cn(
+              "rounded-xl bg-purple-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
+              isProcessing
+                ? "cursor-not-allowed opacity-50"
+                : "hover:bg-purple-700 active:bg-purple-800",
+            )}
+          >
+            {isProcessing ? "Updating…" : "Complete"}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+
+  const moreActionsPanel = showMoreActions ? (
+    <div className="flex flex-col gap-2 p-3">
+      {visibleMoreActions.map((action) => {
+        const Icon = action.icon;
+        return (
+          <button
+            key={action.id}
+            type="button"
+            disabled={isProcessing}
+            onClick={() => {
+              setShowMoreActions(false);
+              if (action.id === "print-bill") onPrintBill?.();
+              if (action.id === "reprint-order") onReprintOrder?.();
+              if (action.id === "delete") onDelete?.();
+            }}
+            className={cn(
+              "flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-base font-semibold tracking-wide transition-colors",
+              action.className,
+              isProcessing && "cursor-not-allowed opacity-50",
+            )}
+          >
+            <Icon size={16} strokeWidth={2} aria-hidden />
+            {action.label}
+          </button>
+        );
+      })}
+    </div>
+  ) : null;
+
   return (
     <SideDrawer
       isOpen={isOpen}
@@ -102,114 +266,49 @@ export default function PosTableMapTableDrawer({
       }
       closeDisabled={isProcessing}
       contentKey={`table-map-drawer-${tableName}`}
+      footer={actionButtons}
+      footerClassName="overflow-visible shadow-[0_-8px_24px_rgba(0,0,0,0.06)]"
+      bodyOverlay={showMoreActions}
+      onBodyOverlayClick={() => setShowMoreActions(false)}
+      bottomSlidePanel={moreActionsPanel}
     >
-      <div className="space-y-4">
-        <div className="overflow-hidden rounded-xl border border-neutral-100 bg-white">
-          <div className="border-b border-neutral-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
-            Order items
+      <div className="overflow-hidden rounded-xl border border-neutral-100 bg-white">
+        <div className="border-b border-neutral-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+          Order items
+        </div>
+        {isPreviewLoading ? (
+          <div className="flex items-center justify-center gap-2 px-3 py-8 text-sm text-neutral-500">
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+            Loading items…
           </div>
-          {isPreviewLoading ? (
-            <div className="flex items-center justify-center gap-2 px-3 py-8 text-sm text-neutral-500">
-              <Loader2 className="size-4 animate-spin" aria-hidden />
-              Loading items…
-            </div>
-          ) : previewError ? (
-            <p className="px-3 py-4 text-sm text-red-600">{previewError}</p>
-          ) : previewLines.length === 0 ? (
-            <p className="px-3 py-4 text-sm text-neutral-500">
-              No items on this check.
-            </p>
-          ) : (
-            <ul className="divide-y divide-neutral-100">
-              {previewLines.map((line) => (
-                <PreviewLine
-                  key={line.lineId || `${line.itemId}-${line.title}-${line.quantity}`}
-                  line={line}
-                />
-              ))}
-            </ul>
-          )}
-          {heldOrder?.total != null && !isPreviewLoading && !previewError ? (
-            <div className="flex items-center justify-between border-t border-neutral-100 bg-neutral-50/80 px-3 py-2.5">
-              <span className="text-sm font-semibold text-neutral-700">
-                Total
-              </span>
-              <span className="text-sm font-bold tabular-nums text-neutral-900">
-                {formatMoney(heldOrder.total)}
-              </span>
-            </div>
-          ) : null}
-        </div>
-
-        <div
-          className={cn(
-            "grid gap-2 rounded-xl border border-neutral-100 bg-neutral-50/80 p-3",
-            showLoadOrder && (showPrintBill || showAllServed)
-              ? "grid-cols-2"
-              : "grid-cols-1",
-          )}
-        >
-          {showLoadOrder ? (
-            <button
-              type="button"
-              disabled={isProcessing || !heldOrder?.orderIds?.length}
-              onClick={onLoadOrder}
-              className={cn(
-                "rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
-                isProcessing
-                  ? "cursor-not-allowed opacity-50"
-                  : "hover:bg-blue-700 active:bg-blue-800",
-              )}
-            >
-              Load order
-            </button>
-          ) : null}
-          {showPrintBill ? (
-            <button
-              type="button"
-              disabled={isProcessing || !heldOrder?.orderIds?.length}
-              onClick={onPrintBill}
-              className={cn(
-                "rounded-xl bg-teal-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
-                isProcessing
-                  ? "cursor-not-allowed opacity-50"
-                  : "hover:bg-teal-700 active:bg-teal-800",
-              )}
-            >
-              {isProcessing ? "Printing..." : "Print bill"}
-            </button>
-          ) : null}
-          {showAllServed ? (
-            <button
-              type="button"
-              disabled={isProcessing || !heldOrder?.orderIds?.length}
-              onClick={onAllServed}
-              className={cn(
-                "rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold tracking-wide text-white transition-colors",
-                isProcessing
-                  ? "cursor-not-allowed opacity-50"
-                  : "hover:bg-green-700 active:bg-green-800",
-              )}
-            >
-              {isProcessing ? "Updating…" : "All Served"}
-            </button>
-          ) : null}
-          {showComplete ? (
-            <button
-              type="button"
-              disabled={isProcessing || !heldOrder?.orderIds?.length}
-              onClick={onComplete}
-              className={cn(
-                "rounded-xl bg-purple-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
-                isProcessing
-                  ? "cursor-not-allowed opacity-50"
-                  : "hover:bg-purple-700 active:bg-purple-800",
-              )}
-            >
-              {isProcessing ? "Updating…" : "Complete"}
-            </button>
-          ) : null}
-        </div>
+        ) : previewError ? (
+          <p className="px-3 py-4 text-sm text-red-600">{previewError}</p>
+        ) : previewLines.length === 0 ? (
+          <p className="px-3 py-4 text-sm text-neutral-500">
+            No items on this check.
+          </p>
+        ) : (
+          <ul className="divide-y divide-neutral-100">
+            {previewLines.map((line) => (
+              <PreviewLine
+                key={
+                  line.lineId || `${line.itemId}-${line.title}-${line.quantity}`
+                }
+                line={line}
+              />
+            ))}
+          </ul>
+        )}
+        {heldOrder?.total != null && !isPreviewLoading && !previewError ? (
+          <div className="flex items-center justify-between border-t border-neutral-100 bg-neutral-50/80 px-3 py-2.5">
+            <span className="text-sm font-semibold text-neutral-700">
+              Total
+            </span>
+            <span className="text-sm font-bold tabular-nums text-neutral-900">
+              {formatMoney(heldOrder.total)}
+            </span>
+          </div>
+        ) : null}
       </div>
     </SideDrawer>
   );
