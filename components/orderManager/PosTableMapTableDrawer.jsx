@@ -134,7 +134,7 @@ export default function PosTableMapTableDrawer({
   });
 
   const actionButtons = (
-    <div className="relative pt-2">
+    <div className="">
       <button
         type="button"
         aria-label={`More actions for table ${tableName}`}
@@ -226,7 +226,7 @@ export default function PosTableMapTableDrawer({
   );
 
   const moreActionsPanel = showMoreActions ? (
-    <div className="flex flex-col gap-2 p-3">
+    <div className="flex flex-col gap-2 p-3 pb-6">
       {visibleMoreActions.map((action) => {
         const Icon = action.icon;
         return (
