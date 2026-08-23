@@ -181,9 +181,11 @@ export default function PosTerminal() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const resumeParam = searchParams.get("resume");
+  const payParam = searchParams.get("pay");
   const tableParam = searchParams.get("table");
   const orderTypeParam = searchParams.get("orderType");
   const resumeLoadedRef = useRef(null);
+  const openPayAfterResumeRef = useRef(false);
   const tablePrefilledRef = useRef(null);
   const {
     menuContent,
@@ -259,6 +261,7 @@ export default function PosTerminal() {
     if (!isTrainingMode || !resumeParam) return;
     showDismissibleToast("Held orders are not available in training mode");
     resumeLoadedRef.current = resumeParam;
+    openPayAfterResumeRef.current = false;
     router.replace("/pos");
   }, [isTrainingMode, resumeParam, router, showDismissibleToast]);
 
@@ -272,6 +275,10 @@ export default function PosTerminal() {
       .filter(Boolean);
     if (orderIds.length === 0) return;
 
+    const shouldOpenPay =
+      payParam === "1" || payParam === "true" || payParam === "yes";
+    openPayAfterResumeRef.current = shouldOpenPay;
+
     let cancelled = false;
     resumeLoadedRef.current = resumeParam;
     setIsResumingOrder(true);
@@ -284,6 +291,7 @@ export default function PosTerminal() {
         if (!result?.success || !result.orders?.length) {
           showDismissibleToast(result?.error || "Could not load held order");
           resumeLoadedRef.current = null;
+          openPayAfterResumeRef.current = false;
           router.replace("/pos");
           return;
         }
@@ -296,6 +304,7 @@ export default function PosTerminal() {
             "Only POS checks can be resumed on the terminal",
           );
           resumeLoadedRef.current = null;
+          openPayAfterResumeRef.current = false;
           router.replace("/pos/held");
           return;
         }
@@ -326,10 +335,20 @@ export default function PosTerminal() {
           setIsTablePrefilled(true);
         }
         router.replace("/pos");
+
+        if (
+          openPayAfterResumeRef.current &&
+          !resumeState.isCheckPaid &&
+          resumeState.orderIds?.length > 0
+        ) {
+          setIsPaymentDrawerOpen(true);
+        }
+        openPayAfterResumeRef.current = false;
       } catch (error) {
         if (!cancelled) {
           showDismissibleToast(error?.message || "Could not load held order");
           resumeLoadedRef.current = null;
+          openPayAfterResumeRef.current = false;
           router.replace("/pos");
         }
       } finally {
@@ -340,7 +359,14 @@ export default function PosTerminal() {
     return () => {
       cancelled = true;
     };
-  }, [resumeParam, menuContent, router, isTrainingMode, restaurantMode]);
+  }, [
+    resumeParam,
+    payParam,
+    menuContent,
+    router,
+    isTrainingMode,
+    restaurantMode,
+  ]);
 
   useLayoutEffect(() => {
     if (!tableNameFromUrl) return;

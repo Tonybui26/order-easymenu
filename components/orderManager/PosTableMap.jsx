@@ -245,6 +245,17 @@ export default function PosTableMap() {
     );
   }
 
+  function handlePay() {
+    if (!drawerHeldOrder?.orderIds?.length) return;
+    if (drawerHeldOrder.allPaid) {
+      showDismissibleToast("This check is already paid");
+      return;
+    }
+    router.push(
+      `/pos?resume=${encodeURIComponent(drawerHeldOrder.orderIds.join(","))}&pay=1`,
+    );
+  }
+
   async function loadDrawerCheckOrders() {
     if (!drawerHeldOrder?.orderIds?.length) return null;
 
@@ -539,6 +550,7 @@ export default function PosTableMap() {
         tableName={drawerTableName}
         heldOrder={drawerHeldOrder}
         onLoadOrder={handleLoadOrder}
+        onPay={handlePay}
         onPrintBill={handlePrintBill}
         onReprintOrder={handleReprintOrder}
         onDelete={handleDeleteOrder}

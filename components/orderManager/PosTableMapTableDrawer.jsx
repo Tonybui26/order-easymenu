@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
+  CircleDollarSign,
   FileText,
   FolderOpen,
   Loader2,
@@ -92,6 +93,7 @@ export default function PosTableMapTableDrawer({
   tableName,
   heldOrder,
   onLoadOrder,
+  onPay,
   onPrintBill,
   onReprintOrder,
   onDelete,
@@ -138,9 +140,9 @@ export default function PosTableMapTableDrawer({
 
   const ticketCount = displayHeldOrder?.orderIds?.length || 0;
   const allPaid = Boolean(displayHeldOrder?.allPaid);
-  // Unpaid + track food: Load + All served. Paid + track food: Complete only.
-  // Unpaid without serve action: Load + Print bill.
-  const showPrintBill = !allPaid && !displayShowAllServed;
+  // Unpaid + track food: Open + All served. Paid + track food: Complete only.
+  // Unpaid without serve action: Open + Pay (Print Bill lives under More).
+  const showPay = !allPaid && !displayShowAllServed;
   const showLoadOrder = !displayShowComplete;
   const subtitleParts = [];
   if (displayHeldOrder?.total != null) {
@@ -157,8 +159,6 @@ export default function PosTableMapTableDrawer({
   const actionsDisabled = isProcessing || !hasTickets;
 
   const visibleMoreActions = TABLE_MORE_ACTIONS.filter((action) => {
-    // Don't repeat actions already shown as primary footer buttons.
-    if (action.id === "print-bill") return !showPrintBill;
     if (action.id === "delete") return !allPaid;
     return true;
   });
@@ -168,7 +168,7 @@ export default function PosTableMapTableDrawer({
       <div
         className={cn(
           "grid gap-2",
-          showLoadOrder && (showPrintBill || displayShowAllServed)
+          showLoadOrder && (showPay || displayShowAllServed)
             ? "grid-cols-2"
             : "grid-cols-1",
         )}
@@ -183,14 +183,14 @@ export default function PosTableMapTableDrawer({
             Open
           </PosActionButton>
         ) : null}
-        {showPrintBill ? (
+        {showPay ? (
           <PosActionButton
-            tone="teal"
-            icon={FileText}
+            tone="red"
+            icon={CircleDollarSign}
             disabled={actionsDisabled}
-            onClick={onPrintBill}
+            onClick={onPay}
           >
-            {isProcessing ? "Printing..." : "Print Bill"}
+            Pay
           </PosActionButton>
         ) : null}
         {displayShowAllServed ? (
