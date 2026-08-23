@@ -62,14 +62,19 @@ export default function PosTableMapTableDrawer({
   heldOrder,
   onLoadOrder,
   onPrintBill,
+  onComplete,
   isProcessing = false,
   previewLines = [],
   isPreviewLoading = false,
   previewError = null,
+  showComplete = false,
 }) {
   if (!tableName) return null;
 
   const ticketCount = heldOrder?.orderIds?.length || 0;
+  const allPaid = Boolean(heldOrder?.allPaid);
+  const showPrintBill = !allPaid;
+  const showLoadOrder = !showComplete;
   const subtitleParts = [];
   if (heldOrder?.total != null) {
     subtitleParts.push(formatMoney(heldOrder.total));
@@ -77,7 +82,7 @@ export default function PosTableMapTableDrawer({
   if (ticketCount > 1) {
     subtitleParts.push(`${ticketCount} tickets`);
   }
-  if (heldOrder?.allPaid) {
+  if (allPaid) {
     subtitleParts.push("Paid");
   }
 
@@ -132,33 +137,57 @@ export default function PosTableMapTableDrawer({
           ) : null}
         </div>
 
-        <div className="grid grid-cols-2 gap-2 rounded-xl border border-neutral-100 bg-neutral-50/80 p-3">
-          <button
-            type="button"
-            disabled={isProcessing || !heldOrder?.orderIds?.length}
-            onClick={onLoadOrder}
-            className={cn(
-              "rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
-              isProcessing
-                ? "cursor-not-allowed opacity-50"
-                : "hover:bg-blue-700 active:bg-blue-800",
-            )}
-          >
-            Load order
-          </button>
-          <button
-            type="button"
-            disabled={isProcessing || !heldOrder?.orderIds?.length}
-            onClick={onPrintBill}
-            className={cn(
-              "rounded-xl bg-teal-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
-              isProcessing
-                ? "cursor-not-allowed opacity-50"
-                : "hover:bg-teal-700 active:bg-teal-800",
-            )}
-          >
-            {isProcessing ? "Printing..." : "Print bill"}
-          </button>
+        <div
+          className={cn(
+            "grid gap-2 rounded-xl border border-neutral-100 bg-neutral-50/80 p-3",
+            showLoadOrder && showPrintBill ? "grid-cols-2" : "grid-cols-1",
+          )}
+        >
+          {showLoadOrder ? (
+            <button
+              type="button"
+              disabled={isProcessing || !heldOrder?.orderIds?.length}
+              onClick={onLoadOrder}
+              className={cn(
+                "rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
+                isProcessing
+                  ? "cursor-not-allowed opacity-50"
+                  : "hover:bg-blue-700 active:bg-blue-800",
+              )}
+            >
+              Load order
+            </button>
+          ) : null}
+          {showPrintBill ? (
+            <button
+              type="button"
+              disabled={isProcessing || !heldOrder?.orderIds?.length}
+              onClick={onPrintBill}
+              className={cn(
+                "rounded-xl bg-teal-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
+                isProcessing
+                  ? "cursor-not-allowed opacity-50"
+                  : "hover:bg-teal-700 active:bg-teal-800",
+              )}
+            >
+              {isProcessing ? "Printing..." : "Print bill"}
+            </button>
+          ) : null}
+          {showComplete ? (
+            <button
+              type="button"
+              disabled={isProcessing || !heldOrder?.orderIds?.length}
+              onClick={onComplete}
+              className={cn(
+                "rounded-xl bg-purple-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-colors",
+                isProcessing
+                  ? "cursor-not-allowed opacity-50"
+                  : "hover:bg-purple-700 active:bg-purple-800",
+              )}
+            >
+              {isProcessing ? "Updating…" : "Complete"}
+            </button>
+          ) : null}
         </div>
       </div>
     </SideDrawer>

@@ -9,8 +9,10 @@ import {
   fetchPosHeldOrders,
   fetchPosResumeOrders,
   markPosBillPrinted,
+  updatePosHeldCheckStatus,
 } from "@/lib/api/fetchApi";
 import { findPosHeldOrderForTable } from "@/lib/pos/posTableMapHeld";
+import { getTicketIdsNotDelivered } from "@/lib/pos/posHeldOrder";
 import { printBillForHeldCheck } from "@/lib/pos/posHeldOrderPrint";
 import { buildCartLinesFromResumeOrders } from "@/lib/pos/posResumeOrder";
 import { resolvePosConfig } from "@/lib/pos/posConfig";
@@ -277,6 +279,40 @@ export default function PosTableMap() {
     }
   }
 
+  async function handleComplete() {
+    if (!drawerHeldOrder || isProcessing) return;
+
+    const ticketIds = getTicketIdsNotDelivered(drawerHeldOrder);
+    if (ticketIds.length === 0) {
+      showDismissibleToast("No tickets to complete");
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const result = await updatePosHeldCheckStatus({
+        orderIds: ticketIds,
+        status: "delivered",
+      });
+      if (!result?.success) {
+        showDismissibleToast(result?.error || "Failed to complete check");
+        return;
+      }
+      toast.success("Order completed");
+      await loadHeldOrders();
+      handleCloseDrawer();
+    } catch (error) {
+      showDismissibleToast(error?.message || "Failed to complete check");
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
+  const showComplete =
+    trackFoodServedOnTableMap &&
+    Boolean(drawerHeldOrder?.allPaid) &&
+    getTicketIdsNotDelivered(drawerHeldOrder).length > 0;
+
   return (
     <>
       <DismissibleToast toast={dismissibleToast} onDismiss={hideDismissibleToast} />
@@ -367,10 +403,12 @@ export default function PosTableMap() {
         heldOrder={drawerHeldOrder}
         onLoadOrder={handleLoadOrder}
         onPrintBill={handlePrintBill}
+        onComplete={handleComplete}
         isProcessing={isProcessing}
         previewLines={previewLines}
         isPreviewLoading={isPreviewLoading}
         previewError={previewError}
+        showComplete={showComplete}
       />
     </>
   );
