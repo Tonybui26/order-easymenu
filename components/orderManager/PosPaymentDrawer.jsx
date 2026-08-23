@@ -251,7 +251,6 @@ export default function PosPaymentDrawer({
       onClose={handleClose}
       showHeader={false}
       side="right"
-      zIndex={40}
       closeDisabled={isPurchasing || tyroApproved}
       panelClassName="bg-[#984B28]"
       bodyClassName=""

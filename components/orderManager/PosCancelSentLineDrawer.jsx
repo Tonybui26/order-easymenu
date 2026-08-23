@@ -55,7 +55,6 @@ export default function PosCancelSentLineDrawer({
           : undefined
       }
       closeDisabled={isSubmitting}
-      zIndex={40}
       contentKey="pos-cancel-line-drawer"
       footer={
         <div className="flex gap-3">

@@ -114,7 +114,6 @@ export default function PosTableEntryDrawer({
       onClose={onClose}
       showHeader={false}
       side="left"
-      zIndex={40}
       widthClassName="w-[min(100%,22rem)]"
       panelClassName="bg-[#984B28]"
       bodyClassName=""
