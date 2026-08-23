@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   FileText,
   Loader2,
@@ -103,22 +103,46 @@ export default function PosTableMapTableDrawer({
   showComplete = false,
 }) {
   const [showMoreActions, setShowMoreActions] = useState(false);
+  // Keep last open snapshot so SideDrawer can play its exit animation after
+  // the parent clears tableName / heldOrder on close.
+  const openSnapshotRef = useRef(null);
+
+  if (isOpen && tableName) {
+    openSnapshotRef.current = {
+      tableName,
+      heldOrder,
+      previewLines,
+      isPreviewLoading,
+      previewError,
+      showAllServed,
+      showComplete,
+    };
+  }
 
   useEffect(() => {
     if (!isOpen) setShowMoreActions(false);
   }, [isOpen, tableName]);
 
-  if (!tableName) return null;
+  const snap = openSnapshotRef.current;
+  if (!snap?.tableName) return null;
 
-  const ticketCount = heldOrder?.orderIds?.length || 0;
-  const allPaid = Boolean(heldOrder?.allPaid);
+  const displayTableName = snap.tableName;
+  const displayHeldOrder = snap.heldOrder;
+  const displayPreviewLines = snap.previewLines || [];
+  const displayPreviewLoading = Boolean(snap.isPreviewLoading);
+  const displayPreviewError = snap.previewError;
+  const displayShowAllServed = Boolean(snap.showAllServed);
+  const displayShowComplete = Boolean(snap.showComplete);
+
+  const ticketCount = displayHeldOrder?.orderIds?.length || 0;
+  const allPaid = Boolean(displayHeldOrder?.allPaid);
   // Unpaid + track food: Load + All served. Paid + track food: Complete only.
   // Unpaid without serve action: Load + Print bill.
-  const showPrintBill = !allPaid && !showAllServed;
-  const showLoadOrder = !showComplete;
+  const showPrintBill = !allPaid && !displayShowAllServed;
+  const showLoadOrder = !displayShowComplete;
   const subtitleParts = [];
-  if (heldOrder?.total != null) {
-    subtitleParts.push(formatMoney(heldOrder.total));
+  if (displayHeldOrder?.total != null) {
+    subtitleParts.push(formatMoney(displayHeldOrder.total));
   }
   if (ticketCount > 1) {
     subtitleParts.push(`${ticketCount} tickets`);
@@ -127,7 +151,7 @@ export default function PosTableMapTableDrawer({
     subtitleParts.push("Paid");
   }
 
-  const hasTickets = Boolean(heldOrder?.orderIds?.length);
+  const hasTickets = Boolean(displayHeldOrder?.orderIds?.length);
   const actionsDisabled = isProcessing || !hasTickets;
 
   const visibleMoreActions = TABLE_MORE_ACTIONS.filter((action) => {
@@ -138,10 +162,10 @@ export default function PosTableMapTableDrawer({
   });
 
   const actionButtons = (
-    <div className="">
+    <>
       <button
         type="button"
-        aria-label={`More actions for table ${tableName}`}
+        aria-label={`More actions for table ${displayTableName}`}
         aria-expanded={showMoreActions}
         disabled={actionsDisabled}
         onClick={() => setShowMoreActions((open) => !open)}
@@ -159,7 +183,7 @@ export default function PosTableMapTableDrawer({
       <div
         className={cn(
           "grid gap-2",
-          showLoadOrder && (showPrintBill || showAllServed)
+          showLoadOrder && (showPrintBill || displayShowAllServed)
             ? "grid-cols-2"
             : "grid-cols-1",
         )}
@@ -183,7 +207,7 @@ export default function PosTableMapTableDrawer({
             {isProcessing ? "Printing..." : "Print Bill"}
           </PosActionButton>
         ) : null}
-        {showAllServed ? (
+        {displayShowAllServed ? (
           <PosActionButton
             tone="green"
             disabled={actionsDisabled}
@@ -192,7 +216,7 @@ export default function PosTableMapTableDrawer({
             {isProcessing ? "Updating…" : "All Served"}
           </PosActionButton>
         ) : null}
-        {showComplete ? (
+        {displayShowComplete ? (
           <PosActionButton
             tone="purple"
             disabled={actionsDisabled}
@@ -202,7 +226,7 @@ export default function PosTableMapTableDrawer({
           </PosActionButton>
         ) : null}
       </div>
-    </div>
+    </>
   );
 
   const moreActionsPanel = showMoreActions ? (
@@ -230,14 +254,14 @@ export default function PosTableMapTableDrawer({
     <SideDrawer
       isOpen={isOpen}
       onClose={onClose}
-      title={`Table ${tableName}`}
+      title={`Table ${displayTableName}`}
       subtitle={
         subtitleParts.length > 0
           ? subtitleParts.join(" · ")
           : "Open check on this table"
       }
       closeDisabled={isProcessing}
-      contentKey={`table-map-drawer-${tableName}`}
+      contentKey={`table-map-drawer-${displayTableName}`}
       footer={actionButtons}
       footerClassName="overflow-visible shadow-[0_-8px_24px_rgba(0,0,0,0.06)]"
       bodyOverlay={showMoreActions}
@@ -248,20 +272,22 @@ export default function PosTableMapTableDrawer({
         <div className="border-b border-neutral-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
           Order items
         </div>
-        {isPreviewLoading ? (
+        {displayPreviewLoading ? (
           <div className="flex items-center justify-center gap-2 px-3 py-8 text-sm text-neutral-500">
             <Loader2 className="size-4 animate-spin" aria-hidden />
             Loading items…
           </div>
-        ) : previewError ? (
-          <p className="px-3 py-4 text-sm text-red-600">{previewError}</p>
-        ) : previewLines.length === 0 ? (
+        ) : displayPreviewError ? (
+          <p className="px-3 py-4 text-sm text-red-600">
+            {displayPreviewError}
+          </p>
+        ) : displayPreviewLines.length === 0 ? (
           <p className="px-3 py-4 text-sm text-neutral-500">
             No items on this check.
           </p>
         ) : (
           <ul className="divide-y divide-neutral-100">
-            {previewLines.map((line) => (
+            {displayPreviewLines.map((line) => (
               <PreviewLine
                 key={
                   line.lineId || `${line.itemId}-${line.title}-${line.quantity}`
@@ -271,13 +297,15 @@ export default function PosTableMapTableDrawer({
             ))}
           </ul>
         )}
-        {heldOrder?.total != null && !isPreviewLoading && !previewError ? (
+        {displayHeldOrder?.total != null &&
+        !displayPreviewLoading &&
+        !displayPreviewError ? (
           <div className="flex items-center justify-between border-t border-neutral-100 bg-neutral-50/80 px-3 py-2.5">
             <span className="text-sm font-semibold text-neutral-700">
               Total
             </span>
             <span className="text-sm font-bold tabular-nums text-neutral-900">
-              {formatMoney(heldOrder.total)}
+              {formatMoney(displayHeldOrder.total)}
             </span>
           </div>
         ) : null}
