@@ -279,12 +279,12 @@ export default function PosTableMap() {
     }
   }
 
-  async function handleComplete() {
+  async function markUndeliveredTicketsServed(successMessage) {
     if (!drawerHeldOrder || isProcessing) return;
 
     const ticketIds = getTicketIdsNotDelivered(drawerHeldOrder);
     if (ticketIds.length === 0) {
-      showDismissibleToast("No tickets to complete");
+      showDismissibleToast("No tickets to update");
       return;
     }
 
@@ -295,23 +295,36 @@ export default function PosTableMap() {
         status: "delivered",
       });
       if (!result?.success) {
-        showDismissibleToast(result?.error || "Failed to complete check");
+        showDismissibleToast(result?.error || "Failed to update tickets");
         return;
       }
-      toast.success("Order completed");
+      toast.success(successMessage);
       await loadHeldOrders();
       handleCloseDrawer();
     } catch (error) {
-      showDismissibleToast(error?.message || "Failed to complete check");
+      showDismissibleToast(error?.message || "Failed to update tickets");
     } finally {
       setIsProcessing(false);
     }
   }
 
-  const showComplete =
+  function handleAllServed() {
+    return markUndeliveredTicketsServed("All Served");
+  }
+
+  function handleComplete() {
+    return markUndeliveredTicketsServed("Order completed");
+  }
+
+  const undeliveredTicketCount = getTicketIdsNotDelivered(
+    drawerHeldOrder,
+  ).length;
+  const needsServe =
     trackFoodServedOnTableMap &&
-    Boolean(drawerHeldOrder?.allPaid) &&
-    getTicketIdsNotDelivered(drawerHeldOrder).length > 0;
+    Boolean(drawerHeldOrder) &&
+    undeliveredTicketCount > 0;
+  const showAllServed = needsServe && !drawerHeldOrder?.allPaid;
+  const showComplete = needsServe && Boolean(drawerHeldOrder?.allPaid);
 
   return (
     <>
@@ -403,11 +416,13 @@ export default function PosTableMap() {
         heldOrder={drawerHeldOrder}
         onLoadOrder={handleLoadOrder}
         onPrintBill={handlePrintBill}
+        onAllServed={handleAllServed}
         onComplete={handleComplete}
         isProcessing={isProcessing}
         previewLines={previewLines}
         isPreviewLoading={isPreviewLoading}
         previewError={previewError}
+        showAllServed={showAllServed}
         showComplete={showComplete}
       />
     </>

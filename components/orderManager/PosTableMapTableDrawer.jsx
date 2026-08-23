@@ -62,18 +62,22 @@ export default function PosTableMapTableDrawer({
   heldOrder,
   onLoadOrder,
   onPrintBill,
+  onAllServed,
   onComplete,
   isProcessing = false,
   previewLines = [],
   isPreviewLoading = false,
   previewError = null,
+  showAllServed = false,
   showComplete = false,
 }) {
   if (!tableName) return null;
 
   const ticketCount = heldOrder?.orderIds?.length || 0;
   const allPaid = Boolean(heldOrder?.allPaid);
-  const showPrintBill = !allPaid;
+  // Unpaid + track food: Load + All served. Paid + track food: Complete only.
+  // Unpaid without serve action: Load + Print bill.
+  const showPrintBill = !allPaid && !showAllServed;
   const showLoadOrder = !showComplete;
   const subtitleParts = [];
   if (heldOrder?.total != null) {
@@ -140,7 +144,9 @@ export default function PosTableMapTableDrawer({
         <div
           className={cn(
             "grid gap-2 rounded-xl border border-neutral-100 bg-neutral-50/80 p-3",
-            showLoadOrder && showPrintBill ? "grid-cols-2" : "grid-cols-1",
+            showLoadOrder && (showPrintBill || showAllServed)
+              ? "grid-cols-2"
+              : "grid-cols-1",
           )}
         >
           {showLoadOrder ? (
@@ -171,6 +177,21 @@ export default function PosTableMapTableDrawer({
               )}
             >
               {isProcessing ? "Printing..." : "Print bill"}
+            </button>
+          ) : null}
+          {showAllServed ? (
+            <button
+              type="button"
+              disabled={isProcessing || !heldOrder?.orderIds?.length}
+              onClick={onAllServed}
+              className={cn(
+                "rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold tracking-wide text-white transition-colors",
+                isProcessing
+                  ? "cursor-not-allowed opacity-50"
+                  : "hover:bg-green-700 active:bg-green-800",
+              )}
+            >
+              {isProcessing ? "Updating…" : "All Served"}
             </button>
           ) : null}
           {showComplete ? (
