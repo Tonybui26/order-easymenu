@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  ChevronDown,
   FileText,
   FolderOpen,
   Loader2,
-  MoreHorizontal,
   Printer,
   Trash2,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/helper";
 import PosActionButton from "./PosActionButton";
@@ -163,24 +164,7 @@ export default function PosTableMapTableDrawer({
   });
 
   const actionButtons = (
-    <>
-      <button
-        type="button"
-        aria-label={`More actions for table ${displayTableName}`}
-        aria-expanded={showMoreActions}
-        disabled={actionsDisabled}
-        onClick={() => setShowMoreActions((open) => !open)}
-        className={cn(
-          "absolute left-1/2 top-0 z-30 flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border bg-white shadow-sm transition-colors",
-          showMoreActions
-            ? "border-neutral-300 text-neutral-800"
-            : "border-neutral-200/90 text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700 active:bg-neutral-100",
-          actionsDisabled && "cursor-not-allowed opacity-50",
-        )}
-      >
-        <MoreHorizontal size={18} strokeWidth={2} aria-hidden />
-      </button>
-
+    <div className="flex flex-col gap-2">
       <div
         className={cn(
           "grid gap-2",
@@ -228,7 +212,52 @@ export default function PosTableMapTableDrawer({
           </PosActionButton>
         ) : null}
       </div>
-    </>
+
+      {visibleMoreActions.length > 0 ? (
+        <button
+          type="button"
+          aria-expanded={showMoreActions}
+          aria-label={
+            showMoreActions
+              ? "Close more actions"
+              : `More actions for table ${displayTableName}`
+          }
+          disabled={actionsDisabled}
+          onClick={() => setShowMoreActions((open) => !open)}
+          className={cn(
+            "-mx-1 flex items-center justify-between border-t border-neutral-100 px-1 pt-2 text-left text-sm font-medium transition-colors",
+            showMoreActions
+              ? "text-neutral-900 hover:text-neutral-950"
+              : "text-neutral-700 hover:text-neutral-800",
+            actionsDisabled && "cursor-not-allowed opacity-50",
+          )}
+        >
+          <span
+            className={cn(
+              "inline-flex items-center gap-2",
+              showMoreActions && "font-semibold",
+            )}
+          >
+            {showMoreActions ? (
+              <>
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-white">
+                  <X className="size-3" strokeWidth={2.5} aria-hidden />
+                </span>
+                Close
+              </>
+            ) : (
+              "More actions"
+            )}
+          </span>
+          {!showMoreActions ? (
+            <ChevronDown
+              className="size-4 shrink-0 text-neutral-500"
+              aria-hidden
+            />
+          ) : null}
+        </button>
+      ) : null}
+    </div>
   );
 
   const moreActionsPanel = showMoreActions ? (
@@ -265,7 +294,7 @@ export default function PosTableMapTableDrawer({
       closeDisabled={isProcessing}
       contentKey={`table-map-drawer-${displayTableName}`}
       footer={actionButtons}
-      footerClassName="overflow-visible shadow-[0_-8px_24px_rgba(0,0,0,0.06)]"
+      footerClassName="shadow-[0_-8px_24px_rgba(0,0,0,0.06)]"
       bodyOverlay={showMoreActions}
       onBodyOverlayClick={() => setShowMoreActions(false)}
       bottomSlidePanel={moreActionsPanel}
