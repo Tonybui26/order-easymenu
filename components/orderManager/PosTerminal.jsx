@@ -201,9 +201,9 @@ export default function PosTerminal() {
   const tableNameFromUrl = resumeParam ? "" : String(tableParam || "").trim();
   const restaurantMode = isRestaurantModeEnabled(menuConfig);
   const orderTypeFromUrl = (() => {
-    if (!tableNameFromUrl) return null;
     const fromParam = resolveOrderTypeFromParam(orderTypeParam);
     if (fromParam) return fromParam;
+    if (!tableNameFromUrl) return null;
     // Restaurant mode: opening a table defaults to dine-in.
     if (restaurantMode) return "dine-in";
     return null;
@@ -374,14 +374,30 @@ export default function PosTerminal() {
   ]);
 
   useLayoutEffect(() => {
-    if (!tableNameFromUrl) return;
+    if (resumeParam) return;
 
-    setTableNumber(tableNameFromUrl);
-    setOrderType(orderTypeFromUrl);
-    setIsTablePrefilled(true);
+    if (tableNameFromUrl) {
+      setTableNumber(tableNameFromUrl);
+      setOrderType(orderTypeFromUrl);
+      setIsTablePrefilled(true);
+      setIsOrderTypeMissing(false);
+      tablePrefilledRef.current = tableNameFromUrl;
+      return;
+    }
+
+    if (!orderTypeParam) return;
+    const fromParam = resolveOrderTypeFromParam(orderTypeParam);
+    if (!fromParam) return;
+    setOrderType(fromParam);
     setIsOrderTypeMissing(false);
-    tablePrefilledRef.current = tableNameFromUrl;
-  }, [tableNameFromUrl, orderTypeFromUrl]);
+    router.replace("/pos");
+  }, [
+    resumeParam,
+    tableNameFromUrl,
+    orderTypeFromUrl,
+    orderTypeParam,
+    router,
+  ]);
 
   useEffect(() => {
     if (tabs.length === 0) {

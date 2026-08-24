@@ -5,6 +5,7 @@ import { cn } from "@/lib/helper";
 import { findPosHeldOrderForTable } from "@/lib/pos/posTableMapHeld";
 import {
   getPosTableMapStatusFill,
+  getPosTableMapStatusTextColor,
   POS_TABLE_MAP_STATUS,
   POS_TABLE_MAP_STATUS_LABEL,
   resolvePosTableMapStatus,
@@ -21,12 +22,21 @@ import {
   isTableMapPartition,
   isTableMapTable,
 } from "@/lib/pos/posTableMaps";
+import {
+  POS_TABLE_MAP_MERGE_SELECT_FILL,
+  POS_TABLE_MAP_MERGE_SELECT_TEXT,
+  POS_TABLE_MAP_MERGED_STROKE_WIDTH,
+} from "@/lib/pos/posTableMapMerge";
 import { TableMapElementGraphic } from "./posTableMapIcons";
 
 export default function PosTableMapFloor({
   tableMap,
   heldOrders = [],
   trackFoodServedOnTableMap = false,
+  floorColor = TABLE_MAP_FLOOR_COLOR,
+  solidFloor = false,
+  selectedObjectIds = [],
+  mergeColorByObjectId = null,
   onTableSelect,
 }) {
   const containerRef = useRef(null);
@@ -34,6 +44,9 @@ export default function PosTableMapFloor({
   const canvasSize = getTableMapCanvasSize(tableMap);
   const layout = getTableMapViewportLayout(canvasSize, viewportSize);
   const objects = Array.isArray(tableMap?.objects) ? tableMap.objects : [];
+  const floorStyle = solidFloor
+    ? { backgroundColor: floorColor }
+    : getTableMapFloorStyle(floorColor);
 
   useEffect(() => {
     const element = containerRef.current;
@@ -56,7 +69,7 @@ export default function PosTableMapFloor({
     <div
       ref={containerRef}
       className="absolute inset-0 flex items-center justify-center overflow-hidden"
-      style={{ backgroundColor: TABLE_MAP_FLOOR_COLOR }}
+      style={{ backgroundColor: floorColor }}
     >
       {layout.width > 0 && layout.height > 0 ? (
         <div
@@ -69,7 +82,7 @@ export default function PosTableMapFloor({
               width: layout.canvasWidth,
               height: layout.canvasHeight,
               transform: `scale(${layout.scale})`,
-              ...getTableMapFloorStyle(),
+              ...floorStyle,
             }}
           >
             {objects.map((object) => {
@@ -83,12 +96,21 @@ export default function PosTableMapFloor({
                 trackFoodServedOnTableMap,
               });
               const statusFill = getPosTableMapStatusFill(status);
-              const fillColor =
-                statusFill || getTableMapBackgroundColor(object);
+              const objectId = String(object.id || "");
+              const isSelected = selectedObjectIds.includes(objectId);
+              const mergeStroke = mergeColorByObjectId?.get(objectId) || null;
+              const fillColor = isSelected
+                ? POS_TABLE_MAP_MERGE_SELECT_FILL
+                : statusFill || getTableMapBackgroundColor(object);
               const statusLabel =
                 status !== POS_TABLE_MAP_STATUS.available
                   ? POS_TABLE_MAP_STATUS_LABEL[status]
                   : null;
+              const labelColor = isSelected
+                ? POS_TABLE_MAP_MERGE_SELECT_TEXT
+                : statusFill && getPosTableMapStatusTextColor(status)
+                  ? getPosTableMapStatusTextColor(status)
+                  : object.fontColor || TABLE_MAP_DEFAULT_FONT_COLOR;
 
               return (
                 <div
@@ -124,9 +146,15 @@ export default function PosTableMapFloor({
                     <TableMapElementGraphic
                       type={object.type}
                       fillColor={fillColor}
+                      strokeColor={mergeStroke || undefined}
+                      strokeWidth={
+                        mergeStroke
+                          ? POS_TABLE_MAP_MERGED_STROKE_WIDTH
+                          : undefined
+                      }
                     />
                     {shouldShowObjectLabel(object) ? (
-                      <ObjectLabel object={object} />
+                      <ObjectLabel object={object} color={labelColor} />
                     ) : null}
                   </button>
                 </div>
@@ -144,7 +172,7 @@ function shouldShowObjectLabel(object) {
   return isTableMapTable(object) || isTableMapPartition(object);
 }
 
-function ObjectLabel({ object }) {
+function ObjectLabel({ object, color }) {
   const isVerticalPartition = object.type === "partition-v";
 
   return (
@@ -152,7 +180,7 @@ function ObjectLabel({ object }) {
       <span
         className="whitespace-nowrap text-center font-semibold leading-none"
         style={{
-          color: object.fontColor || TABLE_MAP_DEFAULT_FONT_COLOR,
+          color: color || object.fontColor || TABLE_MAP_DEFAULT_FONT_COLOR,
           fontSize: object.fontSize || TABLE_MAP_DEFAULT_FONT_SIZE,
           transform: isVerticalPartition ? "rotate(-90deg)" : undefined,
         }}

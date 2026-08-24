@@ -18,7 +18,7 @@ function SvgShell({ children, className }) {
   );
 }
 
-function SquareTableIcon({ className, fillColor }) {
+function SquareTableIcon({ className, fillColor, strokeColor, strokeWidth }) {
   return (
     <SvgShell className={className}>
       <rect
@@ -27,15 +27,15 @@ function SquareTableIcon({ className, fillColor }) {
         width="60"
         height="60"
         fill={fillColor || "#ffffff"}
-        stroke={STROKE}
-        strokeWidth={TABLE_CANVAS_STROKE_WIDTH}
+        stroke={strokeColor || STROKE}
+        strokeWidth={strokeWidth || TABLE_CANVAS_STROKE_WIDTH}
         vectorEffect="non-scaling-stroke"
       />
     </SvgShell>
   );
 }
 
-function RoundTableIcon({ className, fillColor }) {
+function RoundTableIcon({ className, fillColor, strokeColor, strokeWidth }) {
   return (
     <SvgShell className={className}>
       <ellipse
@@ -44,8 +44,8 @@ function RoundTableIcon({ className, fillColor }) {
         rx="30"
         ry="30"
         fill={fillColor || "#ffffff"}
-        stroke={STROKE}
-        strokeWidth={TABLE_CANVAS_STROKE_WIDTH}
+        stroke={strokeColor || STROKE}
+        strokeWidth={strokeWidth || TABLE_CANVAS_STROKE_WIDTH}
         vectorEffect="non-scaling-stroke"
       />
     </SvgShell>
@@ -171,8 +171,17 @@ export function TableMapElementGraphic({
   type,
   className = "block h-full w-full",
   fillColor,
+  strokeColor,
+  strokeWidth,
 }) {
   const Icon = ICONS[type];
   if (!Icon) return null;
-  return <Icon className={className} fillColor={fillColor} />;
+  return (
+    <Icon
+      className={className}
+      fillColor={fillColor}
+      strokeColor={strokeColor}
+      strokeWidth={strokeWidth}
+    />
+  );
 }

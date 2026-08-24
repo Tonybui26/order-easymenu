@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Map as MapIcon } from "lucide-react";
+import { Combine, Map as MapIcon, ShoppingBag, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
 import {
@@ -29,6 +29,12 @@ import {
   POS_TABLE_MAP_STATUS_LABEL,
 } from "@/lib/pos/posTableMapStatus";
 import {
+  confirmPosTableMerge,
+  getMergeGroupColorMap,
+  loadPosTableMergeGroups,
+  savePosTableMergeGroups,
+} from "@/lib/pos/posTableMapMerge";
+import {
   TABLE_MAP_DEFAULT_TABLE_BACKGROUND,
   TABLE_MAP_FLOOR_COLOR,
   getTableMapTableName,
@@ -43,6 +49,7 @@ import DismissibleToast, {
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 
 const HELD_ORDERS_POLL_MS = 10000;
+const TABLE_MAP_MERGE_FLOOR_COLOR = "#1e293b";
 
 function orderIdsCacheKey(orderIds) {
   return (orderIds || []).map(String).join(",");
@@ -66,6 +73,7 @@ export default function PosTableMap() {
     () => getPosTableMapLegendStatuses(trackFoodServedOnTableMap),
     [trackFoodServedOnTableMap],
   );
+  const mergeStoreKey = storeProfile?.menuLink || "default";
   const {
     toast: dismissibleToast,
     showToast: showDismissibleToast,
@@ -87,8 +95,19 @@ export default function PosTableMap() {
   const [deleteDrawerOpen, setDeleteDrawerOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isMergeMode, setIsMergeMode] = useState(false);
+  const [mergeSelectedIds, setMergeSelectedIds] = useState([]);
+  const [mergeGroups, setMergeGroups] = useState([]);
   /** @type {React.MutableRefObject<Map<string, object[]>>} */
   const resumeOrdersCacheRef = useRef(new Map());
+  const mergeColorByObjectId = useMemo(
+    () => getMergeGroupColorMap(mergeGroups),
+    [mergeGroups],
+  );
+
+  useEffect(() => {
+    setMergeGroups(loadPosTableMergeGroups(mergeStoreKey));
+  }, [mergeStoreKey]);
 
   useEffect(() => {
     if (!tableMaps.length) {
@@ -206,10 +225,52 @@ export default function PosTableMap() {
     setIsPreviewLoading(false);
   }
 
+  function handleTakeaway() {
+    router.push("/pos?orderType=takeaway");
+  }
+
+  function handleEnterMergeMode() {
+    handleCloseDrawer();
+    setMergeSelectedIds([]);
+    setIsMergeMode(true);
+  }
+
+  function handleExitMergeMode() {
+    if (mergeSelectedIds.length >= 2) {
+      const result = confirmPosTableMerge(mergeGroups, mergeSelectedIds);
+      if (result.merged) {
+        setMergeGroups(result.groups);
+        savePosTableMergeGroups(mergeStoreKey, result.groups);
+        toast.success("Tables merged");
+      }
+    } else if (mergeSelectedIds.length === 1) {
+      showDismissibleToast("Select at least two tables to merge");
+      return;
+    }
+    setMergeSelectedIds([]);
+    setIsMergeMode(false);
+  }
+
+  function handleToggleMergeMode() {
+    if (isMergeMode) handleExitMergeMode();
+    else handleEnterMergeMode();
+  }
+
   function handleTableSelect(object) {
     const tableName = getTableMapTableName(object);
     if (!tableName) {
       showDismissibleToast("This table has no name configured");
+      return;
+    }
+
+    if (isMergeMode) {
+      const objectId = String(object.id || "");
+      if (!objectId) return;
+      setMergeSelectedIds((prev) =>
+        prev.includes(objectId)
+          ? prev.filter((id) => id !== objectId)
+          : [...prev, objectId],
+      );
       return;
     }
 
@@ -460,6 +521,9 @@ export default function PosTableMap() {
     undeliveredTicketCount > 0;
   const showAllServed = needsServe && !drawerHeldOrder?.allPaid;
   const showComplete = needsServe && Boolean(drawerHeldOrder?.allPaid);
+  const mapFloorColor = isMergeMode
+    ? TABLE_MAP_MERGE_FLOOR_COLOR
+    : TABLE_MAP_FLOOR_COLOR;
 
   return (
     <>
@@ -467,15 +531,15 @@ export default function PosTableMap() {
 
       <div
         className="flex h-[100dvh] w-full flex-col overflow-hidden pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
-        style={{ backgroundColor: TABLE_MAP_FLOOR_COLOR }}
+        style={{ backgroundColor: mapFloorColor }}
       >
         <PosChromeHeader onOpenCashDrawer={handleOpenCashDrawer} />
 
         {selectedMap ? (
           <div className="relative min-h-0 flex-1 overflow-hidden pb-[env(safe-area-inset-bottom)]">
             {tableMaps.length > 1 ? (
-              <div className="absolute right-4 top-2 z-20">
-                <div className="flex shrink-0 space-x-1 rounded-xl bg-[#402e22] p-1 shadow-sm">
+              <div className="pointer-events-none absolute bottom-3 left-4 z-20">
+                <div className="pointer-events-auto flex shrink-0 space-x-1 rounded-xl bg-[#402e22] p-1 shadow-sm ring-1 ring-white/10">
                   {tableMaps.map((map) => {
                     const isActive = map.id === selectedMap.id;
                     return (
@@ -496,6 +560,35 @@ export default function PosTableMap() {
                 </div>
               </div>
             ) : null}
+            <div className="pointer-events-none absolute bottom-3 right-4 z-20">
+              <div className="pointer-events-auto flex shrink-0 space-x-1 rounded-xl bg-[#402e22]/95 p-1 shadow-sm ring-1 ring-white/10">
+                <button
+                  type="button"
+                  onClick={handleTakeaway}
+                  className="flex min-h-[44px] items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10 xl:text-base"
+                >
+                  <ShoppingBag className="size-4 shrink-0" aria-hidden />
+                  Takeaway
+                </button>
+                <button
+                  type="button"
+                  onClick={handleToggleMergeMode}
+                  className="flex min-h-[44px] items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10 xl:text-base"
+                >
+                  {isMergeMode ? (
+                    <>
+                      <X className="size-4 shrink-0" aria-hidden />
+                      Close
+                    </>
+                  ) : (
+                    <>
+                      <Combine className="size-4 shrink-0" aria-hidden />
+                      Merge
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
             <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2">
               <div className="pointer-events-auto flex items-center gap-3 rounded-xl bg-[#402e22]/95 px-3 py-2 shadow-sm ring-1 ring-white/10">
                 {legendStatuses.map((status) => {
@@ -523,6 +616,10 @@ export default function PosTableMap() {
               tableMap={selectedMap}
               heldOrders={heldOrders}
               trackFoodServedOnTableMap={trackFoodServedOnTableMap}
+              floorColor={mapFloorColor}
+              solidFloor={isMergeMode}
+              selectedObjectIds={isMergeMode ? mergeSelectedIds : []}
+              mergeColorByObjectId={mergeColorByObjectId}
               onTableSelect={handleTableSelect}
             />
           </div>
