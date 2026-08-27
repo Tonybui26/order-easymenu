@@ -286,6 +286,7 @@ export default function PosTerminal() {
     useState(false);
   const [customizingItem, setCustomizingItem] = useState(null);
   const [customizingLineId, setCustomizingLineId] = useState(null);
+  const [optionsLineId, setOptionsLineId] = useState(null);
   const [selectedVariants, setSelectedVariants] = useState({});
   const [selectedModifiers, setSelectedModifiers] = useState({});
   const [isOrderTypeMissing, setIsOrderTypeMissing] = useState(false);
@@ -651,8 +652,21 @@ export default function PosTerminal() {
     );
   }
 
+  function handleCartLineOptionsOpenChange(lineId, open) {
+    setOptionsLineId((current) => {
+      if (open) return lineId;
+      return current === lineId ? null : current;
+    });
+  }
+
+  function handleCartLineOptionsClick(lineId) {
+    // UI-only for now — note / line options drawer comes next.
+    setOptionsLineId(null);
+  }
+
   function handleSelectCartLine(lineId) {
     if (isViewOnly) return;
+    setOptionsLineId(null);
     const line = cartLines.find((entry) => entry.lineId === lineId);
     if (!line || !isOpenCartLine(line)) return;
 
@@ -746,6 +760,7 @@ export default function PosTerminal() {
     if (isViewOnly || !isOpenCartLine(line)) return;
     setCartLines((prev) => prev.filter((line) => line.lineId !== lineId));
     if (lineId === customizingLineId) closeCustomization();
+    if (lineId === optionsLineId) setOptionsLineId(null);
   }
 
   function refreshLinePricing(line, selectedVariants, selectedModifiers) {
@@ -1542,6 +1557,11 @@ export default function PosTerminal() {
                       readOnly={isViewOnly}
                       allowVoidSentLine={!isViewOnly && !isTrainingMode}
                       useKitchenPrintAliases={useKitchenPrintAliases}
+                      isOptionsOpen={optionsLineId === line.lineId}
+                      onOptionsOpenChange={(open) =>
+                        handleCartLineOptionsOpenChange(line.lineId, open)
+                      }
+                      onOptionsClick={handleCartLineOptionsClick}
                       onSelect={handleSelectCartLine}
                       onQtyClick={handleQtyClick}
                       onRemoveLine={handleRemoveLine}
