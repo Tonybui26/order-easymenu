@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MoreVertical, Search, Banknote, CreditCard } from "lucide-react";
+import {
+  MoreVertical,
+  Search,
+  Banknote,
+  CreditCard,
+  Calendar,
+} from "lucide-react";
 import toast from "react-hot-toast";
 import InputText from "@/components/InputText";
 import DropdownSelect from "@/components/DropdownSelect";
@@ -15,7 +21,10 @@ import { fetchCompletedOrders, updateOrderStatus } from "@/lib/api/fetchApi";
 import {
   buildOrderHistoryRows,
   filterOrderHistoryRows,
+  getOrderHistoryDateRangeUTC,
   isPosDeliveredHistoryOrder,
+  ORDER_HISTORY_DATE_FILTER_OPTIONS,
+  ORDER_HISTORY_DATE_FILTER_TODAY,
   ORDER_HISTORY_PAYMENT_FILTER_ALL,
   ORDER_HISTORY_PAYMENT_FILTER_OPTIONS,
 } from "@/lib/helper/orderHistoryDisplay";
@@ -47,6 +56,11 @@ const PAYMENT_FILTER_OPTIONS = ORDER_HISTORY_PAYMENT_FILTER_OPTIONS.map(
   }),
 );
 
+const DATE_FILTER_OPTIONS = ORDER_HISTORY_DATE_FILTER_OPTIONS.map((option) => ({
+  ...option,
+  Icon: Calendar,
+}));
+
 export default function OrderHistory() {
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
   const { storeProfile } = useMenuContext();
@@ -55,6 +69,7 @@ export default function OrderHistory() {
   const [orders, setOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [dateFilter, setDateFilter] = useState(ORDER_HISTORY_DATE_FILTER_TODAY);
   const [paymentFilter, setPaymentFilter] = useState(
     ORDER_HISTORY_PAYMENT_FILTER_ALL,
   );
@@ -69,7 +84,8 @@ export default function OrderHistory() {
   const loadOrders = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await fetchCompletedOrders();
+      const { startDate, endDate } = getOrderHistoryDateRangeUTC(dateFilter);
+      const data = await fetchCompletedOrders(startDate, endDate);
       const rows = (data.orders || []).filter(isPosDeliveredHistoryOrder);
       setOrders(rows);
     } catch (error) {
@@ -78,7 +94,7 @@ export default function OrderHistory() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [dateFilter]);
 
   useEffect(() => {
     loadOrders();
@@ -238,6 +254,14 @@ export default function OrderHistory() {
                 />
               </div>
               <DropdownSelect
+                options={DATE_FILTER_OPTIONS}
+                value={dateFilter}
+                onChange={setDateFilter}
+                ariaLabel="Filter by date"
+                showIcons
+                className="w-full sm:w-44"
+              />
+              <DropdownSelect
                 options={PAYMENT_FILTER_OPTIONS}
                 value={paymentFilter}
                 onChange={setPaymentFilter}
@@ -281,7 +305,9 @@ export default function OrderHistory() {
                         colSpan={TABLE_COLUMNS.length}
                         className="px-4 py-12 text-center text-gray-500"
                       >
-                        No delivered POS orders yet
+                        {dateFilter === ORDER_HISTORY_DATE_FILTER_TODAY
+                          ? "No delivered POS orders today"
+                          : "No delivered POS orders for this date"}
                       </td>
                     </tr>
                   ) : filteredRows.length === 0 ? (
