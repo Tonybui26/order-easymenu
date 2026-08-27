@@ -37,6 +37,7 @@ import PosPaymentDrawer from "./PosPaymentDrawer";
 import PosOrderPanelFooter from "./PosOrderPanelFooter";
 import PosItemCustomizePanel from "./PosItemCustomizePanel";
 import PosCartLine from "./PosCartLine";
+import PosItemNoteDrawer from "./PosItemNoteDrawer";
 import PosCancelSentLineDrawer, {
   POS_CANCEL_SENT_LINE_DRAWER_CLOSED,
 } from "./PosCancelSentLineDrawer";
@@ -112,6 +113,7 @@ function buildPosSendItems(cartLines) {
     name: line.title,
     price: Number(line.price || 0),
     quantity: Number(line.quantity || 1),
+    notes: line.notes || undefined,
     selectedVariants: line.selectedVariants || [],
     selectedModifiers: line.selectedModifiers || [],
   }));
@@ -287,6 +289,7 @@ export default function PosTerminal() {
   const [customizingItem, setCustomizingItem] = useState(null);
   const [customizingLineId, setCustomizingLineId] = useState(null);
   const [optionsLineId, setOptionsLineId] = useState(null);
+  const [noteLineId, setNoteLineId] = useState(null);
   const [selectedVariants, setSelectedVariants] = useState({});
   const [selectedModifiers, setSelectedModifiers] = useState({});
   const [isOrderTypeMissing, setIsOrderTypeMissing] = useState(false);
@@ -660,8 +663,24 @@ export default function PosTerminal() {
   }
 
   function handleCartLineOptionsClick(lineId) {
-    // UI-only for now — note / line options drawer comes next.
     setOptionsLineId(null);
+    setNoteLineId(lineId);
+  }
+
+  function handleCloseItemNoteDrawer() {
+    setNoteLineId(null);
+  }
+
+  function handleSaveItemNote(note) {
+    if (!noteLineId) return;
+    const nextNote = String(note || "").trim();
+    setCartLines((prev) =>
+      prev.map((line) =>
+        line.lineId === noteLineId
+          ? { ...line, notes: nextNote || undefined }
+          : line,
+      ),
+    );
   }
 
   function handleSelectCartLine(lineId) {
@@ -761,6 +780,7 @@ export default function PosTerminal() {
     setCartLines((prev) => prev.filter((line) => line.lineId !== lineId));
     if (lineId === customizingLineId) closeCustomization();
     if (lineId === optionsLineId) setOptionsLineId(null);
+    if (lineId === noteLineId) setNoteLineId(null);
   }
 
   function refreshLinePricing(line, selectedVariants, selectedModifiers) {
@@ -925,6 +945,8 @@ export default function PosTerminal() {
     setIsDiscountDrawerOpen(false);
     resumeLoadedRef.current = null;
     closeCustomization();
+    setOptionsLineId(null);
+    setNoteLineId(null);
   }
 
   function handleOpenDiscountDrawer() {
@@ -1262,6 +1284,8 @@ export default function PosTerminal() {
     setIsDiscountDrawerOpen(false);
     resumeLoadedRef.current = null;
     closeCustomization();
+    setOptionsLineId(null);
+    setNoteLineId(null);
     setIsPaymentDrawerOpen(false);
     if (restaurantMode) {
       router.replace(getPosHomePath(menuConfig));
@@ -1513,6 +1537,24 @@ export default function PosTerminal() {
               subtotal={cartSubtotal}
               initialDigits={discountInitialDigits}
               onConfirm={handleDiscountConfirm}
+            />
+
+            <PosItemNoteDrawer
+              isOpen={Boolean(noteLineId)}
+              onClose={handleCloseItemNoteDrawer}
+              onSave={handleSaveItemNote}
+              itemTitle={
+                noteLineId
+                  ? cartLines.find((line) => line.lineId === noteLineId)
+                      ?.title || ""
+                  : ""
+              }
+              initialNote={
+                noteLineId
+                  ? cartLines.find((line) => line.lineId === noteLineId)
+                      ?.notes || ""
+                  : ""
+              }
             />
 
             <PosPaymentDrawer

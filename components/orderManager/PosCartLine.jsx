@@ -221,6 +221,11 @@ export default function PosCartLine({
                 Voided: {line.cancelReason}
               </p>
             ) : null}
+            {!isCancelled && line.notes ? (
+              <p className="mt-0.5 truncate text-xs italic text-neutral-500">
+                Note: {line.notes}
+              </p>
+            ) : null}
           </div>
 
           <span
