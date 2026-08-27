@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   animate,
   motion,
@@ -16,6 +16,8 @@ const SWIPE_SPRING = { type: "spring", damping: 28, stiffness: 320 };
 const OPEN_OFFSET = -OPTION_WIDTH;
 const OPEN_THRESHOLD = OPTION_WIDTH * 0.35;
 const OPEN_VELOCITY = -400;
+/** WebViews often synthesize a click well after touchend; keep ignoring it. */
+const POST_DRAG_CLICK_SUPPRESS_MS = 450;
 
 function formatMoney(amount) {
   return `$${Number(amount || 0).toFixed(2)}`;
@@ -63,6 +65,10 @@ export default function PosCartLine({
   const isOpenRef = useRef(false);
   const isDraggingRef = useRef(false);
   const suppressClickRef = useRef(false);
+  const suppressTimerRef = useRef(null);
+  const optionArmedRef = useRef(false);
+  const lastOptionActivateAtRef = useRef(0);
+  const [isRevealed, setIsRevealed] = useState(false);
 
   useMotionValueEvent(x, "change", (latest) => {
     isOpenRef.current = latest <= OPEN_OFFSET / 2;
@@ -70,50 +76,93 @@ export default function PosCartLine({
 
   useEffect(() => {
     if (!canSwipeOptions) {
+      setIsRevealed(false);
+      optionArmedRef.current = false;
       animate(x, 0, SWIPE_SPRING);
       return;
     }
+    setIsRevealed(isOptionsOpen);
+    optionArmedRef.current = isOptionsOpen;
     animate(x, isOptionsOpen ? OPEN_OFFSET : 0, SWIPE_SPRING);
   }, [canSwipeOptions, isOptionsOpen, x]);
 
+  useEffect(() => {
+    return () => {
+      if (suppressTimerRef.current) clearTimeout(suppressTimerRef.current);
+    };
+  }, []);
+
+  function armPostDragClickSuppress() {
+    suppressClickRef.current = true;
+    if (suppressTimerRef.current) clearTimeout(suppressTimerRef.current);
+    suppressTimerRef.current = window.setTimeout(() => {
+      suppressClickRef.current = false;
+      suppressTimerRef.current = null;
+    }, POST_DRAG_CLICK_SUPPRESS_MS);
+  }
+
   function snapTo(open) {
     if (!canSwipeOptions) {
+      setIsRevealed(false);
+      optionArmedRef.current = false;
       animate(x, 0, SWIPE_SPRING);
       onOptionsOpenChange?.(false);
       return;
     }
-    animate(x, open ? OPEN_OFFSET : 0, SWIPE_SPRING);
+
+    // Elevate Option immediately so the next tap hits the button, not the
+    // sliding row (real-device spring still covers Option mid-animation).
+    setIsRevealed(open);
+    optionArmedRef.current = open;
+    if (open) {
+      x.set(OPEN_OFFSET);
+    } else {
+      animate(x, 0, SWIPE_SPRING);
+    }
     onOptionsOpenChange?.(open);
   }
 
   function handleDragStart() {
     if (!canSwipeOptions) return;
+    // While revealed, only tap-to-close — horizontal drag fights list scroll on device.
+    if (isRevealed || isOptionsOpen || optionArmedRef.current) return;
     isDraggingRef.current = true;
     suppressClickRef.current = true;
   }
 
   function handleDragEnd(_, info) {
+    if (!isDraggingRef.current) return;
     isDraggingRef.current = false;
     const shouldOpen =
       info.offset.x < -OPEN_THRESHOLD || info.velocity.x < OPEN_VELOCITY;
     snapTo(shouldOpen);
-    // Allow the next click after the gesture settles.
-    window.setTimeout(() => {
-      suppressClickRef.current = false;
-    }, 180);
+    armPostDragClickSuppress();
   }
 
   function handleContentActivate() {
     if (suppressClickRef.current || isDraggingRef.current) return;
-    if (isOptionsOpen || isOpenRef.current) {
+    if (isRevealed || isOptionsOpen || isOpenRef.current) {
       snapTo(false);
       return;
     }
     if (!isLocked) onSelect?.(line.lineId);
   }
 
+  function handleOptionActivate(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!optionArmedRef.current && !isRevealed && !isOptionsOpen) return;
+    if (isDraggingRef.current) return;
+    // pointerup + click both fire on some devices; only handle once.
+    const now = performance.now();
+    if (now - lastOptionActivateAtRef.current < 350) return;
+    lastOptionActivateAtRef.current = now;
+    onOptionsClick?.(line.lineId);
+  }
+
   return (
     <li
+      data-pos-cart-line-id={line.lineId}
       className={cn(
         "relative m-2 my-1 overflow-hidden rounded-xl border-2 border-[#f2f2f2] bg-white transition-colors",
         isActive ? "border-[#dcdcdc] drop-shadow-md" : "",
@@ -122,15 +171,18 @@ export default function PosCartLine({
     >
       {canSwipeOptions ? (
         <div
-          className="absolute inset-y-0 right-0 z-0 flex"
+          className={cn(
+            "absolute inset-y-0 right-0 flex",
+            // When revealed, sit above the sliding row so taps reach Option
+            // even while the open spring is still settling.
+            isRevealed ? "z-[3]" : "pointer-events-none z-0",
+          )}
           style={{ width: OPTION_WIDTH }}
         >
           <button
             type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onOptionsClick?.(line.lineId);
-            }}
+            onPointerUp={handleOptionActivate}
+            onClick={handleOptionActivate}
             className="flex h-full w-full flex-col items-center justify-center rounded-r-[0.75rem] bg-[#301C0F] px-2 text-center text-xs font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#3d2614] active:bg-[#24150b]"
             aria-label={`Options for ${displayTitle}`}
           >
@@ -141,7 +193,9 @@ export default function PosCartLine({
 
       <motion.div
         style={{ x: canSwipeOptions ? x : 0 }}
-        drag={canSwipeOptions ? "x" : false}
+        drag={
+          canSwipeOptions && !isRevealed && !isOptionsOpen ? "x" : false
+        }
         dragConstraints={{ left: OPEN_OFFSET, right: 0 }}
         dragElastic={0.12}
         dragDirectionLock
@@ -193,7 +247,7 @@ export default function PosCartLine({
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
-                if (isOptionsOpen) {
+                if (isRevealed || isOptionsOpen) {
                   snapTo(false);
                   return;
                 }

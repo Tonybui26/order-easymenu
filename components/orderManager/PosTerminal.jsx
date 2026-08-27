@@ -319,6 +319,28 @@ export default function PosTerminal() {
     router.replace("/pos");
   }, [isTrainingMode, resumeParam, router, showDismissibleToast]);
 
+  // Tap outside the revealed cart line closes Option (swipe-to-close is disabled).
+  useEffect(() => {
+    if (!optionsLineId) return;
+
+    function handlePointerDown(event) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest(`[data-pos-cart-line-id="${optionsLineId}"]`)) return;
+      setOptionsLineId(null);
+    }
+
+    // Defer so the same gesture that opened Option does not immediately close it.
+    const timer = window.setTimeout(() => {
+      document.addEventListener("pointerdown", handlePointerDown, true);
+    }, 50);
+
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+    };
+  }, [optionsLineId]);
+
   useEffect(() => {
     if (!resumeParam || !menuContent || isTrainingMode) return;
     if (resumeLoadedRef.current === resumeParam) return;
