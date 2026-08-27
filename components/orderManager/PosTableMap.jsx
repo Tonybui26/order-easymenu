@@ -10,6 +10,7 @@ import {
   fetchPosResumeOrders,
   markPosBillPrinted,
   mergePosTables,
+  unmergePosTables,
   updatePosHeldCheckStatus,
 } from "@/lib/api/fetchApi";
 import { findPosHeldOrderForTable } from "@/lib/pos/posTableMapHeld";
@@ -37,6 +38,7 @@ import {
   heldEntryTableNames,
   loadPosTableMergeGroups,
   removeGroupsOverlappingTables,
+  removeMergeGroupContainingTable,
   savePosTableMergeGroups,
 } from "@/lib/pos/posTableMapMerge";
 import {
@@ -48,6 +50,7 @@ import {
 import PosChromeHeader from "./PosChromeHeader";
 import PosTableMapFloor from "./PosTableMapFloor";
 import PosTableMapTableDrawer from "./PosTableMapTableDrawer";
+import PosTableMapUndoMergeModal from "./PosTableMapUndoMergeModal";
 import DeleteOrderDrawer from "./DeleteOrderDrawer";
 import DismissibleToast, {
   useDismissibleToast,
@@ -104,6 +107,8 @@ export default function PosTableMap() {
   const [isMergeMode, setIsMergeMode] = useState(false);
   const [mergeSelectedNames, setMergeSelectedNames] = useState([]);
   const [mergeGroups, setMergeGroups] = useState([]);
+  const [undoMergeTarget, setUndoMergeTarget] = useState(null);
+  const [isUndoingMerge, setIsUndoingMerge] = useState(false);
   /** @type {React.MutableRefObject<Map<string, object[]>>} */
   const resumeOrdersCacheRef = useRef(new Map());
 
@@ -264,10 +269,12 @@ export default function PosTableMap() {
   function handleEnterMergeMode() {
     handleCloseDrawer();
     setMergeSelectedNames([]);
+    setUndoMergeTarget(null);
     setIsMergeMode(true);
   }
 
   async function handleExitMergeMode() {
+    if (undoMergeTarget || isUndoingMerge) return;
     if (mergeSelectedNames.length >= 2) {
       const openChecks = [];
       const seenCheckKeys = new Set();
@@ -314,12 +321,87 @@ export default function PosTableMap() {
       return;
     }
     setMergeSelectedNames([]);
+    setUndoMergeTarget(null);
     setIsMergeMode(false);
   }
 
   function handleToggleMergeMode() {
     if (isMergeMode) handleExitMergeMode();
     else handleEnterMergeMode();
+  }
+
+  function openUndoMergeForTable(tableName) {
+    const localGroup = findMergeGroupForTable(mergeGroups, tableName);
+    const heldOrder = findPosHeldOrderForTable(heldOrders, tableName);
+    const heldTables = heldEntryTableNames(heldOrder);
+    const isHeldMultiSeat = heldTables.length >= 2;
+
+    if (!localGroup && !isHeldMultiSeat) return false;
+
+    const tableNames =
+      localGroup?.tableNames?.length >= 2
+        ? localGroup.tableNames
+        : isHeldMultiSeat
+          ? heldTables
+          : [];
+    if (tableNames.length < 2) return false;
+
+    const keepTable = String(heldOrder?.table || tableNames[0] || "").trim();
+    setUndoMergeTarget({
+      tableNames,
+      keepTable: isHeldMultiSeat ? keepTable : "",
+      heldOrder: isHeldMultiSeat ? heldOrder : null,
+    });
+    return true;
+  }
+
+  async function handleConfirmUndoMerge() {
+    if (!undoMergeTarget || isUndoingMerge) return;
+
+    const { tableNames, keepTable, heldOrder } = undoMergeTarget;
+    setIsUndoingMerge(true);
+    try {
+      if (heldOrder?.orderIds?.length) {
+        const keep =
+          String(keepTable || heldOrder.table || tableNames[0] || "").trim();
+        if (!keep) {
+          showDismissibleToast("Could not determine which table keeps the check");
+          return;
+        }
+        const apiResult = await unmergePosTables({
+          keepTable: keep,
+          orderIds: heldOrder.orderIds,
+          posCheckId: heldOrder.posCheckId || undefined,
+        });
+        if (!apiResult?.success) {
+          showDismissibleToast(apiResult?.error || "Failed to undo merge");
+          return;
+        }
+        await loadHeldOrders();
+      }
+
+      setMergeGroups((prev) => {
+        const next = removeMergeGroupContainingTable(prev, tableNames[0]);
+        savePosTableMergeGroups(mergeStoreKey, next);
+        return next;
+      });
+      setMergeSelectedNames((prev) =>
+        prev.filter(
+          (name) =>
+            !tableNames.some(
+              (seat) =>
+                normalizeTableMapTableName(seat) ===
+                normalizeTableMapTableName(name),
+            ),
+        ),
+      );
+      setUndoMergeTarget(null);
+      toast.success("Merge undone");
+    } catch (error) {
+      showDismissibleToast(error?.message || "Failed to undo merge");
+    } finally {
+      setIsUndoingMerge(false);
+    }
   }
 
   function handleTableSelect(object) {
@@ -330,6 +412,8 @@ export default function PosTableMap() {
     }
 
     if (isMergeMode) {
+      if (openUndoMergeForTable(tableName)) return;
+
       setMergeSelectedNames((prev) => {
         const key = normalizeTableMapTableName(tableName);
         const exists = prev.some(
@@ -752,6 +836,18 @@ export default function PosTableMap() {
         target={deleteTarget}
         onConfirm={handleConfirmDeleteOrder}
         isProcessing={isDeleting}
+      />
+
+      <PosTableMapUndoMergeModal
+        isOpen={Boolean(undoMergeTarget)}
+        tableNames={undoMergeTarget?.tableNames || []}
+        keepTable={undoMergeTarget?.keepTable || ""}
+        isProcessing={isUndoingMerge}
+        onClose={() => {
+          if (isUndoingMerge) return;
+          setUndoMergeTarget(null);
+        }}
+        onConfirm={handleConfirmUndoMerge}
       />
     </>
   );
