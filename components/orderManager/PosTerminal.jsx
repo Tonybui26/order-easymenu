@@ -32,6 +32,7 @@ import {
 } from "@/lib/pos/posResumeOrder";
 import PosTableEntryDrawer from "./PosTableEntryDrawer";
 import PosDiscountDrawer from "./PosDiscountDrawer";
+import PosTakeawayCustomerDrawer from "./PosTakeawayCustomerDrawer";
 import PosPaymentDrawer from "./PosPaymentDrawer";
 import PosOrderPanelFooter from "./PosOrderPanelFooter";
 import PosItemCustomizePanel from "./PosItemCustomizePanel";
@@ -225,6 +226,7 @@ export default function PosTerminal() {
   const resumeLoadedRef = useRef(null);
   const openPayAfterResumeRef = useRef(false);
   const tablePrefilledRef = useRef(null);
+  const pendingTakeawayRef = useRef(null);
   const {
     menuContent,
     posLayouts,
@@ -277,6 +279,11 @@ export default function PosTerminal() {
   const [isPaymentDrawerOpen, setIsPaymentDrawerOpen] = useState(false);
   const [tableNumber, setTableNumber] = useState("");
   const [orderType, setOrderType] = useState(null);
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [isTakeawayCustomerDrawerOpen, setIsTakeawayCustomerDrawerOpen] =
+    useState(false);
   const [customizingItem, setCustomizingItem] = useState(null);
   const [customizingLineId, setCustomizingLineId] = useState(null);
   const [selectedVariants, setSelectedVariants] = useState({});
@@ -365,6 +372,9 @@ export default function PosTerminal() {
         setPosCheckId(resumeState.posCheckId);
         setTaxInvoiceNo(resumeState.taxInvoiceNo || "");
         setTableNumber(resumeState.tableNumber);
+        setCustomerName(resumeState.customerName || "");
+        setCustomerPhone(resumeState.customerPhone || "");
+        setCustomerEmail(resumeState.customerEmail || "");
         // Restaurant mode table checks open as dine-in; staff can switch to takeaway per fire.
         const nextOrderType =
           restaurantMode && resumeState.tableNumber
@@ -428,9 +438,14 @@ export default function PosTerminal() {
     if (!orderTypeParam) return;
     const fromParam = resolveOrderTypeFromParam(orderTypeParam);
     if (!fromParam) return;
+    router.replace("/pos");
+    if (fromParam === "takeaway") {
+      pendingTakeawayRef.current = { tableNumber: "" };
+      setIsTakeawayCustomerDrawerOpen(true);
+      return;
+    }
     setOrderType(fromParam);
     setIsOrderTypeMissing(false);
-    router.replace("/pos");
   }, [
     resumeParam,
     tableNameFromUrl,
@@ -492,6 +507,7 @@ export default function PosTerminal() {
       return `BUZZER: ${resolvedTableNumber || "--"}`;
     }
     if (resolvedOrderType === "takeaway") {
+      if (customerName) return `TAKEAWAY: ${customerName}`;
       return `TAKEAWAY${resolvedTableNumber ? `: ${resolvedTableNumber}` : ""}`;
     }
     if (resolvedOrderType === "delivery") {
@@ -811,9 +827,37 @@ export default function PosTerminal() {
     const nextTableNumber = disableTableNumberInput
       ? resolvedTableNumber
       : number;
+
+    if (nextOrderType === "takeaway") {
+      pendingTakeawayRef.current = {
+        tableNumber: nextTableNumber || "",
+      };
+      setIsTakeawayCustomerDrawerOpen(true);
+      return;
+    }
+
     setTableNumber(nextTableNumber || "");
     setOrderType(nextOrderType || null);
     if (nextOrderType) setIsOrderTypeMissing(false);
+  }
+
+  function handleTakeawayCustomerConfirm({ name, phone, email }) {
+    const pending = pendingTakeawayRef.current;
+    if (pending && pending.tableNumber != null && pending.tableNumber !== "") {
+      setTableNumber(pending.tableNumber);
+    }
+    setCustomerName(String(name || "").trim());
+    setCustomerPhone(String(phone || "").trim());
+    setCustomerEmail(String(email || "").trim());
+    setOrderType("takeaway");
+    setIsOrderTypeMissing(false);
+    setIsTakeawayCustomerDrawerOpen(false);
+    pendingTakeawayRef.current = null;
+  }
+
+  function handleTakeawayCustomerClose() {
+    setIsTakeawayCustomerDrawerOpen(false);
+    pendingTakeawayRef.current = null;
   }
 
   function nudgeTableFieldForMissingOrderType() {
@@ -857,6 +901,11 @@ export default function PosTerminal() {
     setIsCheckPaid(false);
     setIsResumedCheck(false);
     setIsOrderTypeMissing(false);
+    setCustomerName("");
+    setCustomerPhone("");
+    setCustomerEmail("");
+    setIsTakeawayCustomerDrawerOpen(false);
+    pendingTakeawayRef.current = null;
     setCheckDiscount(null);
     setIsDiscountDrawerOpen(false);
     resumeLoadedRef.current = null;
@@ -977,6 +1026,17 @@ export default function PosTerminal() {
       return;
     }
 
+    if (resolvedOrderType === "takeaway") {
+      if (!customerName.trim() || !customerPhone.trim()) {
+        pendingTakeawayRef.current = {
+          tableNumber: resolvedTableNumber || "",
+        };
+        setIsTakeawayCustomerDrawerOpen(true);
+        showDismissibleToast("Enter customer name and phone for takeaway");
+        return;
+      }
+    }
+
     setIsSending(true);
     try {
       const sentLineIds = new Set(unsentLines.map((line) => line.lineId));
@@ -1017,6 +1077,9 @@ export default function PosTerminal() {
       if (resolvedPrimaryTable) payload.table = resolvedPrimaryTable;
       if (resolvedTableNames.length >= 2) payload.tables = resolvedTableNames;
       if (posCheckId) payload.posCheckId = posCheckId;
+      if (customerName.trim()) payload.customerName = customerName.trim();
+      if (customerPhone.trim()) payload.customerPhone = customerPhone.trim();
+      if (customerEmail.trim()) payload.customerEmail = customerEmail.trim();
 
       const result = await sendPosOrder(payload);
       if (!result?.success || !result.order?._id) {
@@ -1172,6 +1235,11 @@ export default function PosTerminal() {
     setIsResumedCheck(false);
     setTableNumber("");
     setOrderType(null);
+    setCustomerName("");
+    setCustomerPhone("");
+    setCustomerEmail("");
+    setIsTakeawayCustomerDrawerOpen(false);
+    pendingTakeawayRef.current = null;
     setIsTablePrefilled(false);
     tablePrefilledRef.current = null;
     setKeypadDrawer(null);
@@ -1413,6 +1481,15 @@ export default function PosTerminal() {
               initialNumber={keypadInitialNumber}
               disableNumberInput={Boolean(keypadDrawer?.disableNumberInput)}
               onConfirm={handleKeypadConfirm}
+            />
+
+            <PosTakeawayCustomerDrawer
+              isOpen={isTakeawayCustomerDrawerOpen}
+              onClose={handleTakeawayCustomerClose}
+              onConfirm={handleTakeawayCustomerConfirm}
+              initialName={customerName}
+              initialPhone={customerPhone}
+              initialEmail={customerEmail}
             />
 
             <PosDiscountDrawer
