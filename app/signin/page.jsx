@@ -37,7 +37,7 @@ export default async function SignInPage({ searchParams }) {
         <div className="text-center">
           <Link
             href="/"
-            className="flex items-center justify-center gap-4 text-2xl font-bold text-primary"
+            className="flex items-center justify-center gap-2 text-2xl font-bold text-primary"
           >
             <Image
               src={Logo}
