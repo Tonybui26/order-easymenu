@@ -421,6 +421,7 @@ export default function PosTerminal() {
       setIsTablePrefilled(true);
       setIsOrderTypeMissing(false);
       tablePrefilledRef.current = tableNameFromUrl;
+      router.replace("/pos");
       return;
     }
 

@@ -36,6 +36,7 @@ const NAV_ITEMS = [
     href: "/pos",
     Icon: MonitorSmartphone,
     requiresPos: true,
+    hideInRestaurantMode: true,
   },
   {
     id: "held",
@@ -137,6 +138,7 @@ export default function PosHeaderNavMenu({ className }) {
   const navItems = NAV_ITEMS.filter((item) => {
     if (item.requiresPos && !posEnabled) return false;
     if (item.requiresRestaurantMode && !restaurantMode) return false;
+    if (item.hideInRestaurantMode && restaurantMode) return false;
     return true;
   });
   const current = resolveActiveItem(pathname, navItems);
