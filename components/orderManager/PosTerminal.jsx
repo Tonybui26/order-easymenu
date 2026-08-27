@@ -53,6 +53,7 @@ import {
   resolvePosPaymentsConfig,
 } from "@/lib/pos/posPaymentsConfig";
 import { buildTrainingKitchenOrder } from "@/lib/pos/buildTrainingKitchenOrder";
+import { clearPosTableMergeGroupsForTables } from "@/lib/pos/posTableMapMerge";
 import { formatPosItemDisplayName } from "@/lib/helper/printNameAlias";
 
 function resolveOrderTypeFromParam(value) {
@@ -61,6 +62,40 @@ function resolveOrderTypeFromParam(value) {
   if (value === "buzzer") return "buzzer";
   if (value === "delivery") return "delivery";
   return "dine-in";
+}
+
+/** Parse `tables` / `table` query values into sorted unique seat names. */
+function parsePosTableNames(...rawValues) {
+  const names = [];
+  const seen = new Set();
+
+  function push(value) {
+    if (value == null) return;
+    if (Array.isArray(value)) {
+      value.forEach(push);
+      return;
+    }
+    String(value)
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .forEach((part) => {
+        const key = part.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        names.push(part);
+      });
+  }
+
+  rawValues.forEach(push);
+  names.sort((a, b) =>
+    a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
+  );
+  return names;
+}
+
+function formatPosTableNames(names) {
+  return (names || []).join(", ");
 }
 
 function mapPosOrderType(orderType) {
@@ -185,6 +220,7 @@ export default function PosTerminal() {
   const resumeParam = searchParams.get("resume");
   const payParam = searchParams.get("pay");
   const tableParam = searchParams.get("table");
+  const tablesParam = searchParams.get("tables");
   const orderTypeParam = searchParams.get("orderType");
   const resumeLoadedRef = useRef(null);
   const openPayAfterResumeRef = useRef(false);
@@ -198,7 +234,10 @@ export default function PosTerminal() {
     itemGroups,
     menuConfig,
   } = useMenuContext();
-  const tableNameFromUrl = resumeParam ? "" : String(tableParam || "").trim();
+  const tableNamesFromUrl = resumeParam
+    ? []
+    : parsePosTableNames(tablesParam, tableParam);
+  const tableNameFromUrl = formatPosTableNames(tableNamesFromUrl);
   const restaurantMode = isRestaurantModeEnabled(menuConfig);
   const orderTypeFromUrl = (() => {
     const fromParam = resolveOrderTypeFromParam(orderTypeParam);
@@ -429,6 +468,8 @@ export default function PosTerminal() {
   const selectedRows = selectedTab?.rows || [];
   const isViewOnly = isCheckPaid;
   const resolvedTableNumber = tableNameFromUrl || tableNumber;
+  const resolvedTableNames = parsePosTableNames(resolvedTableNumber);
+  const resolvedPrimaryTable = resolvedTableNames[0] || "";
   const resolvedOrderType = orderTypeFromUrl || orderType;
   const isTableFromMap = Boolean(tableNameFromUrl);
   const isTableNumberLocked = isTablePrefilled || isTableFromMap;
@@ -972,7 +1013,8 @@ export default function PosTerminal() {
         orderType: mappedOrderType,
         items: buildPosSendItems(unsentLines),
       };
-      if (resolvedTableNumber) payload.table = resolvedTableNumber;
+      if (resolvedPrimaryTable) payload.table = resolvedPrimaryTable;
+      if (resolvedTableNames.length >= 2) payload.tables = resolvedTableNames;
       if (posCheckId) payload.posCheckId = posCheckId;
 
       const result = await sendPosOrder(payload);
@@ -1109,7 +1151,17 @@ export default function PosTerminal() {
     return completePosSaleBatch(payload);
   }
 
+  function clearTableMergeAfterPayment() {
+    const seatNames = parsePosTableNames(resolvedTableNumber);
+    if (seatNames.length === 0) return;
+    clearPosTableMergeGroupsForTables(
+      storeProfile?.menuLink || "default",
+      seatNames,
+    );
+  }
+
   function resetAfterSale() {
+    clearTableMergeAfterPayment();
     setCartLines([]);
     setActiveOrderId(null);
     setCheckOrderIds([]);

@@ -130,7 +130,11 @@ export default function PosTableMapTableDrawer({
   const snap = openSnapshotRef.current;
   if (!snap?.tableName) return null;
 
-  const displayTableName = snap.tableName;
+  const heldTables = Array.isArray(snap.heldOrder?.tables)
+    ? snap.heldOrder.tables.filter(Boolean)
+    : [];
+  const displayTableName =
+    heldTables.length > 1 ? heldTables.join(", ") : snap.tableName;
   const displayHeldOrder = snap.heldOrder;
   const displayPreviewLines = snap.previewLines || [];
   const displayPreviewLoading = Boolean(snap.isPreviewLoading);

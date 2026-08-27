@@ -9,6 +9,7 @@ import {
   fetchPosHeldOrders,
   fetchPosResumeOrders,
   markPosBillPrinted,
+  mergePosTables,
   updatePosHeldCheckStatus,
 } from "@/lib/api/fetchApi";
 import { findPosHeldOrderForTable } from "@/lib/pos/posTableMapHeld";
@@ -30,14 +31,19 @@ import {
 } from "@/lib/pos/posTableMapStatus";
 import {
   confirmPosTableMerge,
+  findMergeGroupForTable,
+  getHeldMergeStrokeColor,
   getMergeGroupColorMap,
+  heldEntryTableNames,
   loadPosTableMergeGroups,
+  removeGroupsOverlappingTables,
   savePosTableMergeGroups,
 } from "@/lib/pos/posTableMapMerge";
 import {
   TABLE_MAP_DEFAULT_TABLE_BACKGROUND,
   TABLE_MAP_FLOOR_COLOR,
   getTableMapTableName,
+  normalizeTableMapTableName,
 } from "@/lib/pos/posTableMaps";
 import PosChromeHeader from "./PosChromeHeader";
 import PosTableMapFloor from "./PosTableMapFloor";
@@ -96,18 +102,47 @@ export default function PosTableMap() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isMergeMode, setIsMergeMode] = useState(false);
-  const [mergeSelectedIds, setMergeSelectedIds] = useState([]);
+  const [mergeSelectedNames, setMergeSelectedNames] = useState([]);
   const [mergeGroups, setMergeGroups] = useState([]);
   /** @type {React.MutableRefObject<Map<string, object[]>>} */
   const resumeOrdersCacheRef = useRef(new Map());
-  const mergeColorByObjectId = useMemo(
-    () => getMergeGroupColorMap(mergeGroups),
-    [mergeGroups],
-  );
+
+  const selectedMap =
+    tableMaps.find((map) => map.id === selectedMapId) || tableMaps[0] || null;
+
+  const mergeColorByTableName = useMemo(() => {
+    const map = getMergeGroupColorMap(mergeGroups);
+    for (const entry of heldOrders || []) {
+      const heldColor = getHeldMergeStrokeColor(entry);
+      if (!heldColor) continue;
+      for (const name of heldEntryTableNames(entry)) {
+        const key = normalizeTableMapTableName(name);
+        if (key) map.set(key, heldColor);
+      }
+    }
+    return map;
+  }, [mergeGroups, heldOrders]);
 
   useEffect(() => {
-    setMergeGroups(loadPosTableMergeGroups(mergeStoreKey));
-  }, [mergeStoreKey]);
+    setMergeGroups(loadPosTableMergeGroups(mergeStoreKey, selectedMap));
+  }, [mergeStoreKey, selectedMap]);
+
+  // Paid multi-seat checks dissolve local merge borders.
+  useEffect(() => {
+    const paidSeats = [];
+    for (const entry of heldOrders || []) {
+      if (!entry?.allPaid) continue;
+      paidSeats.push(...heldEntryTableNames(entry));
+    }
+    if (paidSeats.length === 0) return;
+
+    setMergeGroups((prev) => {
+      const next = removeGroupsOverlappingTables(prev, paidSeats);
+      if (next.length === prev.length) return prev;
+      savePosTableMergeGroups(mergeStoreKey, next);
+      return next;
+    });
+  }, [heldOrders, mergeStoreKey]);
 
   useEffect(() => {
     if (!tableMaps.length) {
@@ -213,9 +248,6 @@ export default function PosTableMap() {
     };
   }, [drawerTableName, drawerOrderIdsKey]);
 
-  const selectedMap =
-    tableMaps.find((map) => map.id === selectedMapId) || tableMaps[0] || null;
-
   function handleCloseDrawer() {
     if (isProcessing) return;
     setDrawerTableName(null);
@@ -231,23 +263,57 @@ export default function PosTableMap() {
 
   function handleEnterMergeMode() {
     handleCloseDrawer();
-    setMergeSelectedIds([]);
+    setMergeSelectedNames([]);
     setIsMergeMode(true);
   }
 
-  function handleExitMergeMode() {
-    if (mergeSelectedIds.length >= 2) {
-      const result = confirmPosTableMerge(mergeGroups, mergeSelectedIds);
+  async function handleExitMergeMode() {
+    if (mergeSelectedNames.length >= 2) {
+      const openChecks = [];
+      const seenCheckKeys = new Set();
+      for (const name of mergeSelectedNames) {
+        const held = findPosHeldOrderForTable(heldOrders, name);
+        if (!held?.orderIds?.length) continue;
+        const key =
+          String(held.posCheckId || "").trim() ||
+          orderIdsCacheKey(held.orderIds);
+        if (seenCheckKeys.has(key)) continue;
+        seenCheckKeys.add(key);
+        openChecks.push(held);
+      }
+
+      if (openChecks.length > 1) {
+        showDismissibleToast(
+          "Cannot merge tables that already have different open checks",
+        );
+        return;
+      }
+
+      const result = confirmPosTableMerge(mergeGroups, mergeSelectedNames);
       if (result.merged) {
+        const mergedGroup = result.groups[result.groups.length - 1];
+        if (openChecks.length === 1) {
+          const check = openChecks[0];
+          const apiResult = await mergePosTables({
+            tables: mergedGroup.tableNames,
+            orderIds: check.orderIds,
+            posCheckId: check.posCheckId || undefined,
+          });
+          if (!apiResult?.success) {
+            showDismissibleToast(apiResult?.error || "Failed to merge tables");
+            return;
+          }
+          await loadHeldOrders();
+        }
         setMergeGroups(result.groups);
         savePosTableMergeGroups(mergeStoreKey, result.groups);
         toast.success("Tables merged");
       }
-    } else if (mergeSelectedIds.length === 1) {
+    } else if (mergeSelectedNames.length === 1) {
       showDismissibleToast("Select at least two tables to merge");
       return;
     }
-    setMergeSelectedIds([]);
+    setMergeSelectedNames([]);
     setIsMergeMode(false);
   }
 
@@ -264,22 +330,33 @@ export default function PosTableMap() {
     }
 
     if (isMergeMode) {
-      const objectId = String(object.id || "");
-      if (!objectId) return;
-      setMergeSelectedIds((prev) =>
-        prev.includes(objectId)
-          ? prev.filter((id) => id !== objectId)
-          : [...prev, objectId],
-      );
+      setMergeSelectedNames((prev) => {
+        const key = normalizeTableMapTableName(tableName);
+        const exists = prev.some(
+          (name) => normalizeTableMapTableName(name) === key,
+        );
+        if (exists) {
+          return prev.filter(
+            (name) => normalizeTableMapTableName(name) !== key,
+          );
+        }
+        return [...prev, tableName];
+      });
       return;
     }
 
     const heldOrder = findPosHeldOrderForTable(heldOrders, tableName);
     if (!heldOrder) {
-      const params = new URLSearchParams({
-        table: tableName,
-        orderType: "dine-in",
-      });
+      const localGroup = findMergeGroupForTable(mergeGroups, tableName);
+      const seatNames = localGroup?.tableNames?.length
+        ? localGroup.tableNames
+        : [tableName];
+      const params = new URLSearchParams({ orderType: "dine-in" });
+      if (seatNames.length >= 2) {
+        params.set("tables", seatNames.join(","));
+      } else {
+        params.set("table", seatNames[0]);
+      }
       router.push(`/pos?${params.toString()}`);
       return;
     }
@@ -398,7 +475,11 @@ export default function PosTableMap() {
 
   function buildTableDeleteTarget(order) {
     const ticketIds = getAllTicketIds(order);
-    const table = String(order?.table || drawerTableName || "").trim();
+    const tableNames = heldEntryTableNames(order);
+    const table =
+      tableNames.length > 1
+        ? tableNames.join(", ")
+        : String(order?.table || drawerTableName || "").trim();
     const taxInvoiceNo = String(order?.taxInvoiceNo || "").trim();
     const title = table
       ? `Delete Table ${table}`
@@ -618,8 +699,8 @@ export default function PosTableMap() {
               trackFoodServedOnTableMap={trackFoodServedOnTableMap}
               floorColor={mapFloorColor}
               solidFloor={isMergeMode}
-              selectedObjectIds={isMergeMode ? mergeSelectedIds : []}
-              mergeColorByObjectId={mergeColorByObjectId}
+              selectedTableNames={isMergeMode ? mergeSelectedNames : []}
+              mergeColorByTableName={mergeColorByTableName}
               onTableSelect={handleTableSelect}
             />
           </div>

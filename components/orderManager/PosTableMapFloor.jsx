@@ -21,6 +21,7 @@ import {
   getTableMapViewportLayout,
   isTableMapPartition,
   isTableMapTable,
+  normalizeTableMapTableName,
 } from "@/lib/pos/posTableMaps";
 import {
   POS_TABLE_MAP_MERGE_SELECT_FILL,
@@ -35,8 +36,8 @@ export default function PosTableMapFloor({
   trackFoodServedOnTableMap = false,
   floorColor = TABLE_MAP_FLOOR_COLOR,
   solidFloor = false,
-  selectedObjectIds = [],
-  mergeColorByObjectId = null,
+  selectedTableNames = [],
+  mergeColorByTableName = null,
   onTableSelect,
 }) {
   const containerRef = useRef(null);
@@ -47,6 +48,9 @@ export default function PosTableMapFloor({
   const floorStyle = solidFloor
     ? { backgroundColor: floorColor }
     : getTableMapFloorStyle(floorColor);
+  const selectedKeys = new Set(
+    (selectedTableNames || []).map((name) => normalizeTableMapTableName(name)),
+  );
 
   useEffect(() => {
     const element = containerRef.current;
@@ -96,9 +100,10 @@ export default function PosTableMapFloor({
                 trackFoodServedOnTableMap,
               });
               const statusFill = getPosTableMapStatusFill(status);
-              const objectId = String(object.id || "");
-              const isSelected = selectedObjectIds.includes(objectId);
-              const mergeStroke = mergeColorByObjectId?.get(objectId) || null;
+              const tableKey = normalizeTableMapTableName(tableName);
+              const isSelected = tableKey ? selectedKeys.has(tableKey) : false;
+              const mergeStroke =
+                (tableKey && mergeColorByTableName?.get(tableKey)) || null;
               const fillColor = isSelected
                 ? POS_TABLE_MAP_MERGE_SELECT_FILL
                 : statusFill || getTableMapBackgroundColor(object);

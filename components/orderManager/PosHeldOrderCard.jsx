@@ -54,6 +54,10 @@ function orderTypeLabel(order) {
 
 function heldCardPrimaryLabel(order) {
   if (isPosDineInHeldOrder(order)) {
+    const tables = Array.isArray(order?.tables)
+      ? order.tables.map((name) => String(name || "").trim()).filter(Boolean)
+      : [];
+    if (tables.length > 1) return `Table ${tables.join(", ")}`;
     const table = String(order?.table || "").trim();
     return table ? `Table ${table}` : "Dine-in";
   }
