@@ -55,9 +55,12 @@ import DeleteOrderDrawer from "./DeleteOrderDrawer";
 import DismissibleToast, {
   useDismissibleToast,
 } from "@/components/orderManager/DismissibleToast";
+import SelfOrderAlertNotification from "@/components/orderManager/SelfOrderAlertNotification";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 
 const HELD_ORDERS_POLL_MS = 10000;
+/** Temporary: preview self-order alert UX on table map mount. */
+const SELF_ORDER_ALERT_TEST_DELAY_MS = 3000;
 const TABLE_MAP_MERGE_FLOOR_COLOR = "#1e293b";
 
 function orderIdsCacheKey(orderIds) {
@@ -109,6 +112,7 @@ export default function PosTableMap() {
   const [mergeGroups, setMergeGroups] = useState([]);
   const [undoMergeTarget, setUndoMergeTarget] = useState(null);
   const [isUndoingMerge, setIsUndoingMerge] = useState(false);
+  const [selfOrderAlertOpen, setSelfOrderAlertOpen] = useState(false);
   /** @type {React.MutableRefObject<Map<string, object[]>>} */
   const resumeOrdersCacheRef = useRef(new Map());
 
@@ -174,6 +178,14 @@ export default function PosTableMap() {
     const id = setInterval(loadHeldOrders, HELD_ORDERS_POLL_MS);
     return () => clearInterval(id);
   }, [loadHeldOrders]);
+
+  // TODO: replace with real new self-order detection
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSelfOrderAlertOpen(true);
+    }, SELF_ORDER_ALERT_TEST_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   // Drop resume caches for checks that are no longer held (or whose ticket set changed).
   useEffect(() => {
@@ -693,6 +705,14 @@ export default function PosTableMap() {
   return (
     <>
       <DismissibleToast toast={dismissibleToast} onDismiss={hideDismissibleToast} />
+
+      <SelfOrderAlertNotification
+        isOpen={selfOrderAlertOpen}
+        title="New QR order"
+        subtitle="Table 5 · 3 items"
+        detail="$42.50 · Tap to dismiss"
+        onDismiss={() => setSelfOrderAlertOpen(false)}
+      />
 
       <div
         className="flex h-[100dvh] w-full flex-col overflow-hidden pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
