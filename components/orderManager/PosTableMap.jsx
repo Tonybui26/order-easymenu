@@ -113,6 +113,7 @@ export default function PosTableMap() {
   const [undoMergeTarget, setUndoMergeTarget] = useState(null);
   const [isUndoingMerge, setIsUndoingMerge] = useState(false);
   const [selfOrderAlertOpen, setSelfOrderAlertOpen] = useState(false);
+  const [selfOrderAlertCreatedAt, setSelfOrderAlertCreatedAt] = useState(null);
   /** @type {React.MutableRefObject<Map<string, object[]>>} */
   const resumeOrdersCacheRef = useRef(new Map());
 
@@ -182,6 +183,7 @@ export default function PosTableMap() {
   // TODO: replace with real new self-order detection
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      setSelfOrderAlertCreatedAt(Date.now());
       setSelfOrderAlertOpen(true);
     }, SELF_ORDER_ALERT_TEST_DELAY_MS);
     return () => window.clearTimeout(timer);
@@ -713,9 +715,10 @@ export default function PosTableMap() {
 
       <SelfOrderAlertNotification
         isOpen={selfOrderAlertOpen}
-        title="New QR order"
-        subtitle="Table 5 · 3 items"
-        detail="$42.50 · Tap to dismiss"
+        table="3"
+        customerName="Alex"
+        createdAt={selfOrderAlertCreatedAt}
+        onSend={() => setSelfOrderAlertOpen(false)}
         onDismiss={() => setSelfOrderAlertOpen(false)}
       />
 

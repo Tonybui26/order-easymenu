@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { QrCode } from "lucide-react";
 import { cn } from "@/lib/helper";
+import {
+  formatNotificationTimeAgo,
+  formatSelfOrderAlertPrimaryLabel,
+} from "@/lib/pos/selfOrderAlertDisplay";
 
 /** Fully off-screen right (element is `fixed` + `right:` anchored). */
-const OFFSCREEN_X = "100%";
+const OFFSCREEN_X = "calc(100% + 1rem)";
 
 /** Same spring as held-order action sheet (PosHeldOrderCard). */
 const ALERT_SPRING = {
@@ -27,73 +31,101 @@ const ALERT_VARIANTS = {
   },
 };
 
+const TIME_AGO_TICK_MS = 30_000;
+
 /**
- * iOS-style banner: slides in from the top-right, one alert at a time.
+ * macOS-style notification banner (top-right).
+ * Bold title, table/customer description, relative time top-right, Send at bottom-right.
  */
 export default function SelfOrderAlertNotification({
   isOpen = false,
-  title = "New order",
-  subtitle = "",
-  detail,
+  title = "New Order",
+  table,
+  customerName,
+  createdAt,
+  onSend,
   onDismiss,
-  autoDismissMs = 6000,
+  isSending = false,
   className,
 }) {
-  useEffect(() => {
-    if (!isOpen || !autoDismissMs || typeof onDismiss !== "function") return;
+  const description = formatSelfOrderAlertPrimaryLabel({ table, customerName });
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
-    const timer = window.setTimeout(onDismiss, autoDismissMs);
-    return () => window.clearTimeout(timer);
-  }, [isOpen, autoDismissMs, onDismiss]);
+  useEffect(() => {
+    if (!isOpen) return;
+
+    setNowMs(Date.now());
+    const id = window.setInterval(() => setNowMs(Date.now()), TIME_AGO_TICK_MS);
+    return () => window.clearInterval(id);
+  }, [isOpen, createdAt]);
+
+  const timeAgo = formatNotificationTimeAgo(createdAt ?? nowMs, nowMs);
 
   return (
     <AnimatePresence>
       {isOpen ? (
-        <motion.button
-          type="button"
+        <motion.div
           role="status"
           aria-live="polite"
-          aria-label={[title, subtitle, detail].filter(Boolean).join(". ")}
+          aria-label={[title, description, timeAgo].filter(Boolean).join(". ")}
           variants={ALERT_VARIANTS}
           initial="hidden"
           animate="visible"
           exit="exit"
-          onClick={onDismiss}
           className={cn(
-            "fixed z-[70] max-w-[min(100vw-1.5rem,22rem)]",
+            "fixed z-[70] w-[min(100vw-1.5rem,22rem)] min-w-[300px]",
             "right-[max(0.75rem,env(safe-area-inset-right))]",
             "top-[max(0.75rem,env(safe-area-inset-top))]",
-            "flex items-start gap-3 rounded-2xl border border-white/60",
-            "bg-white px-3.5 py-3 text-left shadow-[0_8px_32px_rgba(0,0,0,0.18)]",
+            "rounded-2xl bg-[#ebebeb] p-2.5",
+            "text-left shadow-[0_4px_24px_rgba(0,0,0,0.12)]",
             "will-change-transform",
-            "ring-1 ring-black/5",
-            "active:scale-[0.98]",
             className,
           )}
         >
-          <span
-            className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white shadow-sm"
-            aria-hidden
-          >
-            <QrCode className="size-5" strokeWidth={2.25} />
-          </span>
-
-          <span className="min-w-0 flex-1 pt-0.5">
-            <span className="block truncate text-[13px] font-semibold leading-tight text-neutral-900">
-              {title}
+          <div className="flex items-start gap-2.5">
+            <span
+              className="flex size-11 shrink-0 items-center justify-center rounded-[0.65rem] bg-violet-600 text-white shadow-sm"
+              aria-hidden
+            >
+              <QrCode className="size-6" strokeWidth={2.25} />
             </span>
-            {subtitle ? (
-              <span className="mt-0.5 block truncate text-[13px] leading-snug text-neutral-600">
-                {subtitle}
-              </span>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-2">
+                <p className="truncate text-[15px] font-semibold leading-snug text-neutral-900">
+                  {title}
+                </p>
+                <span className="shrink-0 text-xs font-medium tabular-nums text-neutral-400">
+                  {timeAgo}
+                </span>
+              </div>
+              <p className="mt-0.5 truncate text-[15px] leading-snug text-neutral-600">
+                {description}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-2.5 flex items-center justify-end gap-2">
+            {typeof onDismiss === "function" ? (
+              <button
+                type="button"
+                onClick={onDismiss}
+                disabled={isSending}
+                className="px-1 py-1 text-xs font-medium text-neutral-500 transition-colors hover:text-neutral-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Dismiss
+              </button>
             ) : null}
-            {detail ? (
-              <span className="mt-1 block truncate text-xs font-medium text-neutral-500">
-                {detail}
-              </span>
-            ) : null}
-          </span>
-        </motion.button>
+            <button
+              type="button"
+              onClick={onSend}
+              disabled={isSending || typeof onSend !== "function"}
+              className="flex-grow rounded-lg bg-[#984B28] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#7f3f22] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSending ? "…" : "Send"}
+            </button>
+          </div>
+        </motion.div>
       ) : null}
     </AnimatePresence>
   );
