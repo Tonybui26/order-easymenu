@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { cn } from "@/lib/helper";
+import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
+import { playNotificationSoundOnce } from "@/lib/utils/notificationSound";
 import SelfOrderAlertNotification from "./SelfOrderAlertNotification";
 
 /** Fully off-screen right for slide-in / slide-out. */
@@ -59,6 +62,25 @@ export default function SelfOrderAlertStack({
   onSend,
   className,
 }) {
+  const { soundEnabled, notificationSoundId, newOrderAlertsMuted } =
+    useGlobalAppContext();
+  const playedSoundAlertIdsRef = useRef(new Set());
+
+  useEffect(() => {
+    if (!soundEnabled || newOrderAlertsMuted) return;
+
+    const currentIds = new Set(alerts.map((alert) => alert.id));
+    for (const id of [...playedSoundAlertIdsRef.current]) {
+      if (!currentIds.has(id)) playedSoundAlertIdsRef.current.delete(id);
+    }
+
+    for (const alert of alerts) {
+      if (!alert?.id || playedSoundAlertIdsRef.current.has(alert.id)) continue;
+      playedSoundAlertIdsRef.current.add(alert.id);
+      void playNotificationSoundOnce(notificationSoundId);
+    }
+  }, [alerts, soundEnabled, notificationSoundId, newOrderAlertsMuted]);
+
   return (
     <LayoutGroup id="self-order-alert-stack">
       <div
