@@ -5,12 +5,26 @@ import { AnimatePresence, motion } from "motion/react";
 import { QrCode } from "lucide-react";
 import { cn } from "@/lib/helper";
 
-const SLIDE_OFFSCREEN_X = "calc(100% + 1rem)";
+/** Fully off-screen right (element is `fixed` + `right:` anchored). */
+const OFFSCREEN_X = "100%";
 
-const LINEAR_SLIDE = {
-  type: "tween",
-  duration: 0.25,
-  ease: "linear",
+/** Same spring as held-order action sheet (PosHeldOrderCard). */
+const ALERT_SPRING = {
+  type: "spring",
+  damping: 28,
+  stiffness: 320,
+};
+
+const ALERT_VARIANTS = {
+  hidden: { x: OFFSCREEN_X },
+  visible: {
+    x: 0,
+    transition: ALERT_SPRING,
+  },
+  exit: {
+    x: OFFSCREEN_X,
+    transition: ALERT_SPRING,
+  },
 };
 
 /**
@@ -40,10 +54,10 @@ export default function SelfOrderAlertNotification({
           role="status"
           aria-live="polite"
           aria-label={[title, subtitle, detail].filter(Boolean).join(". ")}
-          initial={{ x: SLIDE_OFFSCREEN_X }}
-          animate={{ x: 0 }}
-          exit={{ x: SLIDE_OFFSCREEN_X }}
-          transition={LINEAR_SLIDE}
+          variants={ALERT_VARIANTS}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
           onClick={onDismiss}
           className={cn(
             "fixed z-[70] max-w-[min(100vw-1.5rem,22rem)]",
@@ -51,8 +65,9 @@ export default function SelfOrderAlertNotification({
             "top-[max(0.75rem,env(safe-area-inset-top))]",
             "flex items-start gap-3 rounded-2xl border border-white/60",
             "bg-white px-3.5 py-3 text-left shadow-[0_8px_32px_rgba(0,0,0,0.18)]",
+            "will-change-transform",
             "ring-1 ring-black/5",
-            "transition-transform active:scale-[0.98]",
+            "active:scale-[0.98]",
             className,
           )}
         >

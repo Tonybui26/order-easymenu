@@ -60,7 +60,7 @@ import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 
 const HELD_ORDERS_POLL_MS = 10000;
 /** Temporary: preview self-order alert UX on table map mount. */
-const SELF_ORDER_ALERT_TEST_DELAY_MS = 3000;
+const SELF_ORDER_ALERT_TEST_DELAY_MS = 1000;
 const TABLE_MAP_MERGE_FLOOR_COLOR = "#1e293b";
 
 function orderIdsCacheKey(orderIds) {
@@ -374,10 +374,13 @@ export default function PosTableMap() {
     setIsUndoingMerge(true);
     try {
       if (heldOrder?.orderIds?.length) {
-        const keep =
-          String(keepTable || heldOrder.table || tableNames[0] || "").trim();
+        const keep = String(
+          keepTable || heldOrder.table || tableNames[0] || "",
+        ).trim();
         if (!keep) {
-          showDismissibleToast("Could not determine which table keeps the check");
+          showDismissibleToast(
+            "Could not determine which table keeps the check",
+          );
           return;
         }
         const apiResult = await unmergePosTables({
@@ -689,9 +692,8 @@ export default function PosTableMap() {
     return markUndeliveredTicketsServed("Order completed");
   }
 
-  const undeliveredTicketCount = getTicketIdsNotDelivered(
-    drawerHeldOrder,
-  ).length;
+  const undeliveredTicketCount =
+    getTicketIdsNotDelivered(drawerHeldOrder).length;
   const needsServe =
     trackFoodServedOnTableMap &&
     Boolean(drawerHeldOrder) &&
@@ -704,7 +706,10 @@ export default function PosTableMap() {
 
   return (
     <>
-      <DismissibleToast toast={dismissibleToast} onDismiss={hideDismissibleToast} />
+      <DismissibleToast
+        toast={dismissibleToast}
+        onDismiss={hideDismissibleToast}
+      />
 
       <SelfOrderAlertNotification
         isOpen={selfOrderAlertOpen}
