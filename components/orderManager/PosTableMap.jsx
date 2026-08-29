@@ -55,12 +55,17 @@ import DeleteOrderDrawer from "./DeleteOrderDrawer";
 import DismissibleToast, {
   useDismissibleToast,
 } from "@/components/orderManager/DismissibleToast";
-import SelfOrderAlertNotification from "@/components/orderManager/SelfOrderAlertNotification";
+import SelfOrderAlertStack from "@/components/orderManager/SelfOrderAlertStack";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 
 const HELD_ORDERS_POLL_MS = 10000;
-/** Temporary: preview self-order alert UX on table map mount. */
-const SELF_ORDER_ALERT_TEST_DELAY_MS = 1000;
+/** Temporary: preview stacked self-order alerts on table map mount. */
+const SELF_ORDER_ALERT_TEST_INTERVAL_MS = 2000;
+const SELF_ORDER_ALERT_TEST_SAMPLES = [
+  { table: "3", customerName: "Alex" },
+  { table: "7", customerName: "Sam" },
+  { customerName: "Jordan" },
+];
 const TABLE_MAP_MERGE_FLOOR_COLOR = "#1e293b";
 
 function orderIdsCacheKey(orderIds) {
@@ -112,8 +117,7 @@ export default function PosTableMap() {
   const [mergeGroups, setMergeGroups] = useState([]);
   const [undoMergeTarget, setUndoMergeTarget] = useState(null);
   const [isUndoingMerge, setIsUndoingMerge] = useState(false);
-  const [selfOrderAlertOpen, setSelfOrderAlertOpen] = useState(false);
-  const [selfOrderAlertCreatedAt, setSelfOrderAlertCreatedAt] = useState(null);
+  const [selfOrderAlerts, setSelfOrderAlerts] = useState([]);
   /** @type {React.MutableRefObject<Map<string, object[]>>} */
   const resumeOrdersCacheRef = useRef(new Map());
 
@@ -182,12 +186,28 @@ export default function PosTableMap() {
 
   // TODO: replace with real new self-order detection
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setSelfOrderAlertCreatedAt(Date.now());
-      setSelfOrderAlertOpen(true);
-    }, SELF_ORDER_ALERT_TEST_DELAY_MS);
-    return () => window.clearTimeout(timer);
+    const timers = SELF_ORDER_ALERT_TEST_SAMPLES.map((sample, index) =>
+      window.setTimeout(() => {
+        const createdAt = Date.now();
+        setSelfOrderAlerts((prev) => [
+          {
+            id: `test-alert-${index}-${createdAt}`,
+            createdAt,
+            ...sample,
+          },
+          ...prev,
+        ]);
+      }, SELF_ORDER_ALERT_TEST_INTERVAL_MS * (index + 1)),
+    );
+
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
   }, []);
+
+  function dismissSelfOrderAlert(alertId) {
+    setSelfOrderAlerts((prev) => prev.filter((alert) => alert.id !== alertId));
+  }
 
   // Drop resume caches for checks that are no longer held (or whose ticket set changed).
   useEffect(() => {
@@ -713,13 +733,10 @@ export default function PosTableMap() {
         onDismiss={hideDismissibleToast}
       />
 
-      <SelfOrderAlertNotification
-        isOpen={selfOrderAlertOpen}
-        table="3"
-        customerName="Alex"
-        createdAt={selfOrderAlertCreatedAt}
-        onSend={() => setSelfOrderAlertOpen(false)}
-        onDismiss={() => setSelfOrderAlertOpen(false)}
+      <SelfOrderAlertStack
+        alerts={selfOrderAlerts}
+        onSend={dismissSelfOrderAlert}
+        onDismiss={dismissSelfOrderAlert}
       />
 
       <div
