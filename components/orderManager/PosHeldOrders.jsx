@@ -287,17 +287,23 @@ export default function PosHeldOrders() {
         return;
       }
 
-      const orders = await loadHeldCheckOrders(order);
-      if (orders?.length) {
-        await printHeldCheckKitchenOnPrepare(orders, orderIds, {
-          storeProfile,
-          itemGroups,
-          menuConfig,
-        });
-      }
-
       toast.success("Preparation started");
       await loadHeldOrders({ silent: true });
+
+      void (async () => {
+        try {
+          const resume = await fetchPosResumeOrders(orderIds);
+          if (!resume?.success || !resume.orders?.length) return;
+
+          await printHeldCheckKitchenOnPrepare(resume.orders, orderIds, {
+            storeProfile,
+            itemGroups,
+            menuConfig,
+          });
+        } catch (error) {
+          console.error("[prepare] Kitchen print failed:", error);
+        }
+      })();
     } catch (error) {
       showDismissibleToast(error?.message || "Failed to start preparation");
     } finally {

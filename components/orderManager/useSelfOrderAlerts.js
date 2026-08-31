@@ -130,12 +130,7 @@ export function useSelfOrderAlerts() {
         }
 
         dismissSelfOrderAlert(alertId);
-
-        if (result.printFailed) {
-          toast.error(result.message || "Order prepared but print failed");
-        } else {
-          toast.success("Order sent to kitchen");
-        }
+        toast.success("Order sent to kitchen");
       } catch (error) {
         console.error("Failed to prepare self-order alert:", error);
         toast.error(error?.message || "Failed to prepare order");
