@@ -41,6 +41,12 @@ function orderIdsCacheKey(orderIds) {
   return (orderIds || []).map(String).join(",");
 }
 
+function ticketsStatusKey(heldOrder) {
+  return (heldOrder?.tickets || [])
+    .map((ticket) => `${ticket.orderId}:${String(ticket.status || "").trim()}`)
+    .join(",");
+}
+
 function previewLinesFromResumeOrders(orders) {
   return buildCartLinesFromResumeOrders(orders).filter(
     (line) => String(line.kitchenStatus || "").trim() !== "cancelled",
@@ -156,7 +162,7 @@ export default function PosHeldOrders() {
         orderIdsCacheKey(prev.orderIds) === orderIdsCacheKey(latest.orderIds) &&
         Number(prev.total) === Number(latest.total) &&
         Boolean(prev.allPaid) === Boolean(latest.allPaid) &&
-        String(prev.status || "") === String(latest.status || "")
+        ticketsStatusKey(prev) === ticketsStatusKey(latest)
       ) {
         return prev;
       }

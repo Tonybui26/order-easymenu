@@ -61,6 +61,10 @@ import Image from "next/image";
 import { isNativeApp } from "@/lib/helper/platformDetection";
 import toast from "react-hot-toast";
 import { printKitchenOrder } from "@/lib/helper/printKitchenOrder";
+import {
+  DismissibleToastStack,
+  useDismissibleToastQueue,
+} from "@/components/orderManager/DismissibleToast";
 import { compareOrdersByFulfillment } from "@/lib/helper/pickupTimeDisplay";
 import { App } from "@capacitor/app";
 import {
@@ -1541,14 +1545,12 @@ export default function LiveOrderTerminal() {
   );
   const unpaidTablesBadgeCount = unpaidTableCount;
 
-  const [customToast, setCustomToast] = useState({
-    show: false,
-    type: "error", // 'error', 'success', 'warning'
-    message: "",
-    id: null,
-    retry: null,
-  });
-  const [isPrintToastRetrying, setIsPrintToastRetrying] = useState(false);
+  const {
+    toasts: printErrorToastQueue,
+    showToast: enqueuePrintErrorToast,
+    dismissToast: dismissPrintErrorToast,
+  } = useDismissibleToastQueue();
+  const [retryingPrintToastId, setRetryingPrintToastId] = useState(null);
 
   // Item tracking state - persists across view mode changes
   const [orderItemTracking, setOrderItemTracking] = useState({});
@@ -1580,32 +1582,20 @@ export default function LiveOrderTerminal() {
   };
 
   const showCustomToast = (message, type = "error", retry = null) => {
-    const id = Date.now() + Math.random();
-    setCustomToast({
-      show: true,
-      type,
-      message,
-      id,
-      retry,
-    });
+    enqueuePrintErrorToast(message, type, retry);
   };
 
-  const hideCustomToast = () => {
-    setCustomToast({
-      show: false,
-      type: "error",
-      message: "",
-      id: null,
-      retry: null,
-    });
-    setIsPrintToastRetrying(false);
+  const handleDismissPrintErrorToast = (toastId) => {
+    dismissPrintErrorToast(toastId);
+    setRetryingPrintToastId((current) => (current === toastId ? null : current));
   };
 
-  const handlePrintToastRetry = async () => {
-    const retry = customToast.retry;
-    if (!retry?.order || isPrintToastRetrying) return;
+  const handlePrintToastRetry = async (toastId) => {
+    const entry = printErrorToastQueue.find((toast) => toast.id === toastId);
+    const retry = entry?.retry;
+    if (!retry?.order || retryingPrintToastId) return;
 
-    setIsPrintToastRetrying(true);
+    setRetryingPrintToastId(toastId);
 
     try {
       const freshOrder =
@@ -1623,12 +1613,14 @@ export default function LiveOrderTerminal() {
       });
 
       if (result?.success && (result.failedPrints ?? 0) === 0) {
-        hideCustomToast();
+        handleDismissPrintErrorToast(toastId);
       }
     } catch (error) {
       console.error("Print toast retry failed:", error);
     } finally {
-      setIsPrintToastRetrying(false);
+      setRetryingPrintToastId((current) =>
+        current === toastId ? null : current,
+      );
     }
   };
 
@@ -2158,51 +2150,13 @@ export default function LiveOrderTerminal() {
           )}
         />
       </div>
-      {/* Custom Toast Component */}
-      {customToast.show && (
-        <div className="fixed right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))] z-50 animate-in slide-in-from-right-5">
-          <div
-            className={`flex w-full max-w-md flex-col items-start justify-between gap-3 rounded-lg border p-3 shadow-lg ${
-              customToast.type === "error"
-                ? "bg-red-50 text-red-800"
-                : customToast.type === "success"
-                  ? "border-green-200 bg-green-50 text-green-800"
-                  : "border-yellow-200 bg-yellow-50 text-yellow-800"
-            } `}
-          >
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <span className="text-sm">
-                {customToast.type === "error"
-                  ? "❌"
-                  : customToast.type === "success"
-                    ? "✅"
-                    : "⚠️"}
-              </span>
-              <span className="font-medium">{customToast.message}</span>
-            </div>
-            <div className="flex w-full shrink-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={hideCustomToast}
-                disabled={isPrintToastRetrying}
-                className="w-28 rounded bg-[#947474] px-3 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#947474] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Dismiss
-              </button>
-              {customToast.retry?.order && (
-                <button
-                  type="button"
-                  onClick={handlePrintToastRetry}
-                  disabled={isPrintToastRetrying}
-                  className="w-full rounded bg-[#2d9453] px-3 py-3 text-sm font-semibold text-white transition-colors hover:bg-green-900 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {isPrintToastRetrying ? "Retrying..." : "Print again"}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <DismissibleToastStack
+        toasts={printErrorToastQueue}
+        onDismiss={handleDismissPrintErrorToast}
+        onRetry={handlePrintToastRetry}
+        retryingToastId={retryingPrintToastId}
+        className="right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))]"
+      />
     </>
   );
 }
