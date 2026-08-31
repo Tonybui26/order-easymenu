@@ -20,6 +20,7 @@ import {
   getTicketIdsNotDelivered,
   getTicketIdsByStatus,
   isPosDineInHeldOrder,
+  isPickupOrDeliveryHeldOrder,
   isPosSourceHeldOrder,
 } from "@/lib/pos/posHeldOrder";
 import PosChromeHeader from "./PosChromeHeader";
@@ -222,7 +223,7 @@ export default function PosHeldOrders() {
   }
 
   async function handleCompleteHeldOrder(order) {
-    if (!order.allPaid) {
+    if (!isPickupOrDeliveryHeldOrder(order) && !order.allPaid) {
       showDismissibleToast("Pay the check before completing");
       return;
     }
