@@ -2,11 +2,12 @@
 
 import { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { FileText, Receipt, RotateCcw, Trash2, X } from "lucide-react";
+import { FileText, Mail, Receipt, RotateCcw, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/helper";
+import { historyRowSupportsEmailReceipt } from "@/lib/helper/orderHistoryDisplay";
 import OrderHistoryCheckDetails from "./OrderHistoryCheckDetails";
 
-const HISTORY_ACTIONS = [
+const PRINT_ACTIONS = [
   {
     id: "print-bill",
     label: "Print Bill",
@@ -19,6 +20,16 @@ const HISTORY_ACTIONS = [
     icon: Receipt,
     className: "bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white",
   },
+];
+
+const EMAIL_RECEIPT_ACTION = {
+  id: "email-receipt",
+  label: "Email Receipt",
+  icon: Mail,
+  className: "bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white",
+};
+
+const DESTRUCTIVE_ACTIONS = [
   {
     id: "refund",
     label: "Refund",
@@ -34,6 +45,25 @@ const HISTORY_ACTIONS = [
   },
 ];
 
+function buildVisibleActions(row) {
+  const actions = [];
+
+  if (historyRowSupportsEmailReceipt(row)) {
+    actions.push(EMAIL_RECEIPT_ACTION);
+  } else {
+    actions.push(...PRINT_ACTIONS);
+  }
+
+  if (row?.primaryAction === "refund") {
+    actions.push(DESTRUCTIVE_ACTIONS.find((action) => action.id === "refund"));
+  }
+  if (row?.primaryAction === "delete") {
+    actions.push(DESTRUCTIVE_ACTIONS.find((action) => action.id === "delete"));
+  }
+
+  return actions;
+}
+
 const PANEL_SPRING = { type: "spring", damping: 28, stiffness: 320 };
 
 /**
@@ -47,6 +77,7 @@ export default function OrderHistoryActionsPanel({
   onExitComplete,
   onPrintBill,
   onPrintReceipt,
+  onEmailReceipt,
   onRefund,
   onDelete,
 }) {
@@ -58,15 +89,7 @@ export default function OrderHistoryActionsPanel({
 
   const displayRow = row ?? lastRowRef.current;
 
-  const visibleActions = HISTORY_ACTIONS.filter((action) => {
-    if (action.id === "refund") {
-      return displayRow?.primaryAction === "refund";
-    }
-    if (action.id === "delete") {
-      return displayRow?.primaryAction === "delete";
-    }
-    return true;
-  });
+  const visibleActions = buildVisibleActions(displayRow);
 
   return (
     <AnimatePresence onExitComplete={onExitComplete}>
@@ -124,9 +147,16 @@ export default function OrderHistoryActionsPanel({
             <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-neutral-200 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
               {visibleActions.map((action) => {
                 const Icon = action.icon;
+                const hasEmailReceipt = visibleActions.some(
+                  (item) => item.id === "email-receipt",
+                );
                 const disabled =
                   isProcessing &&
                   (action.id === "print-bill" || action.id === "print-receipt");
+                const spansFullWidth =
+                  (action.id === "refund" && !hasEmailReceipt) ||
+                  action.id === "delete" ||
+                  (action.id === "email-receipt" && visibleActions.length === 1);
 
                 return (
                   <button
@@ -137,14 +167,15 @@ export default function OrderHistoryActionsPanel({
                       if (action.id === "print-bill") onPrintBill?.(displayRow);
                       if (action.id === "print-receipt")
                         onPrintReceipt?.(displayRow);
+                      if (action.id === "email-receipt")
+                        onEmailReceipt?.(displayRow);
                       if (action.id === "refund") onRefund?.(displayRow);
                       if (action.id === "delete") onDelete?.(displayRow);
                     }}
                     className={cn(
                       "flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-base font-semibold tracking-wide transition-colors",
                       action.className,
-                      (action.id === "refund" || action.id === "delete") &&
-                        "col-span-2",
+                      spansFullWidth && "col-span-2",
                       disabled && "cursor-not-allowed opacity-50",
                     )}
                   >

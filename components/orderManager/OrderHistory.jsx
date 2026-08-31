@@ -13,6 +13,7 @@ import InputText from "@/components/InputText";
 import DropdownSelect from "@/components/DropdownSelect";
 import PosChromeHeader from "./PosChromeHeader";
 import OrderHistoryActionsPanel from "./OrderHistoryActionsPanel";
+import EmailReceiptModal from "./EmailReceiptModal";
 import RefundModal from "./RefundModal";
 import DeleteOrderDrawer from "./DeleteOrderDrawer";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
@@ -22,7 +23,9 @@ import {
   buildOrderHistoryRows,
   filterOrderHistoryRows,
   getOrderHistoryDateRangeUTC,
-  isPosDeliveredHistoryOrder,
+  isDeliveredHistoryOrder,
+  pickHistoryReceiptEmail,
+  pickHistoryReceiptOrder,
   ORDER_HISTORY_DATE_FILTER_OPTIONS,
   ORDER_HISTORY_DATE_FILTER_TODAY,
   ORDER_HISTORY_PAYMENT_FILTER_ALL,
@@ -45,6 +48,7 @@ const TABLE_COLUMNS = [
 ];
 
 const PAYMENT_FILTER_ICONS = {
+  Online: CreditCard,
   Cash: Banknote,
   Card: CreditCard,
 };
@@ -80,13 +84,15 @@ export default function OrderHistory() {
   const [refundModalOpen, setRefundModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteDrawerOpen, setDeleteDrawerOpen] = useState(false);
+  const [receiptTarget, setReceiptTarget] = useState(null);
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
 
   const loadOrders = useCallback(async () => {
     setIsLoading(true);
     try {
       const { startDate, endDate } = getOrderHistoryDateRangeUTC(dateFilter);
       const data = await fetchCompletedOrders(startDate, endDate);
-      const rows = (data.orders || []).filter(isPosDeliveredHistoryOrder);
+      const rows = (data.orders || []).filter(isDeliveredHistoryOrder);
       setOrders(rows);
     } catch (error) {
       console.error("Error fetching order history:", error);
@@ -163,6 +169,20 @@ export default function OrderHistory() {
     } finally {
       setIsProcessing(false);
     }
+  }
+
+  function handleEmailReceipt(row) {
+    const order = pickHistoryReceiptOrder(row?.orders);
+    if (!order?._id) {
+      toast.error("Could not load order for receipt");
+      return;
+    }
+
+    setReceiptTarget({
+      orderId: String(order._id),
+      defaultEmail: pickHistoryReceiptEmail(row?.orders),
+    });
+    setReceiptModalOpen(true);
   }
 
   function handleRefund(row) {
@@ -306,8 +326,8 @@ export default function OrderHistory() {
                         className="px-4 py-12 text-center text-gray-500"
                       >
                         {dateFilter === ORDER_HISTORY_DATE_FILTER_TODAY
-                          ? "No delivered POS orders today"
-                          : "No delivered POS orders for this date"}
+                          ? "No delivered orders today"
+                          : "No delivered orders for this date"}
                       </td>
                     </tr>
                   ) : filteredRows.length === 0 ? (
@@ -378,8 +398,20 @@ export default function OrderHistory() {
         onExitComplete={handlePanelExitComplete}
         onPrintBill={handlePrintBill}
         onPrintReceipt={handlePrintReceipt}
+        onEmailReceipt={handleEmailReceipt}
         onRefund={handleRefund}
         onDelete={handleDelete}
+      />
+
+      <EmailReceiptModal
+        isOpen={receiptModalOpen}
+        onClose={() => {
+          setReceiptModalOpen(false);
+          setReceiptTarget(null);
+        }}
+        orderId={receiptTarget?.orderId}
+        defaultEmail={receiptTarget?.defaultEmail}
+        onSent={closeActionsPanel}
       />
 
       <RefundModal
