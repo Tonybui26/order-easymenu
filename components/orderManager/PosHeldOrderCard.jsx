@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Clock3,
   FileText,
+  Info,
   MoreHorizontal,
   Printer,
   Trash2,
@@ -16,6 +17,7 @@ import {
   getHeldAggregateStatusLabel,
   getPosHeldCardActions,
   isPosDineInHeldOrder,
+  isTakeawayPickupHeldOrder,
 } from "@/lib/pos/posHeldOrder";
 
 function formatMoney(amount) {
@@ -60,6 +62,9 @@ function heldCardPrimaryLabel(order) {
     if (tables.length > 1) return `Table ${tables.join(", ")}`;
     const table = String(order?.table || "").trim();
     return table ? `Table ${table}` : "Dine-in";
+  }
+  if (isTakeawayPickupHeldOrder(order)) {
+    return customerLabel(order);
   }
   return orderNumberLabel(order);
 }
@@ -319,13 +324,30 @@ export default function PosHeldOrderCard({
                 </span>
               </span>
               <span className="inline-flex min-w-0 items-center gap-1.5">
-                <User
-                  size={14}
-                  strokeWidth={2}
-                  className="shrink-0 opacity-70"
-                />
-                <span className="truncate font-medium text-neutral-700">
-                  {customerLabel(order)}
+                {isTakeawayPickupHeldOrder(order) ? (
+                  <Info
+                    size={14}
+                    strokeWidth={2}
+                    className="shrink-0 opacity-70"
+                    aria-hidden
+                  />
+                ) : (
+                  <User
+                    size={14}
+                    strokeWidth={2}
+                    className="shrink-0 opacity-70"
+                  />
+                )}
+                <span
+                  className={cn(
+                    "truncate font-medium text-neutral-700",
+                    isTakeawayPickupHeldOrder(order) &&
+                      "font-mono tabular-nums tracking-tight",
+                  )}
+                >
+                  {isTakeawayPickupHeldOrder(order)
+                    ? orderNumberLabel(order)
+                    : customerLabel(order)}
                 </span>
               </span>
             </div>

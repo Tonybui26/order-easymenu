@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import {
   fetchPosHeldOrders,
@@ -38,11 +38,16 @@ const HELD_TABS = [
   { id: "self-ordering", label: "Self Ordering" },
 ];
 
+export const POS_HELD_ORDERS_TAB_SELF_ORDERING = "self-ordering";
+export const POS_HELD_ORDERS_TAB_POS = "pos";
+
 /**
  * Held Orders — open checks (POS + Self Ordering) until paid and cleared.
  */
 export default function PosHeldOrders() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
   const {
     toast: dismissibleToast,
     showToast: showDismissibleToast,
@@ -51,7 +56,12 @@ export default function PosHeldOrders() {
   const { handleOpenCashDrawer } = usePosOpenCashDrawer(showDismissibleToast);
   const { storeProfile, itemGroups, menuConfig } = useMenuContext();
   const [heldOrders, setHeldOrders] = useState([]);
-  const [activeTab, setActiveTab] = useState("pos");
+  const [activeTab, setActiveTab] = useState(() => {
+    if (tabParam === POS_HELD_ORDERS_TAB_SELF_ORDERING) {
+      return POS_HELD_ORDERS_TAB_SELF_ORDERING;
+    }
+    return POS_HELD_ORDERS_TAB_POS;
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [processingCheckId, setProcessingCheckId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -78,6 +88,14 @@ export default function PosHeldOrders() {
       if (!silent) setIsLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (tabParam === POS_HELD_ORDERS_TAB_SELF_ORDERING) {
+      setActiveTab(POS_HELD_ORDERS_TAB_SELF_ORDERING);
+    } else if (tabParam === POS_HELD_ORDERS_TAB_POS) {
+      setActiveTab(POS_HELD_ORDERS_TAB_POS);
+    }
+  }, [tabParam]);
 
   useEffect(() => {
     loadHeldOrders();

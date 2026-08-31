@@ -70,31 +70,10 @@ import {
   getNewOrderAlertsMuted,
   NEW_ORDER_ALERTS_MUTED_CHANGED_EVENT,
 } from "@/lib/utils/newOrderAlerts";
-
-/** Same criteria as the live new-order alert (paid online, or pending counter dine-in). */
-function isNotificationWorthyOrder(order) {
-  if (
-    order.paymentStatus === "paid" &&
-    !isCounterPayment(order.paymentMethod)
-  ) {
-    return true;
-  }
-
-  if (
-    order.paymentStatus === "pending" &&
-    isCounterPayment(order.paymentMethod) &&
-    order.table !== "takeaway"
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-/** Still waiting for Prepare (kitchen not started). */
-function isUnpreparedNewOrder(order) {
-  return ["pending", "confirmed", "accepted"].includes(order.status);
-}
+import {
+  isNotificationWorthyOrder,
+  isUnpreparedNewOrder,
+} from "@/lib/helper/liveOrderNotifications";
 
 /** Re-fire the new-order alert if dismissed but still unprepared after this long. */
 const NEW_ORDER_REALERT_AFTER_MS = 3 * 60 * 1000;

@@ -15,15 +15,19 @@ const TIME_AGO_TICK_MS = 30_000;
  */
 export default function SelfOrderAlertNotification({
   title = "New Order",
+  description: descriptionOverride,
   table,
   customerName,
   createdAt,
+  sendLabel = "Send",
   onSend,
   onDismiss,
   isSending = false,
   className,
 }) {
-  const description = formatSelfOrderAlertPrimaryLabel({ table, customerName });
+  const description =
+    descriptionOverride ??
+    formatSelfOrderAlertPrimaryLabel({ table, customerName });
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
@@ -86,7 +90,7 @@ export default function SelfOrderAlertNotification({
           disabled={isSending || typeof onSend !== "function"}
           className="flex-grow rounded-lg bg-[#984B28] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#7f3f22] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isSending ? "…" : "Send"}
+          {isSending ? "…" : sendLabel}
         </button>
       </div>
     </div>

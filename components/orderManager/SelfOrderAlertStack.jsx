@@ -49,11 +49,14 @@ const ALERT_ITEM_VARIANTS = {
  *
  * @param {Array<{
  *   id: string,
+ *   kind?: "order" | "batch",
  *   title?: string,
+ *   description?: string,
  *   table?: string,
  *   customerName?: string,
  *   createdAt?: number | string | Date,
  *   isSending?: boolean,
+ *   sendLabel?: string,
  * }>} alerts — newest entries first
  */
 export default function SelfOrderAlertStack({
@@ -107,10 +110,12 @@ export default function SelfOrderAlertStack({
             >
               <SelfOrderAlertNotification
                 title={alert.title}
+                description={alert.description}
                 table={alert.table}
                 customerName={alert.customerName}
                 createdAt={alert.createdAt}
                 isSending={alert.isSending}
+                sendLabel={alert.sendLabel}
                 onDismiss={
                   typeof onDismiss === "function"
                     ? () => onDismiss(alert.id)
