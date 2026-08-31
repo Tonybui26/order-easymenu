@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import {
@@ -15,6 +15,7 @@ import {
   printHeldCheckKitchenOnPrepare,
   reprintHeldCheckKitchen,
 } from "@/lib/pos/posHeldOrderPrint";
+import { buildCartLinesFromResumeOrders } from "@/lib/pos/posResumeOrder";
 import {
   getAllTicketIds,
   getTicketIdsNotDelivered,
@@ -27,6 +28,7 @@ import PosChromeHeader from "./PosChromeHeader";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 import PosHeldOrderCard from "./PosHeldOrderCard";
 import SelfOrderingHeldOrderCard from "./SelfOrderingHeldOrderCard";
+import PosSelfOrderingHeldDrawer from "./PosSelfOrderingHeldDrawer";
 import DeleteOrderDrawer from "./DeleteOrderDrawer";
 import { buildHeldCheckCancelTarget } from "@/lib/helper/buildCancelOrderTarget";
 import DismissibleToast, {
@@ -34,6 +36,16 @@ import DismissibleToast, {
 } from "@/components/orderManager/DismissibleToast";
 
 const HELD_ORDERS_POLL_MS = 10000;
+
+function orderIdsCacheKey(orderIds) {
+  return (orderIds || []).map(String).join(",");
+}
+
+function previewLinesFromResumeOrders(orders) {
+  return buildCartLinesFromResumeOrders(orders).filter(
+    (line) => String(line.kitchenStatus || "").trim() !== "cancelled",
+  );
+}
 
 const HELD_TABS = [
   { id: "pos", label: "POS" },
@@ -72,6 +84,11 @@ export default function PosHeldOrders() {
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelDrawerOpen, setCancelDrawerOpen] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [drawerHeldOrder, setDrawerHeldOrder] = useState(null);
+  const [previewLines, setPreviewLines] = useState([]);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState(null);
+  const resumeOrdersCacheRef = useRef(new Map());
 
   const loadHeldOrders = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setIsLoading(true);
@@ -111,6 +128,84 @@ export default function PosHeldOrders() {
     return () => clearInterval(id);
   }, [loadHeldOrders]);
 
+  useEffect(() => {
+    const validKeys = new Set(
+      (heldOrders || [])
+        .map((entry) => orderIdsCacheKey(entry?.orderIds))
+        .filter(Boolean),
+    );
+    for (const key of [...resumeOrdersCacheRef.current.keys()]) {
+      if (!validKeys.has(key)) resumeOrdersCacheRef.current.delete(key);
+    }
+  }, [heldOrders]);
+
+  useEffect(() => {
+    if (!drawerHeldOrder) return;
+
+    const latest = heldOrders.find((entry) => entry.id === drawerHeldOrder.id);
+    if (!latest) {
+      if (!processingCheckId && !isCancelling) {
+        handleCloseSelfOrderingDrawer();
+      }
+      return;
+    }
+
+    setDrawerHeldOrder((prev) => {
+      if (
+        prev &&
+        orderIdsCacheKey(prev.orderIds) === orderIdsCacheKey(latest.orderIds) &&
+        Number(prev.total) === Number(latest.total) &&
+        Boolean(prev.allPaid) === Boolean(latest.allPaid) &&
+        String(prev.status || "") === String(latest.status || "")
+      ) {
+        return prev;
+      }
+      return latest;
+    });
+  }, [heldOrders, drawerHeldOrder?.id, processingCheckId, isCancelling]);
+
+  const drawerOrderIdsKey = orderIdsCacheKey(drawerHeldOrder?.orderIds);
+
+  useEffect(() => {
+    if (!drawerHeldOrder || !drawerOrderIdsKey) {
+      setPreviewLines([]);
+      setPreviewError(null);
+      setIsPreviewLoading(false);
+      return;
+    }
+
+    const orderIds = drawerOrderIdsKey.split(",");
+    const cached = resumeOrdersCacheRef.current.get(drawerOrderIdsKey);
+    if (cached) {
+      setPreviewLines(previewLinesFromResumeOrders(cached));
+      setPreviewError(null);
+      setIsPreviewLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsPreviewLoading(true);
+    setPreviewError(null);
+
+    (async () => {
+      const result = await fetchPosResumeOrders(orderIds);
+      if (cancelled) return;
+      if (!result?.success || !result.orders?.length) {
+        setPreviewLines([]);
+        setPreviewError(result?.error || "Could not load items");
+        setIsPreviewLoading(false);
+        return;
+      }
+      resumeOrdersCacheRef.current.set(drawerOrderIdsKey, result.orders);
+      setPreviewLines(previewLinesFromResumeOrders(result.orders));
+      setIsPreviewLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [drawerHeldOrder, drawerOrderIdsKey]);
+
   const posHeldOrders = useMemo(
     () => heldOrders.filter(isPosSourceHeldOrder),
     [heldOrders],
@@ -122,10 +217,29 @@ export default function PosHeldOrders() {
   const visibleHeldOrders =
     activeTab === "pos" ? posHeldOrders : selfOrderingHeldOrders;
 
+  function handleCloseSelfOrderingDrawer() {
+    if (processingCheckId || isCancelling) return;
+    setDrawerHeldOrder(null);
+    setPreviewLines([]);
+    setPreviewError(null);
+    setIsPreviewLoading(false);
+  }
+
   function handleSelectHeldOrder(order) {
     if (!order?.orderIds?.length) return;
     if (!isPosSourceHeldOrder(order)) {
-      showDismissibleToast("Self Ordering checks open on Live Orders");
+      const cacheKey = orderIdsCacheKey(order.orderIds);
+      const cached = resumeOrdersCacheRef.current.get(cacheKey);
+      setDrawerHeldOrder(order);
+      if (cached) {
+        setPreviewLines(previewLinesFromResumeOrders(cached));
+        setPreviewError(null);
+        setIsPreviewLoading(false);
+      } else {
+        setPreviewLines([]);
+        setPreviewError(null);
+        setIsPreviewLoading(true);
+      }
       return;
     }
     router.push(`/pos?resume=${encodeURIComponent(order.orderIds.join(","))}`);
@@ -399,6 +513,7 @@ export default function PosHeldOrders() {
       );
       setCancelDrawerOpen(false);
       setCancelTarget(null);
+      handleCloseSelfOrderingDrawer();
       await loadHeldOrders({ silent: true });
     } catch (error) {
       showDismissibleToast(error?.message || "Failed to cancel order");
@@ -557,6 +672,24 @@ export default function PosHeldOrders() {
         toast={dismissibleToast}
         onDismiss={hideDismissibleToast}
         className="right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))]"
+      />
+
+      <PosSelfOrderingHeldDrawer
+        isOpen={Boolean(drawerHeldOrder)}
+        onClose={handleCloseSelfOrderingDrawer}
+        heldOrder={drawerHeldOrder}
+        onPrepare={handlePrepareHeldOrder}
+        onReady={handleReadyHeldOrder}
+        onComplete={handleCompleteHeldOrder}
+        onPrintBill={handlePrintBillHeldOrder}
+        onReprintOrder={handleReprintHeldOrder}
+        onCancel={handleCancelHeldOrder}
+        isProcessing={
+          Boolean(drawerHeldOrder) && processingCheckId === drawerHeldOrder?.id
+        }
+        previewLines={previewLines}
+        isPreviewLoading={isPreviewLoading}
+        previewError={previewError}
       />
 
       <DeleteOrderDrawer
