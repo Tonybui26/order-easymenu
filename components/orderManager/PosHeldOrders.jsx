@@ -28,6 +28,7 @@ import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 import PosHeldOrderCard from "./PosHeldOrderCard";
 import SelfOrderingHeldOrderCard from "./SelfOrderingHeldOrderCard";
 import DeleteOrderDrawer from "./DeleteOrderDrawer";
+import { buildHeldCheckCancelTarget } from "@/lib/helper/buildCancelOrderTarget";
 import DismissibleToast, {
   useDismissibleToast,
 } from "@/components/orderManager/DismissibleToast";
@@ -68,6 +69,9 @@ export default function PosHeldOrders() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteDrawerOpen, setDeleteDrawerOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelDrawerOpen, setCancelDrawerOpen] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const loadHeldOrders = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setIsLoading(true);
@@ -358,6 +362,52 @@ export default function PosHeldOrders() {
     setDeleteDrawerOpen(true);
   }
 
+  function handleCancelHeldOrder(order) {
+    if (!order?.id || processingCheckId || isCancelling) return;
+
+    const ticketIds = getAllTicketIds(order);
+    if (ticketIds.length === 0) {
+      showDismissibleToast("No tickets on this check");
+      return;
+    }
+
+    setCancelTarget(buildHeldCheckCancelTarget(order));
+    setCancelDrawerOpen(true);
+  }
+
+  async function handleConfirmCancelHeldOrder(cancelReason) {
+    if (!cancelTarget?.orderIds?.length || isCancelling) return;
+
+    setIsCancelling(true);
+    setProcessingCheckId(cancelTarget.id);
+    try {
+      const result = await updatePosHeldCheckStatus({
+        orderIds: cancelTarget.orderIds,
+        status: "cancelled",
+        cancelReason,
+        requireCancelReason: true,
+      });
+      if (!result?.success) {
+        showDismissibleToast(result?.error || "Failed to cancel order");
+        return;
+      }
+
+      toast.success(
+        cancelTarget.orderIds.length === 1
+          ? "Order cancelled"
+          : "Check cancelled",
+      );
+      setCancelDrawerOpen(false);
+      setCancelTarget(null);
+      await loadHeldOrders({ silent: true });
+    } catch (error) {
+      showDismissibleToast(error?.message || "Failed to cancel order");
+    } finally {
+      setIsCancelling(false);
+      setProcessingCheckId(null);
+    }
+  }
+
   async function handleConfirmDeleteHeldOrder(cancelReason) {
     if (!deleteTarget?.orderIds?.length || isDeleting) return;
 
@@ -490,6 +540,7 @@ export default function PosHeldOrders() {
                             onPrintBill={handlePrintBillHeldOrder}
                             onReprintOrder={handleReprintHeldOrder}
                             onDelete={handleDeleteHeldOrder}
+                            onCancel={handleCancelHeldOrder}
                             isProcessing={processingCheckId === order.id}
                           />
                         </li>
@@ -506,6 +557,18 @@ export default function PosHeldOrders() {
         toast={dismissibleToast}
         onDismiss={hideDismissibleToast}
         className="right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))]"
+      />
+
+      <DeleteOrderDrawer
+        isOpen={cancelDrawerOpen}
+        onClose={() => {
+          if (isCancelling) return;
+          setCancelDrawerOpen(false);
+          setCancelTarget(null);
+        }}
+        target={cancelTarget}
+        onConfirm={handleConfirmCancelHeldOrder}
+        isProcessing={isCancelling}
       />
 
       <DeleteOrderDrawer

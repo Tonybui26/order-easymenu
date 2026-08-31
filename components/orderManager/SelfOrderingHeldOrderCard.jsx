@@ -8,7 +8,7 @@ import {
   Info,
   MoreHorizontal,
   Printer,
-  Trash2,
+  XCircle,
   User,
 } from "lucide-react";
 import { cn } from "@/lib/helper";
@@ -130,9 +130,9 @@ const HELD_MORE_ACTIONS = [
     tone: "blue",
   },
   {
-    id: "delete",
-    label: "Delete",
-    icon: Trash2,
+    id: "cancel",
+    label: "Cancel",
+    icon: XCircle,
     tone: "red",
   },
 ];
@@ -149,7 +149,7 @@ export default function SelfOrderingHeldOrderCard({
   onComplete,
   onPrintBill,
   onReprintOrder,
-  onDelete,
+  onCancel,
   isProcessing = false,
   className,
 }) {
@@ -161,6 +161,7 @@ export default function SelfOrderingHeldOrderCard({
     showPrepare,
     showReady,
     showComplete,
+    showCancel,
     primaryStatus,
     completeLabel,
   } = getSelfOrderingHeldCardActions(order);
@@ -175,7 +176,7 @@ export default function SelfOrderingHeldOrderCard({
   const holdLabel = formatHoldDuration(Number.isFinite(heldMs) ? heldMs : 0);
   const isLongHold = heldMs >= 15 * 60 * 1000;
   const visibleMoreActions = HELD_MORE_ACTIONS.filter((action) => {
-    if (action.id === "delete") return !order?.allPaid;
+    if (action.id === "cancel") return showCancel;
     return true;
   });
 
@@ -407,7 +408,7 @@ export default function SelfOrderingHeldOrderCard({
                     isProcessing &&
                     (action.id === "print-bill" ||
                       action.id === "reprint-order" ||
-                      action.id === "delete")
+                      action.id === "cancel")
                   }
                   onClick={(event) => {
                     event.stopPropagation();
@@ -415,7 +416,7 @@ export default function SelfOrderingHeldOrderCard({
                     if (action.id === "print-bill") onPrintBill?.(order);
                     if (action.id === "reprint-order")
                       onReprintOrder?.(order);
-                    if (action.id === "delete") onDelete?.(order);
+                    if (action.id === "cancel") onCancel?.(order);
                   }}
                 >
                   {action.label}

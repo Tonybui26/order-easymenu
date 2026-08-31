@@ -34,9 +34,11 @@ function orderToAlert(order) {
   return {
     kind: "order",
     id: order._id,
+    orderId: order._id,
     table: order.table,
     customerName: order.customerName,
     createdAt: order.createdAt,
+    paymentStatus: order.paymentStatus,
   };
 }
 

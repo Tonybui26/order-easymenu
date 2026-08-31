@@ -22,6 +22,7 @@ import {
 import { isPendingCounterOrderForCollection } from "@/lib/helper/orderCollectAmount";
 import { isOrderPaidForFulfillment } from "@/lib/helper/orderPaymentStatus";
 import { summarizeCompletedOrderRefunds } from "@/lib/helper/completedOrderRefunds";
+import { buildCancelOrderTarget } from "@/lib/helper/buildCancelOrderTarget";
 import {
   getUnpaidOrdersByTable,
   isUnpaidCounterDineInOrder,
@@ -1173,35 +1174,9 @@ export default function LiveOrderTerminal() {
     }
   };
 
-  function buildLiveCancelTarget(order) {
-    const orderIdShort = order._id?.slice(-6).toUpperCase();
-    const isPaid = order.paymentStatus === "paid";
-    const customerName = String(order.customerName || "").trim();
-    const table = String(order.table || "").trim();
-
-    const subtitleParts = [];
-    if (customerName) subtitleParts.push(customerName);
-    if (table && table !== "takeaway") subtitleParts.push(`Table ${table}`);
-    if (isPaid) subtitleParts.push("Paid — refund manually if needed");
-
-    return {
-      id: order._id,
-      orderId: order._id,
-      title: `Cancel order #${orderIdShort}`,
-      subtitle: subtitleParts.join(" · ") || undefined,
-      ticketCount: 1,
-      confirmLabel: "Confirm cancel",
-      processingLabel: "Cancelling…",
-      otherPlaceholder: "Describe why this order is being cancelled",
-      warningMessage: isPaid
-        ? "This order is already paid. You'll need to process a refund manually. This will cancel the order and cannot be undone."
-        : "This will cancel this order. This action cannot be undone.",
-    };
-  }
-
   function handleCancelOrder(order) {
     if (!order?._id || processingOrders.has(order._id)) return;
-    setCancelTarget(buildLiveCancelTarget(order));
+    setCancelTarget(buildCancelOrderTarget(order));
     setCancelDrawerOpen(true);
   }
 
