@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { usePosNavigate } from "@/components/context/PosNavigateContext";
 import toast from "react-hot-toast";
 import {
   fetchPosHeldOrders,
@@ -65,7 +66,7 @@ export const POS_HELD_ORDERS_TAB_POS = "pos";
  * Held Orders — open checks (POS + Self Ordering) until paid and cleared.
  */
 export default function PosHeldOrders() {
-  const router = useRouter();
+  const { navigate } = usePosNavigate();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
   const {
@@ -248,7 +249,7 @@ export default function PosHeldOrders() {
       }
       return;
     }
-    router.push(`/pos?resume=${encodeURIComponent(order.orderIds.join(","))}`);
+    navigate(`/pos?resume=${encodeURIComponent(order.orderIds.join(","))}`);
   }
 
   async function markTicketsDelivered(order, orderIds, successMessage) {

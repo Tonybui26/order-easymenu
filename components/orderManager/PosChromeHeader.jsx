@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
+import { usePosNavigate } from "@/components/context/PosNavigateContext";
 import {
   Folder,
   PanelBottomOpen,
@@ -55,7 +56,7 @@ const POS_TABLE_MAP_PATH = "/pos/table-map";
  * @param {{ onLogoClick?: () => void, onOpenCashDrawer?: () => void }} props
  */
 export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
-  const router = useRouter();
+  const { navigate } = usePosNavigate();
   const pathname = usePathname();
   const { menuConfig } = useMenuContext();
   const posEnabled = Boolean(menuConfig?.posEnabled);
@@ -70,7 +71,7 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
   function handleLogoClick() {
     onLogoClick?.();
     if (pathname !== homePath) {
-      router.push(homePath);
+      navigate(homePath);
     }
   }
 
@@ -115,7 +116,7 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
                   window.location.reload();
                   return;
                 }
-                if (href) router.push(href);
+                if (href) navigate(href);
               }}
               className={`flex size-10 items-center justify-center rounded-xl transition-colors active:bg-black/25 sm:size-11 ${
                 isActive

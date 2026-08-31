@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePosNavigate } from "@/components/context/PosNavigateContext";
 import { Combine, Map as MapIcon, ShoppingBag, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
@@ -80,7 +80,7 @@ function previewLinesFromResumeOrders(orders) {
 }
 
 export default function PosTableMap() {
-  const router = useRouter();
+  const { navigate, isPending } = usePosNavigate();
   const { alerts: selfOrderAlerts, dismissSelfOrderAlert, prepareSelfOrderAlert } =
     useSelfOrderAlerts();
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
@@ -123,6 +123,7 @@ export default function PosTableMap() {
   const [mergeGroups, setMergeGroups] = useState([]);
   const [undoMergeTarget, setUndoMergeTarget] = useState(null);
   const [isUndoingMerge, setIsUndoingMerge] = useState(false);
+  const [navigatingTableNames, setNavigatingTableNames] = useState([]);
   /** @type {React.MutableRefObject<Map<string, object[]>>} */
   const resumeOrdersCacheRef = useRef(new Map());
 
@@ -193,6 +194,12 @@ export default function PosTableMap() {
     const id = setInterval(loadHeldOrders, HELD_ORDERS_POLL_MS);
     return () => clearInterval(id);
   }, [loadHeldOrders]);
+
+  useEffect(() => {
+    if (!isPending) {
+      setNavigatingTableNames([]);
+    }
+  }, [isPending]);
 
   // Drop resume caches for checks that are no longer held (or whose ticket set changed).
   useEffect(() => {
@@ -282,7 +289,7 @@ export default function PosTableMap() {
   }
 
   function handleTakeaway() {
-    router.push("/pos?orderType=takeaway");
+    navigate("/pos?orderType=takeaway");
   }
 
   function handleEnterMergeMode() {
@@ -463,7 +470,8 @@ export default function PosTableMap() {
       } else {
         params.set("table", seatNames[0]);
       }
-      router.push(`/pos?${params.toString()}`);
+      setNavigatingTableNames(seatNames);
+      navigate(`/pos?${params.toString()}`);
       return;
     }
 
@@ -484,7 +492,7 @@ export default function PosTableMap() {
 
   function handleLoadOrder() {
     if (!drawerHeldOrder?.orderIds?.length) return;
-    router.push(
+    navigate(
       `/pos?resume=${encodeURIComponent(drawerHeldOrder.orderIds.join(","))}`,
     );
   }
@@ -495,7 +503,7 @@ export default function PosTableMap() {
       showDismissibleToast("This check is already paid");
       return;
     }
-    router.push(
+    navigate(
       `/pos?resume=${encodeURIComponent(drawerHeldOrder.orderIds.join(","))}&pay=1`,
     );
   }
@@ -714,13 +722,13 @@ export default function PosTableMap() {
   const handleSelfOrderAlertSend = useCallback(
     (alertId) => {
       if (alertId === SELF_ORDER_BATCH_ALERT_ID) {
-        router.push(`/pos/held?tab=${POS_HELD_ORDERS_TAB_SELF_ORDERING}`);
+        navigate(`/pos/held?tab=${POS_HELD_ORDERS_TAB_SELF_ORDERING}`);
         return;
       }
 
       void prepareSelfOrderAlert(alertId);
     },
-    [prepareSelfOrderAlert, router],
+    [prepareSelfOrderAlert, navigate],
   );
 
   const handleSelfOrderAlertCancel = useCallback(
@@ -880,6 +888,8 @@ export default function PosTableMap() {
               floorColor={mapFloorColor}
               solidFloor={isMergeMode}
               selectedTableNames={isMergeMode ? mergeSelectedNames : []}
+              navigatingTableNames={navigatingTableNames}
+              disableInteraction={navigatingTableNames.length > 0}
               mergeColorByTableName={mergeColorByTableName}
               onTableSelect={handleTableSelect}
             />

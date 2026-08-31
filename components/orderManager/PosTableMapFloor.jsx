@@ -27,6 +27,10 @@ import {
   POS_TABLE_MAP_MERGE_SELECT_FILL,
   POS_TABLE_MAP_MERGE_SELECT_TEXT,
   POS_TABLE_MAP_MERGED_STROKE_WIDTH,
+  POS_TABLE_MAP_NAVIGATING_FILL,
+  POS_TABLE_MAP_NAVIGATING_STROKE,
+  POS_TABLE_MAP_NAVIGATING_STROKE_WIDTH,
+  POS_TABLE_MAP_NAVIGATING_TEXT,
 } from "@/lib/pos/posTableMapMerge";
 import { TableMapElementGraphic } from "./posTableMapIcons";
 
@@ -38,6 +42,8 @@ export default function PosTableMapFloor({
   floorColor = TABLE_MAP_FLOOR_COLOR,
   solidFloor = false,
   selectedTableNames = [],
+  navigatingTableNames = [],
+  disableInteraction = false,
   mergeColorByTableName = null,
   onTableSelect,
 }) {
@@ -51,6 +57,11 @@ export default function PosTableMapFloor({
     : getTableMapFloorStyle(floorColor);
   const selectedKeys = new Set(
     (selectedTableNames || []).map((name) => normalizeTableMapTableName(name)),
+  );
+  const navigatingKeys = new Set(
+    (navigatingTableNames || []).map((name) =>
+      normalizeTableMapTableName(name),
+    ),
   );
 
   useEffect(() => {
@@ -73,7 +84,10 @@ export default function PosTableMapFloor({
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 flex items-center justify-center overflow-hidden"
+      className={cn(
+        "absolute inset-0 flex items-center justify-center overflow-hidden",
+        disableInteraction && "pointer-events-none",
+      )}
       style={{ backgroundColor: floorColor }}
     >
       {layout.width > 0 && layout.height > 0 ? (
@@ -103,27 +117,43 @@ export default function PosTableMapFloor({
               const statusFill = getPosTableMapStatusFill(status);
               const tableKey = normalizeTableMapTableName(tableName);
               const isSelected = tableKey ? selectedKeys.has(tableKey) : false;
+              const isNavigating = tableKey ? navigatingKeys.has(tableKey) : false;
               const hasSelfOrderDot =
                 Boolean(tableKey) && Boolean(selfOrderTableKeys?.has(tableKey));
               const mergeStroke =
                 (tableKey && mergeColorByTableName?.get(tableKey)) || null;
               const fillColor = isSelected
                 ? POS_TABLE_MAP_MERGE_SELECT_FILL
-                : statusFill || getTableMapBackgroundColor(object);
+                : isNavigating
+                  ? POS_TABLE_MAP_NAVIGATING_FILL
+                  : statusFill || getTableMapBackgroundColor(object);
               const statusLabel =
                 status !== POS_TABLE_MAP_STATUS.available
                   ? POS_TABLE_MAP_STATUS_LABEL[status]
                   : null;
               const labelColor = isSelected
                 ? POS_TABLE_MAP_MERGE_SELECT_TEXT
-                : statusFill && getPosTableMapStatusTextColor(status)
-                  ? getPosTableMapStatusTextColor(status)
-                  : object.fontColor || TABLE_MAP_DEFAULT_FONT_COLOR;
+                : isNavigating
+                  ? POS_TABLE_MAP_NAVIGATING_TEXT
+                  : statusFill && getPosTableMapStatusTextColor(status)
+                    ? getPosTableMapStatusTextColor(status)
+                    : object.fontColor || TABLE_MAP_DEFAULT_FONT_COLOR;
+              const tableStrokeColor = isNavigating
+                ? POS_TABLE_MAP_NAVIGATING_STROKE
+                : mergeStroke || undefined;
+              const tableStrokeWidth = isNavigating
+                ? POS_TABLE_MAP_NAVIGATING_STROKE_WIDTH
+                : mergeStroke
+                  ? POS_TABLE_MAP_MERGED_STROKE_WIDTH
+                  : undefined;
 
               return (
                 <div
                   key={object.id}
-                  className="absolute"
+                  className={cn(
+                    "absolute transition-transform duration-150",
+                    isNavigating && "z-10 scale-[1.04]",
+                  )}
                   style={{
                     left: object.x,
                     top: object.y,
@@ -140,9 +170,9 @@ export default function PosTableMapFloor({
                       onTableSelect?.(object);
                     }}
                     className={cn(
-                      "relative h-full w-full overflow-visible border-0 bg-transparent p-0",
+                      "relative h-full w-full overflow-visible border-0 bg-transparent p-0 transition-transform duration-100",
                       isInteractive
-                        ? "cursor-pointer touch-manipulation"
+                        ? "cursor-pointer touch-manipulation active:scale-[0.97]"
                         : "cursor-default",
                     )}
                     aria-label={
@@ -154,12 +184,8 @@ export default function PosTableMapFloor({
                     <TableMapElementGraphic
                       type={object.type}
                       fillColor={fillColor}
-                      strokeColor={mergeStroke || undefined}
-                      strokeWidth={
-                        mergeStroke
-                          ? POS_TABLE_MAP_MERGED_STROKE_WIDTH
-                          : undefined
-                      }
+                      strokeColor={tableStrokeColor}
+                      strokeWidth={tableStrokeWidth}
                     />
                     {hasSelfOrderDot ? (
                       <span

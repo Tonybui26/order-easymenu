@@ -13,6 +13,7 @@ import PrintToastHost from "@/components/print/PrintToastHost";
 import PosImmersiveHost from "@/components/orderManager/PosImmersiveHost";
 import { ActiveOperatorProvider } from "@/components/context/ActiveOperatorContext";
 import { PosRegisterSessionProvider } from "@/components/context/PosRegisterSessionContext";
+import { PosNavigateProvider } from "@/components/context/PosNavigateContext";
 import RequireActiveOperator from "@/components/auth/RequireActiveOperator";
 import RequireOpenRegister from "@/components/auth/RequireOpenRegister";
 
@@ -61,13 +62,15 @@ export default async function RootLayout({ children }) {
             <MenuContextProvider data={menuData}>
               <ActiveOperatorProvider>
                 <PosRegisterSessionProvider>
-                  <RequireActiveOperator>
-                    <RequireOpenRegister>
-                      {children}
-                      <PrintToastHost />
-                      <PosImmersiveHost />
-                    </RequireOpenRegister>
-                  </RequireActiveOperator>
+                  <PosNavigateProvider>
+                    <RequireActiveOperator>
+                      <RequireOpenRegister>
+                        {children}
+                        <PrintToastHost />
+                        <PosImmersiveHost />
+                      </RequireOpenRegister>
+                    </RequireActiveOperator>
+                  </PosNavigateProvider>
                 </PosRegisterSessionProvider>
               </ActiveOperatorProvider>
             </MenuContextProvider>

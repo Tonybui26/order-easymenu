@@ -7,6 +7,7 @@ import { Check, Plus } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
+import { usePosNavigate } from "@/components/context/PosNavigateContext";
 import { cn } from "@/lib/helper";
 import {
   completePosSaleBatch,
@@ -219,6 +220,7 @@ function PosProductCard({
 
 export default function PosTerminal() {
   const router = useRouter();
+  const { navigate } = usePosNavigate();
   const searchParams = useSearchParams();
   const resumeParam = searchParams.get("resume");
   const payParam = searchParams.get("pay");
@@ -1025,7 +1027,7 @@ export default function PosTerminal() {
   }
 
   function handleGoToHeldOrders() {
-    router.push("/pos/held");
+    navigate("/pos/held");
   }
 
   function handleTrainingHold() {

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
+import { usePosNavigate } from "@/components/context/PosNavigateContext";
 import {
   Banknote,
   Check,
@@ -127,7 +128,7 @@ function resolveActiveItem(pathname, items) {
  * Icon + stacked labels + chevron; shaded to merge with the dark header.
  */
 export default function PosHeaderNavMenu({ className }) {
-  const router = useRouter();
+  const { navigate } = usePosNavigate();
   const pathname = usePathname();
   const { menuConfig } = useMenuContext();
   const [isOpen, setIsOpen] = useState(false);
@@ -169,7 +170,7 @@ export default function PosHeaderNavMenu({ className }) {
   function handleSelect(item) {
     setIsOpen(false);
     if (item.id === current.id) return;
-    router.push(item.href);
+    navigate(item.href);
   }
 
   return (
