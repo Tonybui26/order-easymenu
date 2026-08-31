@@ -16,6 +16,7 @@ import {
 } from "@/lib/api/fetchApi";
 import { buildCancelOrderTarget } from "@/lib/helper/buildCancelOrderTarget";
 import { findPosHeldOrderForTable } from "@/lib/pos/posTableMapHeld";
+import { buildSelfOrderTableIndicatorKeys } from "@/lib/pos/posTableMapSelfOrder";
 import {
   getAllTicketIds,
   getTicketIdsNotDelivered,
@@ -127,6 +128,11 @@ export default function PosTableMap() {
 
   const selectedMap =
     tableMaps.find((map) => map.id === selectedMapId) || tableMaps[0] || null;
+
+  const selfOrderTableKeys = useMemo(
+    () => buildSelfOrderTableIndicatorKeys(heldOrders),
+    [heldOrders],
+  );
 
   const mergeColorByTableName = useMemo(() => {
     const map = getMergeGroupColorMap(mergeGroups);
@@ -857,11 +863,19 @@ export default function PosTableMap() {
                     </div>
                   );
                 })}
+                <div className="flex items-center gap-1.5 text-xs font-medium text-white/90">
+                  <span
+                    className="size-2.5 shrink-0 rounded-full bg-violet-600 ring-2 ring-white/80"
+                    aria-hidden
+                  />
+                  <span>QR order</span>
+                </div>
               </div>
             </div>
             <PosTableMapFloor
               tableMap={selectedMap}
               heldOrders={heldOrders}
+              selfOrderTableKeys={selfOrderTableKeys}
               trackFoodServedOnTableMap={trackFoodServedOnTableMap}
               floorColor={mapFloorColor}
               solidFloor={isMergeMode}

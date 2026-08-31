@@ -33,6 +33,7 @@ import { TableMapElementGraphic } from "./posTableMapIcons";
 export default function PosTableMapFloor({
   tableMap,
   heldOrders = [],
+  selfOrderTableKeys = null,
   trackFoodServedOnTableMap = false,
   floorColor = TABLE_MAP_FLOOR_COLOR,
   solidFloor = false,
@@ -102,6 +103,8 @@ export default function PosTableMapFloor({
               const statusFill = getPosTableMapStatusFill(status);
               const tableKey = normalizeTableMapTableName(tableName);
               const isSelected = tableKey ? selectedKeys.has(tableKey) : false;
+              const hasSelfOrderDot =
+                Boolean(tableKey) && Boolean(selfOrderTableKeys?.has(tableKey));
               const mergeStroke =
                 (tableKey && mergeColorByTableName?.get(tableKey)) || null;
               const fillColor = isSelected
@@ -144,7 +147,7 @@ export default function PosTableMapFloor({
                     )}
                     aria-label={
                       isInteractive
-                        ? `Table ${tableName}${statusLabel ? `, ${statusLabel}` : ""}`
+                        ? `Table ${tableName}${statusLabel ? `, ${statusLabel}` : ""}${hasSelfOrderDot ? ", QR self-order" : ""}`
                         : undefined
                     }
                   >
@@ -158,6 +161,12 @@ export default function PosTableMapFloor({
                           : undefined
                       }
                     />
+                    {hasSelfOrderDot ? (
+                      <span
+                        className="pointer-events-none absolute right-1 top-1 z-10 size-2.5 rounded-full bg-violet-600 shadow-sm ring-2 ring-white"
+                        aria-hidden
+                      />
+                    ) : null}
                     {shouldShowObjectLabel(object) ? (
                       <ObjectLabel object={object} color={labelColor} />
                     ) : null}

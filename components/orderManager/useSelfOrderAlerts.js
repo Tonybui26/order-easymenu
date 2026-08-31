@@ -24,6 +24,10 @@ const POLLING_INTERVALS = {
 
 export const SELF_ORDER_BATCH_ALERT_ID = "__self_order_batch__";
 
+function normalizeOrderId(orderId) {
+  return String(orderId ?? "").trim();
+}
+
 function sortCandidatesNewestFirst(orders) {
   return [...orders].sort(
     (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0),
@@ -58,8 +62,12 @@ function batchToAlert(orders) {
 
 export function buildAlertsFromCandidates(candidates, returnSyncIds) {
   const sorted = sortCandidatesNewestFirst(candidates);
-  const backlog = sorted.filter((order) => returnSyncIds.has(order._id));
-  const liveArrivals = sorted.filter((order) => !returnSyncIds.has(order._id));
+  const backlog = sorted.filter((order) =>
+    returnSyncIds.has(normalizeOrderId(order._id)),
+  );
+  const liveArrivals = sorted.filter(
+    (order) => !returnSyncIds.has(normalizeOrderId(order._id)),
+  );
 
   const alerts = liveArrivals.map(orderToAlert);
 
@@ -82,8 +90,6 @@ export function useSelfOrderAlerts() {
 
   const isReturnSyncDoneRef = useRef(false);
   const returnSyncCandidateIdsRef = useRef(new Set());
-  const previousCandidateIdsRef = useRef(new Set());
-  const hasStartedPollingRef = useRef(false);
   const consecutiveErrorsRef = useRef(0);
   const pollingTimeoutRef = useRef(null);
   const isPollingInProgressRef = useRef(false);
@@ -160,19 +166,22 @@ export function useSelfOrderAlerts() {
     const candidates = sortCandidatesNewestFirst(
       activeOrders.filter(isSelfOrderNotificationCandidate),
     );
-    const candidateIds = new Set(candidates.map((order) => order._id));
+    const candidateIds = new Set(
+      candidates.map((order) => normalizeOrderId(order._id)).filter(Boolean),
+    );
 
     if (!isReturnSyncDoneRef.current) {
       isReturnSyncDoneRef.current = true;
       returnSyncCandidateIdsRef.current = new Set(candidateIds);
-      previousCandidateIdsRef.current = new Set(candidateIds);
       setAlerts(
-        buildAlertsFromCandidates(candidates, returnSyncCandidateIdsRef.current),
+        buildAlertsFromCandidates(
+          candidates,
+          returnSyncCandidateIdsRef.current,
+        ),
       );
       return;
     }
 
-    previousCandidateIdsRef.current = candidateIds;
     setAlerts(
       buildAlertsFromCandidates(candidates, returnSyncCandidateIdsRef.current),
     );
@@ -253,15 +262,17 @@ export function useSelfOrderAlerts() {
   }, []);
 
   useEffect(() => {
-    if (!menuConfig || hasStartedPollingRef.current) return;
+    if (!menuConfig) return;
 
-    hasStartedPollingRef.current = true;
     startPolling();
 
     return () => {
       stopPolling();
+      isReturnSyncDoneRef.current = false;
+      returnSyncCandidateIdsRef.current = new Set();
       if (pollingTimeoutRef.current) {
         clearTimeout(pollingTimeoutRef.current);
+        pollingTimeoutRef.current = null;
       }
     };
   }, [menuConfig, startPolling, stopPolling]);
