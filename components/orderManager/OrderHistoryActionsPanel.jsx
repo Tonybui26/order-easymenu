@@ -46,6 +46,8 @@ const DESTRUCTIVE_ACTIONS = [
 ];
 
 function buildVisibleActions(row) {
+  if (row?.isCancelled) return [];
+
   const actions = [];
 
   if (historyRowSupportsEmailReceipt(row)) {
@@ -126,6 +128,11 @@ export default function OrderHistoryActionsPanel({
                 <p className="mt-1 truncate text-lg font-bold text-neutral-900">
                   {displayRow.invoice}
                 </p>
+                {displayRow.isCancelled ? (
+                  <span className="mt-1 inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-red-800">
+                    Cancelled
+                  </span>
+                ) : null}
                 <p className="mt-1 text-sm text-neutral-500">
                   {displayRow.drawerSubtitle}
                 </p>
@@ -144,7 +151,14 @@ export default function OrderHistoryActionsPanel({
               <OrderHistoryCheckDetails row={displayRow} />
             </div>
 
-            <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-neutral-200 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div
+              className={cn(
+                "shrink-0 border-t border-neutral-200 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))]",
+                visibleActions.length > 0
+                  ? "grid grid-cols-2 gap-2"
+                  : "hidden",
+              )}
+            >
               {visibleActions.map((action) => {
                 const Icon = action.icon;
                 const hasEmailReceipt = visibleActions.some(

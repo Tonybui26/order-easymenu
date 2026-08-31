@@ -23,14 +23,16 @@ import {
   buildOrderHistoryRows,
   filterOrderHistoryRows,
   getOrderHistoryDateRangeUTC,
-  isDeliveredHistoryOrder,
+  isHistoryOrder,
   pickHistoryReceiptEmail,
   pickHistoryReceiptOrder,
   ORDER_HISTORY_DATE_FILTER_OPTIONS,
   ORDER_HISTORY_DATE_FILTER_TODAY,
   ORDER_HISTORY_PAYMENT_FILTER_ALL,
   ORDER_HISTORY_PAYMENT_FILTER_OPTIONS,
+  formatOrderHistoryRefundBadgeLabel,
 } from "@/lib/helper/orderHistoryDisplay";
+import { cn } from "@/lib/helper";
 import {
   buildHistoryRefundOrder,
   printBillForHistoryCheck,
@@ -59,6 +61,24 @@ const PAYMENT_FILTER_OPTIONS = ORDER_HISTORY_PAYMENT_FILTER_OPTIONS.map(
     Icon: PAYMENT_FILTER_ICONS[option.id],
   }),
 );
+
+function OrderHistoryRefundBadge({ badge }) {
+  const label = formatOrderHistoryRefundBadgeLabel(badge);
+  if (!label) return null;
+
+  return (
+    <span
+      className={cn(
+        "mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide",
+        badge === "partial"
+          ? "bg-amber-100 text-amber-800"
+          : "bg-neutral-200 text-neutral-700",
+      )}
+    >
+      {label}
+    </span>
+  );
+}
 
 const DATE_FILTER_OPTIONS = ORDER_HISTORY_DATE_FILTER_OPTIONS.map((option) => ({
   ...option,
@@ -92,7 +112,7 @@ export default function OrderHistory() {
     try {
       const { startDate, endDate } = getOrderHistoryDateRangeUTC(dateFilter);
       const data = await fetchCompletedOrders(startDate, endDate);
-      const rows = (data.orders || []).filter(isDeliveredHistoryOrder);
+      const rows = (data.orders || []).filter(isHistoryOrder);
       setOrders(rows);
     } catch (error) {
       console.error("Error fetching order history:", error);
@@ -326,8 +346,8 @@ export default function OrderHistory() {
                         className="px-4 py-12 text-center text-gray-500"
                       >
                         {dateFilter === ORDER_HISTORY_DATE_FILTER_TODAY
-                          ? "No delivered orders today"
-                          : "No delivered orders for this date"}
+                          ? "No orders today"
+                          : "No orders for this date"}
                       </td>
                     </tr>
                   ) : filteredRows.length === 0 ? (
@@ -347,8 +367,15 @@ export default function OrderHistory() {
                         key={row.id}
                         className="border-b border-gray-100 last:border-b-0"
                       >
-                        <td className="px-4 py-3 font-medium text-gray-900">
-                          {row.invoice}
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-gray-900">
+                            {row.invoice}
+                          </div>
+                          {row.isCancelled ? (
+                            <span className="mt-1 inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-red-800">
+                              Cancelled
+                            </span>
+                          ) : null}
                         </td>
                         <td className="px-4 py-3 text-gray-800">{row.date}</td>
                         <td className="px-4 py-3 text-gray-800">
@@ -357,8 +384,9 @@ export default function OrderHistory() {
                         <td className="px-4 py-3 text-gray-800">
                           {row.details}
                         </td>
-                        <td className="px-4 py-3 text-gray-800">
-                          {row.payment}
+                        <td className="px-4 py-3">
+                          <div className="text-gray-800">{row.payment}</div>
+                          <OrderHistoryRefundBadge badge={row.refundBadge} />
                         </td>
                         <td className="px-4 py-3 font-medium text-gray-900">
                           {row.total}
