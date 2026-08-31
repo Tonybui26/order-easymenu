@@ -176,6 +176,7 @@ export default function SelfOrderingHeldOrderCard({
   const holdLabel = formatHoldDuration(Number.isFinite(heldMs) ? heldMs : 0);
   const isLongHold = heldMs >= 15 * 60 * 1000;
   const visibleMoreActions = HELD_MORE_ACTIONS.filter((action) => {
+    if (action.id === "print-bill") return !order?.allPaid;
     if (action.id === "cancel") return showCancel;
     return true;
   });

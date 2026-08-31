@@ -177,6 +177,7 @@ export default function PosSelfOrderingHeldDrawer({
   ).length;
 
   const visibleMoreActions = SELF_ORDER_MORE_ACTIONS.filter((action) => {
+    if (action.id === "print-bill") return !displayHeldOrder?.allPaid;
     if (action.id === "cancel") return showCancel;
     return true;
   });
