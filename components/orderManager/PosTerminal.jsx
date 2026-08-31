@@ -1043,6 +1043,17 @@ export default function PosTerminal() {
       handleTrainingHold();
       return;
     }
+    if (restaurantMode) {
+      handleClearOrder();
+      setTableNumber("");
+      setOrderType(null);
+      setIsTablePrefilled(false);
+      tablePrefilledRef.current = null;
+      setKeypadDrawer(null);
+      setIsPaymentDrawerOpen(false);
+      navigate(getPosHomePath(menuConfig));
+      return;
+    }
     handleGoToHeldOrders();
   }
 
