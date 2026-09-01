@@ -675,11 +675,15 @@ export default function PosTerminal() {
       (line) => line.lineId === customizingLineId,
     );
     if (isSentCartLine(activeLine) || isCancelledCartLine(activeLine)) return;
+    const prevModifierCount = (activeLine?.selectedModifiers || []).length;
     const built = buildLineFromSelections(
       customizingItem,
       variantMap,
       modifierMap,
     );
+    if (built.modifiersPayload.length > prevModifierCount) {
+      scrollCartToBottomPendingRef.current = true;
+    }
     setCartLines((prev) =>
       prev.map((line) =>
         line.lineId === customizingLineId
