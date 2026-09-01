@@ -73,6 +73,7 @@ export default function PosCartLine({
   const hasChildren = variants.length > 0 || modifiers.length > 0;
   const isSentToKitchen = line.kitchenStatus === "sent";
   const isCancelled = line.kitchenStatus === "cancelled";
+  const isMarkedTakeaway = line.isTakeaway === true;
   const isLocked = readOnly || isSentToKitchen || isCancelled;
   const showVoidSentButton =
     allowVoidSentLine && isSentToKitchen && !isCancelled;
@@ -226,9 +227,7 @@ export default function PosCartLine({
 
       <motion.div
         style={{ x: canSwipeOptions ? x : 0 }}
-        drag={
-          canSwipeOptions && !isRevealed && !isOptionsOpen ? "x" : false
-        }
+        drag={canSwipeOptions && !isRevealed && !isOptionsOpen ? "x" : false}
         dragConstraints={{ left: OPEN_OFFSET, right: 0 }}
         dragElastic={0.12}
         dragDirectionLock
@@ -263,7 +262,9 @@ export default function PosCartLine({
               ? `${displayTitle}, voided`
               : isSentToKitchen
                 ? `${displayTitle}, sent to kitchen`
-                : undefined
+                : isMarkedTakeaway
+                  ? `${displayTitle}, marked for takeaway`
+                  : undefined
           }
         >
           {isLocked ? (
@@ -294,15 +295,29 @@ export default function PosCartLine({
           )}
 
           <div className="min-w-0 flex-1">
-            <p
-              className={cn(
-                "text-base font-medium text-neutral-800",
-                strikeClass,
-                isCancelled && "text-neutral-400",
-              )}
-            >
-              {displayTitle}
-            </p>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <p
+                className={cn(
+                  "min-w-0 text-base font-medium text-neutral-800",
+                  strikeClass,
+                  isCancelled && "text-neutral-400",
+                )}
+              >
+                {displayTitle}
+              </p>
+              {isMarkedTakeaway ? (
+                <span
+                  className={cn(
+                    "inline-flex shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                    isCancelled
+                      ? "bg-neutral-200 text-neutral-500"
+                      : "bg-darken_primary text-white",
+                  )}
+                >
+                  Takeaway
+                </span>
+              ) : null}
+            </div>
             {isCancelled && line.cancelReason ? (
               <p className="mt-0.5 truncate text-xs text-neutral-400">
                 Voided: {line.cancelReason}

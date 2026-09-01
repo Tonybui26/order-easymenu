@@ -23,15 +23,18 @@ export default function PosItemNoteDrawer({
   onSave,
   itemTitle = "",
   initialNote = "",
+  initialIsTakeaway = false,
 }) {
   const [note, setNote] = useState("");
+  const [isTakeaway, setIsTakeaway] = useState(false);
   const [isNotesListOpen, setIsNotesListOpen] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
     setNote(String(initialNote || ""));
+    setIsTakeaway(Boolean(initialIsTakeaway));
     setIsNotesListOpen(false);
-  }, [isOpen, initialNote]);
+  }, [isOpen, initialNote, initialIsTakeaway]);
 
   function handleDismiss() {
     setIsNotesListOpen(false);
@@ -39,7 +42,10 @@ export default function PosItemNoteDrawer({
   }
 
   function handleDone() {
-    onSave?.(note.trim());
+    onSave?.({
+      note: note.trim(),
+      isTakeaway,
+    });
     setIsNotesListOpen(false);
     onClose?.();
   }
@@ -149,6 +155,19 @@ export default function PosItemNoteDrawer({
           </button>
         </div>
       </div>
+
+      <label className="mt-4 flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-neutral-300 bg-white px-4 py-3">
+        <span className="text-base font-semibold uppercase tracking-wide text-neutral-900">
+          Mark for Takeaway
+        </span>
+        <input
+          type="checkbox"
+          className="toggle toggle-primary toggle-lg shrink-0"
+          checked={isTakeaway}
+          onChange={(event) => setIsTakeaway(event.target.checked)}
+          aria-label="Mark item for takeaway"
+        />
+      </label>
     </SideDrawer>
   );
 }

@@ -120,6 +120,7 @@ function buildPosSendItems(cartLines) {
     price: Number(line.price || 0),
     quantity: Number(line.quantity || 1),
     notes: line.notes || undefined,
+    isTakeaway: line.isTakeaway === true ? true : undefined,
     selectedVariants: line.selectedVariants || [],
     selectedModifiers: line.selectedModifiers || [],
   }));
@@ -721,13 +722,18 @@ export default function PosTerminal() {
     setNoteLineId(null);
   }
 
-  function handleSaveItemNote(note) {
+  function handleSaveItemNote({ note, isTakeaway }) {
     if (!noteLineId) return;
     const nextNote = String(note || "").trim();
+    const nextIsTakeaway = Boolean(isTakeaway);
     setCartLines((prev) =>
       prev.map((line) =>
         line.lineId === noteLineId
-          ? { ...line, notes: nextNote || undefined }
+          ? {
+              ...line,
+              notes: nextNote || undefined,
+              isTakeaway: nextIsTakeaway ? true : undefined,
+            }
           : line,
       ),
     );
@@ -1637,6 +1643,14 @@ export default function PosTerminal() {
                   ? cartLines.find((line) => line.lineId === noteLineId)
                       ?.notes || ""
                   : ""
+              }
+              initialIsTakeaway={
+                noteLineId
+                  ? Boolean(
+                      cartLines.find((line) => line.lineId === noteLineId)
+                        ?.isTakeaway,
+                    )
+                  : false
               }
             />
 
