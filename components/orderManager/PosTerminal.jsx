@@ -271,8 +271,6 @@ export default function PosTerminal() {
   const [selectedTabId, setSelectedTabId] = useState(null);
   const [panelTransitionDirection, setPanelTransitionDirection] = useState(0);
   const prevSelectedTabIndexRef = useRef(-1);
-  const cartListScrollRef = useRef(null);
-  const scrollCartToBottomPendingRef = useRef(false);
   const [cartLines, setCartLines] = useState([]);
   const [activeOrderId, setActiveOrderId] = useState(null);
   const [checkOrderIds, setCheckOrderIds] = useState([]);
@@ -457,14 +455,6 @@ export default function PosTerminal() {
     restaurantMode,
   ]);
 
-  useEffect(() => {
-    if (!scrollCartToBottomPendingRef.current) return;
-    scrollCartToBottomPendingRef.current = false;
-    const el = cartListScrollRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [cartLines]);
-
   useLayoutEffect(() => {
     if (resumeParam) return;
 
@@ -584,7 +574,6 @@ export default function PosTerminal() {
             : line,
         );
       }
-      scrollCartToBottomPendingRef.current = true;
       return [
         ...prev,
         {
@@ -647,7 +636,6 @@ export default function PosTerminal() {
     const built = buildLineFromSelections(item, variantMap, modifierMap);
     const lineId = `${item.id}-${Date.now()}`;
 
-    scrollCartToBottomPendingRef.current = true;
     setCartLines((prev) => [
       ...prev,
       {
@@ -675,15 +663,11 @@ export default function PosTerminal() {
       (line) => line.lineId === customizingLineId,
     );
     if (isSentCartLine(activeLine) || isCancelledCartLine(activeLine)) return;
-    const prevModifierCount = (activeLine?.selectedModifiers || []).length;
     const built = buildLineFromSelections(
       customizingItem,
       variantMap,
       modifierMap,
     );
-    if (built.modifiersPayload.length > prevModifierCount) {
-      scrollCartToBottomPendingRef.current = true;
-    }
     setCartLines((prev) =>
       prev.map((line) =>
         line.lineId === customizingLineId
@@ -1652,9 +1636,8 @@ export default function PosTerminal() {
             />
 
             <div
-              ref={cartListScrollRef}
               className={cn(
-                "min-h-0 flex-1 overflow-y-auto scroll-smooth bg-[#f2f2f2] transition-opacity duration-300",
+                "min-h-0 flex-1 overflow-y-auto bg-[#f2f2f2] transition-opacity duration-300",
                 awaitingOrderType && "pointer-events-none opacity-35",
               )}
             >
