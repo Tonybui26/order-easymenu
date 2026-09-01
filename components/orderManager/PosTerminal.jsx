@@ -101,6 +101,10 @@ function formatPosTableNames(names) {
   return (names || []).join(", ");
 }
 
+function hasTakeawayTableReference(tableNumber) {
+  return Boolean(String(tableNumber || "").trim());
+}
+
 function mapPosOrderType(orderType) {
   if (orderType === "dine-in") return "dine-in";
   if (orderType === "takeaway") return "pick-up";
@@ -888,6 +892,13 @@ export default function PosTerminal() {
       : number;
 
     if (nextOrderType === "takeaway") {
+      const tableRef = String(nextTableNumber || "").trim();
+      if (hasTakeawayTableReference(tableRef)) {
+        setTableNumber(tableRef);
+        setOrderType("takeaway");
+        setIsOrderTypeMissing(false);
+        return;
+      }
       pendingTakeawayRef.current = {
         tableNumber: nextTableNumber || "",
       };
@@ -1099,7 +1110,11 @@ export default function PosTerminal() {
     }
 
     if (resolvedOrderType === "takeaway") {
-      if (!customerName.trim() || !customerPhone.trim()) {
+      const hasTableReference = hasTakeawayTableReference(resolvedTableNumber);
+      if (
+        !hasTableReference &&
+        (!customerName.trim() || !customerPhone.trim())
+      ) {
         pendingTakeawayRef.current = {
           tableNumber: resolvedTableNumber || "",
         };
