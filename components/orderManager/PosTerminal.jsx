@@ -24,6 +24,7 @@ import {
   cartConfigKey,
   computeLineBasePrice,
   computeLineUnitPrice,
+  itemHasCustomizableOptions,
   itemNeedsCustomization,
   selectionMapsFromLine,
 } from "@/lib/pos/itemCustomization";
@@ -270,6 +271,8 @@ export default function PosTerminal() {
   const [selectedTabId, setSelectedTabId] = useState(null);
   const [panelTransitionDirection, setPanelTransitionDirection] = useState(0);
   const prevSelectedTabIndexRef = useRef(-1);
+  const cartListScrollRef = useRef(null);
+  const scrollCartToBottomPendingRef = useRef(false);
   const [cartLines, setCartLines] = useState([]);
   const [activeOrderId, setActiveOrderId] = useState(null);
   const [checkOrderIds, setCheckOrderIds] = useState([]);
@@ -455,6 +458,14 @@ export default function PosTerminal() {
   ]);
 
   useLayoutEffect(() => {
+    if (!scrollCartToBottomPendingRef.current) return;
+    scrollCartToBottomPendingRef.current = false;
+    const el = cartListScrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [cartLines]);
+
+  useLayoutEffect(() => {
     if (resumeParam) return;
 
     if (tableNameFromUrl) {
@@ -573,6 +584,7 @@ export default function PosTerminal() {
             : line,
         );
       }
+      scrollCartToBottomPendingRef.current = true;
       return [
         ...prev,
         {
@@ -635,6 +647,7 @@ export default function PosTerminal() {
     const built = buildLineFromSelections(item, variantMap, modifierMap);
     const lineId = `${item.id}-${Date.now()}`;
 
+    scrollCartToBottomPendingRef.current = true;
     setCartLines((prev) => [
       ...prev,
       {
@@ -718,7 +731,7 @@ export default function PosTerminal() {
     if (!line || !isOpenCartLine(line)) return;
 
     const item = itemsById.get(line.itemId);
-    if (!item || !itemNeedsCustomization(item)) {
+    if (!item || !itemHasCustomizableOptions(item, globalModifiers || {})) {
       closeCustomization();
       return;
     }
@@ -743,13 +756,24 @@ export default function PosTerminal() {
 
   function handleAddItem(item) {
     if (isViewOnly) return;
-    if (itemNeedsCustomization(item)) {
+    if (itemNeedsCustomization(item, globalModifiers || {})) {
       openCustomization(item);
       return;
     }
 
     closeCustomization();
-    addConfiguredLine(item, [], [], Number(item.price || 0));
+    const variantMap = buildDefaultVariantSelections(item, globalVariants || {});
+    const modifierMap = buildDefaultModifierSelections(
+      item,
+      globalModifiers || {},
+    );
+    const built = buildLineFromSelections(item, variantMap, modifierMap);
+    addConfiguredLine(
+      item,
+      built.variantsPayload,
+      built.modifiersPayload,
+      built.price,
+    );
   }
 
   function handleTabClick(tabId) {
@@ -1624,6 +1648,7 @@ export default function PosTerminal() {
             />
 
             <div
+              ref={cartListScrollRef}
               className={cn(
                 "min-h-0 flex-1 overflow-y-auto bg-[#f2f2f2] transition-opacity duration-300",
                 awaitingOrderType && "pointer-events-none opacity-35",
