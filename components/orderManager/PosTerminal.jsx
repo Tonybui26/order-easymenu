@@ -575,7 +575,6 @@ export default function PosTerminal() {
         );
       }
       return [
-        ...prev,
         {
           lineId: `${item.id}-${Date.now()}`,
           itemId: item.id,
@@ -587,6 +586,7 @@ export default function PosTerminal() {
           selectedModifiers: modifiersPayload,
           configKey,
         },
+        ...prev,
       ];
     });
   }
@@ -637,7 +637,6 @@ export default function PosTerminal() {
     const lineId = `${item.id}-${Date.now()}`;
 
     setCartLines((prev) => [
-      ...prev,
       {
         lineId,
         itemId: item.id,
@@ -649,6 +648,7 @@ export default function PosTerminal() {
         selectedModifiers: built.modifiersPayload,
         configKey: built.configKey,
       },
+      ...prev,
     ]);
 
     setCustomizingLineId(lineId);
