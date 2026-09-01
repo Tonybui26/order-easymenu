@@ -457,12 +457,12 @@ export default function PosTerminal() {
     restaurantMode,
   ]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!scrollCartToBottomPendingRef.current) return;
     scrollCartToBottomPendingRef.current = false;
     const el = cartListScrollRef.current;
     if (!el) return;
-    el.scrollTop = el.scrollHeight;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [cartLines]);
 
   useLayoutEffect(() => {
@@ -1650,7 +1650,7 @@ export default function PosTerminal() {
             <div
               ref={cartListScrollRef}
               className={cn(
-                "min-h-0 flex-1 overflow-y-auto bg-[#f2f2f2] transition-opacity duration-300",
+                "min-h-0 flex-1 overflow-y-auto scroll-smooth bg-[#f2f2f2] transition-opacity duration-300",
                 awaitingOrderType && "pointer-events-none opacity-35",
               )}
             >
