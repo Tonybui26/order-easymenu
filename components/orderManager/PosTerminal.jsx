@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Plus } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { usePosNavigate } from "@/components/context/PosNavigateContext";
@@ -272,6 +272,7 @@ export default function PosTerminal() {
   const [panelTransitionDirection, setPanelTransitionDirection] = useState(0);
   const prevSelectedTabIndexRef = useRef(-1);
   const [cartLines, setCartLines] = useState([]);
+  const [enteringLineIds, setEnteringLineIds] = useState(() => new Set());
   const [activeOrderId, setActiveOrderId] = useState(null);
   const [checkOrderIds, setCheckOrderIds] = useState([]);
   const [posCheckId, setPosCheckId] = useState(null);
@@ -549,6 +550,23 @@ export default function PosTerminal() {
     return `TABLE: ${resolvedTableNumber || "--"}`;
   })();
 
+  function registerEnteringLine(lineId) {
+    setEnteringLineIds((prev) => {
+      const next = new Set(prev);
+      next.add(lineId);
+      return next;
+    });
+  }
+
+  function clearEnteringLine(lineId) {
+    setEnteringLineIds((prev) => {
+      if (!prev.has(lineId)) return prev;
+      const next = new Set(prev);
+      next.delete(lineId);
+      return next;
+    });
+  }
+
   function addConfiguredLine(
     item,
     variantsPayload,
@@ -574,9 +592,11 @@ export default function PosTerminal() {
             : line,
         );
       }
+      const lineId = `${item.id}-${Date.now()}`;
+      registerEnteringLine(lineId);
       return [
         {
-          lineId: `${item.id}-${Date.now()}`,
+          lineId,
           itemId: item.id,
           title: item.title || "Untitled",
           basePrice,
@@ -635,6 +655,7 @@ export default function PosTerminal() {
     );
     const built = buildLineFromSelections(item, variantMap, modifierMap);
     const lineId = `${item.id}-${Date.now()}`;
+    registerEnteringLine(lineId);
 
     setCartLines((prev) => [
       {
@@ -1652,29 +1673,37 @@ export default function PosTerminal() {
                     : "Tap products to add them to this order"}
                 </div>
               ) : (
-                <ul>
-                  {cartLines.map((line) => (
-                    <PosCartLine
-                      key={line.lineId}
-                      line={line}
-                      isActive={line.lineId === customizingLineId}
-                      readOnly={isViewOnly}
-                      allowVoidSentLine={!isViewOnly && !isTrainingMode}
-                      useKitchenPrintAliases={useKitchenPrintAliases}
-                      isOptionsOpen={optionsLineId === line.lineId}
-                      onOptionsOpenChange={(open) =>
-                        handleCartLineOptionsOpenChange(line.lineId, open)
-                      }
-                      onOptionsClick={handleCartLineOptionsClick}
-                      onSelect={handleSelectCartLine}
-                      onQtyClick={handleQtyClick}
-                      onRemoveLine={handleRemoveLine}
-                      onVoidSentLine={handleVoidSentLine}
-                      onRemoveVariant={handleRemoveVariant}
-                      onRemoveModifier={handleRemoveModifier}
-                    />
-                  ))}
-                </ul>
+                <LayoutGroup id="pos-cart-lines">
+                  <ul>
+                    <AnimatePresence initial={false} mode="popLayout">
+                      {cartLines.map((line) => (
+                        <PosCartLine
+                          key={line.lineId}
+                          line={line}
+                          enterAnimation={enteringLineIds.has(line.lineId)}
+                          onEnterAnimationComplete={() =>
+                            clearEnteringLine(line.lineId)
+                          }
+                          isActive={line.lineId === customizingLineId}
+                          readOnly={isViewOnly}
+                          allowVoidSentLine={!isViewOnly && !isTrainingMode}
+                          useKitchenPrintAliases={useKitchenPrintAliases}
+                          isOptionsOpen={optionsLineId === line.lineId}
+                          onOptionsOpenChange={(open) =>
+                            handleCartLineOptionsOpenChange(line.lineId, open)
+                          }
+                          onOptionsClick={handleCartLineOptionsClick}
+                          onSelect={handleSelectCartLine}
+                          onQtyClick={handleQtyClick}
+                          onRemoveLine={handleRemoveLine}
+                          onVoidSentLine={handleVoidSentLine}
+                          onRemoveVariant={handleRemoveVariant}
+                          onRemoveModifier={handleRemoveModifier}
+                        />
+                      ))}
+                    </AnimatePresence>
+                  </ul>
+                </LayoutGroup>
               )}
             </div>
 

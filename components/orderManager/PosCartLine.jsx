@@ -13,11 +13,31 @@ import { formatPosItemDisplayName } from "@/lib/helper/printNameAlias";
 
 const OPTION_WIDTH = 88;
 const SWIPE_SPRING = { type: "spring", damping: 28, stiffness: 320 };
+const CART_LINE_LAYOUT_SPRING = { type: "spring", damping: 28, stiffness: 320 };
 const OPEN_OFFSET = -OPTION_WIDTH;
 const OPEN_THRESHOLD = OPTION_WIDTH * 0.35;
 const OPEN_VELOCITY = -400;
 /** WebViews often synthesize a click well after touchend; keep ignoring it. */
 const POST_DRAG_CLICK_SUPPRESS_MS = 450;
+
+const CART_LINE_ITEM_VARIANTS = {
+  hidden: { opacity: 0, y: -20, scale: 0.97 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      y: CART_LINE_LAYOUT_SPRING,
+      opacity: { duration: 0.2, ease: "easeOut" },
+      scale: { duration: 0.2, ease: "easeOut" },
+    },
+  },
+  exit: {
+    opacity: 0,
+    scale: 0.97,
+    transition: { duration: 0.15, ease: "easeIn" },
+  },
+};
 
 function formatMoney(amount) {
   return `$${Number(amount || 0).toFixed(2)}`;
@@ -30,6 +50,8 @@ function formatMoney(amount) {
  */
 export default function PosCartLine({
   line,
+  enterAnimation = false,
+  onEnterAnimationComplete,
   isActive = false,
   readOnly = false,
   allowVoidSentLine = false,
@@ -161,10 +183,21 @@ export default function PosCartLine({
   }
 
   return (
-    <li
+    <motion.li
+      layout="position"
+      variants={CART_LINE_ITEM_VARIANTS}
+      initial={enterAnimation ? "hidden" : false}
+      animate="visible"
+      exit="exit"
+      transition={{ layout: CART_LINE_LAYOUT_SPRING }}
+      onAnimationComplete={(definition) => {
+        if (definition === "visible" && enterAnimation) {
+          onEnterAnimationComplete?.();
+        }
+      }}
       data-pos-cart-line-id={line.lineId}
       className={cn(
-        "relative m-2 my-1 overflow-hidden rounded-xl border-2 border-[#f2f2f2] bg-white transition-colors",
+        "relative m-2 my-1 overflow-hidden rounded-xl border-2 border-[#f2f2f2] bg-white transition-colors will-change-transform",
         isActive ? "border-[#dcdcdc] drop-shadow-md" : "",
         isCancelled && "bg-neutral-50/80",
       )}
@@ -410,6 +443,6 @@ export default function PosCartLine({
           </ul>
         ) : null}
       </motion.div>
-    </li>
+    </motion.li>
   );
 }
