@@ -2,7 +2,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
   appId: "order.goeasy.menu",
-  appName: "Order Manager by EasyMenu",
+  appName: "EasyMenu OM",
   // Small bundled shell; live app loads from server.url when online.
   webDir: "capacitor-shell",
   server: {
