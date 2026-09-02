@@ -44,6 +44,7 @@ import PosCancelSentLineDrawer, {
   POS_CANCEL_SENT_LINE_DRAWER_CLOSED,
 } from "./PosCancelSentLineDrawer";
 import PosChromeHeader from "./PosChromeHeader";
+import PosMenuSearch from "./PosMenuSearch";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 import DismissibleToast, {
   useDismissibleToast,
@@ -59,6 +60,7 @@ import {
 import { buildTrainingKitchenOrder } from "@/lib/pos/buildTrainingKitchenOrder";
 import { clearPosTableMergeGroupsForTables } from "@/lib/pos/posTableMapMerge";
 import { formatPosItemDisplayName } from "@/lib/helper/printNameAlias";
+import { textMatchesAvailabilityQuery } from "@/lib/helper/availabilitySearchHelpers";
 
 function resolveOrderTypeFromParam(value) {
   if (!value) return null;
@@ -265,6 +267,19 @@ export default function PosTerminal() {
     hideToast: hideDismissibleToast,
   } = useDismissibleToast();
   const itemsById = useAllMenuItems(menuContent);
+  const searchableMenuItems = useMemo(
+    () => Array.from(itemsById.values()),
+    [itemsById],
+  );
+  const [menuSearchQuery, setMenuSearchQuery] = useState("");
+  const trimmedMenuSearchQuery = menuSearchQuery.trim();
+  const isMenuSearchActive = trimmedMenuSearchQuery.length > 0;
+  const menuSearchResults = useMemo(() => {
+    if (!isMenuSearchActive) return [];
+    return searchableMenuItems.filter((item) =>
+      textMatchesAvailabilityQuery(item.title || "", trimmedMenuSearchQuery),
+    );
+  }, [searchableMenuItems, trimmedMenuSearchQuery, isMenuSearchActive]);
 
   const activeLayout = posLayouts?.[0] || null;
   const tabs = activeLayout?.tabs || [];
@@ -793,6 +808,7 @@ export default function PosTerminal() {
 
   function handleTabClick(tabId) {
     if (customizingItem) closeCustomization();
+    setMenuSearchQuery("");
     setSelectedTabId(tabId);
   }
 
@@ -1830,6 +1846,11 @@ export default function PosTerminal() {
 
             {/* Products / item customization */}
             <div className="relative z-0 min-h-0 min-w-0 flex-1 overflow-hidden bg-[#f0f0f0]">
+              <PosMenuSearch
+                query={menuSearchQuery}
+                onQueryChange={setMenuSearchQuery}
+                disabled={isViewOnly || awaitingOrderType}
+              />
               <AnimatePresence mode="wait" initial={false}>
                 {customizingItem && isOpenCartLine(activeCartLine) ? (
                   <motion.div
@@ -1847,6 +1868,43 @@ export default function PosTerminal() {
                       onSelectVariant={handleSelectVariant}
                       onToggleModifier={handleToggleModifier}
                     />
+                  </motion.div>
+                ) : isMenuSearchActive ? (
+                  <motion.div
+                    key={`search-${trimmedMenuSearchQuery}`}
+                    {...getPosPanelMotionProps(panelTransitionDirection)}
+                    className="h-full overflow-y-auto pt-16"
+                  >
+                    <div className="border-b border-neutral-200/80 px-4 pb-3 pt-1">
+                      <h2 className="text-lg font-semibold text-neutral-900 xl:text-xl">
+                        Results for &ldquo;{trimmedMenuSearchQuery}&rdquo;
+                      </h2>
+                      {menuSearchResults.length > 0 ? (
+                        <p className="mt-0.5 text-sm text-neutral-500">
+                          {menuSearchResults.length} product
+                          {menuSearchResults.length === 1 ? "" : "s"}
+                        </p>
+                      ) : null}
+                    </div>
+                    {menuSearchResults.length === 0 ? (
+                      <div className="flex h-[calc(100%-4.5rem)] items-center justify-center px-6 text-center text-sm text-neutral-500">
+                        No products match your search
+                      </div>
+                    ) : (
+                      <div className="p-4">
+                        <div className="grid grid-cols-4 gap-1 xl:grid-cols-5">
+                          {menuSearchResults.map((item) => (
+                            <PosProductCard
+                              key={item.id}
+                              item={item}
+                              onAdd={handleAddItem}
+                              disabled={isViewOnly}
+                              useKitchenPrintAliases={useKitchenPrintAliases}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </motion.div>
                 ) : !selectedTab ? (
                   <motion.div
