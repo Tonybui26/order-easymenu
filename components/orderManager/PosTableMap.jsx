@@ -12,10 +12,8 @@ import {
   markPosBillPrinted,
   mergePosTables,
   unmergePosTables,
-  updateOrderStatus,
   updatePosHeldCheckStatus,
 } from "@/lib/api/fetchApi";
-import { buildCancelOrderTarget } from "@/lib/helper/buildCancelOrderTarget";
 import { isNativeApp } from "@/lib/helper/platformDetection";
 import { findPosHeldOrderForTable } from "@/lib/pos/posTableMapHeld";
 import { buildSelfOrderTableIndicatorKeys } from "@/lib/pos/posTableMapSelfOrder";
@@ -121,9 +119,6 @@ export default function PosTableMap() {
   const [deleteDrawerOpen, setDeleteDrawerOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [selfOrderCancelTarget, setSelfOrderCancelTarget] = useState(null);
-  const [selfOrderCancelOpen, setSelfOrderCancelOpen] = useState(false);
-  const [isCancellingSelfOrder, setIsCancellingSelfOrder] = useState(false);
   const [isMergeMode, setIsMergeMode] = useState(false);
   const [mergeSelectedNames, setMergeSelectedNames] = useState([]);
   const [mergeGroups, setMergeGroups] = useState([]);
@@ -798,58 +793,12 @@ export default function PosTableMap() {
     [prepareSelfOrderAlert, navigate],
   );
 
-  const handleSelfOrderAlertCancel = useCallback(
-    (alertId) => {
-      if (
-        alertId === SELF_ORDER_BATCH_ALERT_ID ||
-        isCancellingSelfOrder
-      ) {
-        return;
-      }
-
-      const alert = selfOrderAlerts.find((entry) => entry.id === alertId);
-      if (!alert) return;
-
-      setSelfOrderCancelTarget(
-        buildCancelOrderTarget({
-          _id: alertId,
-          paymentStatus: alert.paymentStatus,
-          customerName: alert.customerName,
-          table: alert.table,
-        }),
-      );
-      setSelfOrderCancelOpen(true);
-    },
-    [isCancellingSelfOrder, selfOrderAlerts],
-  );
-
-  async function handleConfirmSelfOrderCancel(cancelReason) {
-    if (!selfOrderCancelTarget?.orderId || isCancellingSelfOrder) return;
-
-    setIsCancellingSelfOrder(true);
-    try {
-      await updateOrderStatus(selfOrderCancelTarget.orderId, "cancelled", {
-        cancelReason,
-        requireCancelReason: true,
-      });
-      dismissSelfOrderAlert(selfOrderCancelTarget.orderId);
-      toast.success("Order cancelled");
-      setSelfOrderCancelOpen(false);
-      setSelfOrderCancelTarget(null);
-    } catch (error) {
-      toast.error(error?.message || "Failed to cancel order");
-    } finally {
-      setIsCancellingSelfOrder(false);
-    }
-  }
-
   return (
     <>
       <SelfOrderAlertStack
         alerts={selfOrderAlerts}
         onDismiss={dismissSelfOrderAlert}
         onSend={handleSelfOrderAlertSend}
-        onCancel={handleSelfOrderAlertCancel}
       />
 
       <DismissibleToast
@@ -997,18 +946,6 @@ export default function PosTableMap() {
         previewError={previewError}
         showAllServed={showAllServed}
         showComplete={showComplete}
-      />
-
-      <DeleteOrderDrawer
-        isOpen={selfOrderCancelOpen}
-        onClose={() => {
-          if (isCancellingSelfOrder) return;
-          setSelfOrderCancelOpen(false);
-          setSelfOrderCancelTarget(null);
-        }}
-        target={selfOrderCancelTarget}
-        onConfirm={handleConfirmSelfOrderCancel}
-        isProcessing={isCancellingSelfOrder}
       />
 
       <DeleteOrderDrawer

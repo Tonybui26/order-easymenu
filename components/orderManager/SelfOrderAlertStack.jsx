@@ -63,7 +63,6 @@ export default function SelfOrderAlertStack({
   alerts = [],
   onDismiss,
   onSend,
-  onCancel,
   className,
 }) {
   const { soundEnabled, notificationSoundId, newOrderAlertsMuted } =
@@ -120,11 +119,6 @@ export default function SelfOrderAlertStack({
                 onDismiss={
                   typeof onDismiss === "function"
                     ? () => onDismiss(alert.id)
-                    : undefined
-                }
-                onCancel={
-                  alert.kind !== "batch" && typeof onCancel === "function"
-                    ? () => onCancel(alert.id)
                     : undefined
                 }
                 onSend={

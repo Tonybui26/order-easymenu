@@ -21,7 +21,6 @@ export default function SelfOrderAlertNotification({
   createdAt,
   sendLabel = "Send",
   onSend,
-  onCancel,
   onDismiss,
   isSending = false,
   className,
@@ -83,16 +82,6 @@ export default function SelfOrderAlertNotification({
             className="px-1 py-1 text-xs font-medium text-neutral-500 transition-colors hover:text-neutral-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Dismiss
-          </button>
-        ) : null}
-        {typeof onCancel === "function" ? (
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isSending}
-            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Cancel
           </button>
         ) : null}
         <button
