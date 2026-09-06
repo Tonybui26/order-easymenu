@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { App } from "@capacitor/app";
 import { usePosNavigate } from "@/components/context/PosNavigateContext";
 import { Combine, Map as MapIcon, ShoppingBag, X } from "lucide-react";
 import toast from "react-hot-toast";
@@ -15,6 +16,7 @@ import {
   updatePosHeldCheckStatus,
 } from "@/lib/api/fetchApi";
 import { buildCancelOrderTarget } from "@/lib/helper/buildCancelOrderTarget";
+import { isNativeApp } from "@/lib/helper/platformDetection";
 import { findPosHeldOrderForTable } from "@/lib/pos/posTableMapHeld";
 import { buildSelfOrderTableIndicatorKeys } from "@/lib/pos/posTableMapSelfOrder";
 import {
@@ -66,7 +68,7 @@ import DismissibleToast, {
 } from "@/components/orderManager/DismissibleToast";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 
-const HELD_ORDERS_POLL_MS = 10000;
+const TABLE_MAP_POLL_MS = 10000;
 const TABLE_MAP_MERGE_FLOOR_COLOR = "#1e293b";
 
 function orderIdsCacheKey(orderIds) {
@@ -81,8 +83,12 @@ function previewLinesFromResumeOrders(orders) {
 
 export default function PosTableMap() {
   const { navigate, isPending } = usePosNavigate();
-  const { alerts: selfOrderAlerts, dismissSelfOrderAlert, prepareSelfOrderAlert } =
-    useSelfOrderAlerts();
+  const {
+    alerts: selfOrderAlerts,
+    dismissSelfOrderAlert,
+    prepareSelfOrderAlert,
+    pollSelfOrderAlerts,
+  } = useSelfOrderAlerts({ externalPolling: true });
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
   const { posTableMaps, storeProfile, menuConfig, itemGroups } =
     useMenuContext();
@@ -189,11 +195,72 @@ export default function PosTableMap() {
     }
   }, []);
 
+  const pollTableMap = useCallback(async () => {
+    await Promise.all([loadHeldOrders(), pollSelfOrderAlerts()]);
+  }, [loadHeldOrders, pollSelfOrderAlerts]);
+
+  // Shared poll clock: held-order dots + self-order alert popups refresh together.
   useEffect(() => {
-    loadHeldOrders();
-    const id = setInterval(loadHeldOrders, HELD_ORDERS_POLL_MS);
-    return () => clearInterval(id);
-  }, [loadHeldOrders]);
+    let intervalId = null;
+    let cancelled = false;
+
+    const clearPollInterval = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    const startPollInterval = () => {
+      clearPollInterval();
+      intervalId = setInterval(() => {
+        if (!cancelled) void pollTableMap();
+      }, TABLE_MAP_POLL_MS);
+    };
+
+    const resumePolling = () => {
+      if (cancelled) return;
+      void pollTableMap();
+      startPollInterval();
+    };
+
+    const pausePolling = () => {
+      clearPollInterval();
+    };
+
+    resumePolling();
+
+    if (isNativeApp()) {
+      let listenerHandle = null;
+      App.addListener("appStateChange", ({ isActive }) => {
+        if (isActive) resumePolling();
+        else pausePolling();
+      }).then((handle) => {
+        if (cancelled) {
+          handle.remove();
+          return;
+        }
+        listenerHandle = handle;
+      });
+
+      return () => {
+        cancelled = true;
+        clearPollInterval();
+        if (listenerHandle) listenerHandle.remove();
+      };
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) pausePolling();
+      else resumePolling();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      cancelled = true;
+      clearPollInterval();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [pollTableMap]);
 
   useEffect(() => {
     if (!isPending) {

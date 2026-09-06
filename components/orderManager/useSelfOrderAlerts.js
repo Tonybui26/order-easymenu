@@ -80,13 +80,18 @@ export function buildAlertsFromCandidates(candidates, returnSyncIds) {
   return alerts;
 }
 
-export function useSelfOrderAlerts() {
+/**
+ * @param {{ externalPolling?: boolean }} [options]
+ * When `externalPolling` is true, the caller owns the poll clock
+ * (e.g. table map shared with held-orders refresh). Use `pollSelfOrderAlerts`.
+ */
+export function useSelfOrderAlerts({ externalPolling = false } = {}) {
   const { menuConfig, storeProfile, itemGroups } = useMenuContext();
   const { userData } = useGlobalAppContext();
   const [alerts, setAlerts] = useState([]);
   const [processingAlertIds, setProcessingAlertIds] = useState(() => new Set());
   const processingAlertIdsRef = useRef(new Set());
-  const [isPollingActive, setIsPollingActive] = useState(true);
+  const [isPollingActive, setIsPollingActive] = useState(!externalPolling);
 
   const isReturnSyncDoneRef = useRef(false);
   const returnSyncCandidateIdsRef = useRef(new Set());
@@ -182,55 +187,52 @@ export function useSelfOrderAlerts() {
     );
   }, []);
 
-  const pollingOrders = useCallback(async () => {
-    if (!isPollingActive || !menuConfig) return;
-    if (isPollingInProgressRef.current) return;
+  const pollSelfOrderAlerts = useCallback(async () => {
+    if (!menuConfig) return { skipped: true };
+    if (isPollingInProgressRef.current) return { skipped: true };
 
     isPollingInProgressRef.current = true;
 
     try {
       const data = await fetchOrders();
       const activeOrders = filterOrdersForActiveList(data, menuConfig);
-
       consecutiveErrorsRef.current = 0;
       syncAlertsFromOrders(activeOrders);
-
-      const hasActiveOrders = activeOrders.length > 0;
-      const nextInterval = hasActiveOrders
-        ? POLLING_INTERVALS.ACTIVE
-        : POLLING_INTERVALS.IDLE;
-
-      if (isPollingActive) {
-        if (pollingTimeoutRef.current) {
-          clearTimeout(pollingTimeoutRef.current);
-        }
-        pollingTimeoutRef.current = setTimeout(() => {
-          pollingOrders();
-        }, nextInterval);
-      }
+      return { success: true, hasActiveOrders: activeOrders.length > 0 };
     } catch (error) {
       console.error("Self-order alert polling error:", error);
-
       consecutiveErrorsRef.current += 1;
+      return { success: false, error };
+    } finally {
+      isPollingInProgressRef.current = false;
+    }
+  }, [menuConfig, syncAlertsFromOrders]);
 
-      const backoffInterval = Math.min(
+  const pollingOrders = useCallback(async () => {
+    if (!isPollingActive || !menuConfig) return;
+
+    const result = await pollSelfOrderAlerts();
+
+    if (!isPollingActive) return;
+
+    let nextInterval = POLLING_INTERVALS.ACTIVE;
+    if (result?.success === false) {
+      nextInterval = Math.min(
         POLLING_INTERVALS.ERROR_BASE *
           Math.pow(2, Math.min(consecutiveErrorsRef.current - 1, 4)),
         POLLING_INTERVALS.ERROR_MAX,
       );
-
-      if (isPollingActive) {
-        if (pollingTimeoutRef.current) {
-          clearTimeout(pollingTimeoutRef.current);
-        }
-        pollingTimeoutRef.current = setTimeout(() => {
-          pollingOrders();
-        }, backoffInterval);
-      }
-    } finally {
-      isPollingInProgressRef.current = false;
+    } else if (result?.success && !result.hasActiveOrders) {
+      nextInterval = POLLING_INTERVALS.IDLE;
     }
-  }, [isPollingActive, menuConfig, syncAlertsFromOrders]);
+
+    if (pollingTimeoutRef.current) {
+      clearTimeout(pollingTimeoutRef.current);
+    }
+    pollingTimeoutRef.current = setTimeout(() => {
+      pollingOrders();
+    }, nextInterval);
+  }, [isPollingActive, menuConfig, pollSelfOrderAlerts]);
 
   const startPolling = useCallback(() => {
     if (isPollingInProgressRef.current) return;
@@ -257,6 +259,13 @@ export function useSelfOrderAlerts() {
   }, []);
 
   useEffect(() => {
+    if (externalPolling) {
+      return () => {
+        isReturnSyncDoneRef.current = false;
+        returnSyncCandidateIdsRef.current = new Set();
+      };
+    }
+
     if (!menuConfig) return;
 
     startPolling();
@@ -270,9 +279,11 @@ export function useSelfOrderAlerts() {
         pollingTimeoutRef.current = null;
       }
     };
-  }, [menuConfig, startPolling, stopPolling]);
+  }, [externalPolling, menuConfig, startPolling, stopPolling]);
 
   useEffect(() => {
+    if (externalPolling) return undefined;
+
     let appStateListener = null;
 
     if (isNative) {
@@ -312,11 +323,12 @@ export function useSelfOrderAlerts() {
         appStateListener.remove();
       }
     };
-  }, [isNative, startPolling, stopPolling]);
+  }, [externalPolling, isNative, startPolling, stopPolling]);
 
   return {
     alerts: alertsWithProcessing,
     dismissSelfOrderAlert,
     prepareSelfOrderAlert,
+    pollSelfOrderAlerts,
   };
 }
