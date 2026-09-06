@@ -331,6 +331,7 @@ export default function PosTerminal() {
   );
   const tyroCardEnabled = isTyroPosCardReady(menuConfig);
   const isTrainingMode = Boolean(posConfig.trainingModeEnabled);
+  const isPayFirstMode = Boolean(posConfig.payFirstModeEnabled);
   const useKitchenPrintAliases = Boolean(
     posConfig.showKitchenPrintAliasesOnPos,
   );
@@ -1149,19 +1150,33 @@ export default function PosTerminal() {
     router.replace(getPosHomePath(menuConfig), { scroll: false });
   }
 
-  async function handleSendOrder() {
-    if (isViewOnly || cartLines.length === 0 || isSending) return;
+  async function sendUnsentLinesToKitchen({ showSuccessToast = true } = {}) {
+    if (isViewOnly) {
+      return { success: false, error: "Order is view only" };
+    }
+    if (isSending) {
+      return { success: false, error: "Send already in progress" };
+    }
 
     const unsentLines = cartLines.filter(isOpenCartLine);
     if (unsentLines.length === 0) {
-      showDismissibleToast("Nothing new to send");
-      return;
+      const existingOrderIds =
+        checkOrderIds.length > 0
+          ? checkOrderIds
+          : activeOrderId
+            ? [activeOrderId]
+            : [];
+      return { success: true, orderIds: existingOrderIds, skipped: true };
     }
 
     const mappedOrderType = mapPosOrderType(resolvedOrderType);
     if (!mappedOrderType) {
       nudgeTableFieldForMissingOrderType();
-      return;
+      return {
+        success: false,
+        validationBlocked: true,
+        error: "Choose dine in or take away before sending",
+      };
     }
 
     if (resolvedOrderType === "takeaway") {
@@ -1175,7 +1190,11 @@ export default function PosTerminal() {
         };
         setIsTakeawayCustomerDrawerOpen(true);
         showDismissibleToast("Enter customer name and phone for takeaway");
-        return;
+        return {
+          success: false,
+          validationBlocked: true,
+          error: "Enter customer name and phone for takeaway",
+        };
       }
     }
 
@@ -1201,15 +1220,20 @@ export default function PosTerminal() {
           });
         } catch (printError) {
           console.error("POS training print error:", printError);
-          return;
+          return {
+            success: false,
+            error: printError?.message || "Failed to print training docket",
+          };
         }
 
         markCartLinesSentLocally(sentLineIds);
         if (customizingLineId && sentLineIds.has(customizingLineId)) {
           closeCustomization();
         }
-        toast.success("Training docket sent to kitchen printers");
-        return;
+        if (showSuccessToast) {
+          toast.success("Training docket sent to kitchen printers");
+        }
+        return { success: true, orderIds: [], training: true };
       }
 
       const payload = {
@@ -1225,8 +1249,9 @@ export default function PosTerminal() {
 
       const result = await sendPosOrder(payload);
       if (!result?.success || !result.order?._id) {
-        showDismissibleToast(result?.error || "Failed to send order");
-        return;
+        const error = result?.error || "Failed to send order";
+        showDismissibleToast(error);
+        return { success: false, error };
       }
 
       const newOrderId = String(result.order._id);
@@ -1249,7 +1274,9 @@ export default function PosTerminal() {
       if (customizingLineId && sentLineIds.has(customizingLineId)) {
         closeCustomization();
       }
-      toast.success("Order sent to kitchen");
+      if (showSuccessToast) {
+        toast.success("Order sent to kitchen");
+      }
 
       if (checkDiscount) {
         const discountResult = await applyPosCheckDiscount({
@@ -1265,24 +1292,42 @@ export default function PosTerminal() {
         }
       }
 
-      // Each Send creates one kitchen order with only this fire's items — print that ticket.
-      try {
-        await printKitchenOrder(result.order, {
-          storeProfile,
-          itemGroups,
-          menuConfig,
-          source: "pos_send",
-          notify: true,
-          notifySuccess: false,
-        });
-      } catch (printError) {
+      // Print in background so payment/send UI is not blocked by TCP retries.
+      void printKitchenOrder(result.order, {
+        storeProfile,
+        itemGroups,
+        menuConfig,
+        source: "pos_send",
+        notify: true,
+        notifySuccess: false,
+      }).catch((printError) => {
         console.error("POS send print error:", printError);
-      }
+      });
+
+      return {
+        success: true,
+        orderIds: nextCheckOrderIds,
+        order: result.order,
+      };
     } catch (error) {
-      showDismissibleToast(error?.message || "Failed to send order");
+      const message = error?.message || "Failed to send order";
+      showDismissibleToast(message);
+      return { success: false, error: message };
     } finally {
       setIsSending(false);
     }
+  }
+
+  async function handleSendOrder() {
+    if (isViewOnly || cartLines.length === 0 || isSending) return;
+
+    const unsentLines = cartLines.filter(isOpenCartLine);
+    if (unsentLines.length === 0) {
+      showDismissibleToast("Nothing new to send");
+      return;
+    }
+
+    await sendUnsentLinesToKitchen({ showSuccessToast: true });
   }
 
   async function handlePrintReceipt(paymentSummary) {
@@ -1323,21 +1368,44 @@ export default function PosTerminal() {
   }
 
   async function persistPosSale(paymentSummary) {
-    const orderIdsToComplete =
+    if (!paymentSummary?.method) {
+      return { success: false, error: "Payment method is required" };
+    }
+
+    let orderIdsToComplete =
       checkOrderIds.length > 0
         ? checkOrderIds
         : activeOrderId
           ? [activeOrderId]
           : [];
 
+    const hasUnsentToSend = cartLines.some(isOpenCartLine);
+    if (hasUnsentToSend || orderIdsToComplete.length === 0) {
+      const sendResult = await sendUnsentLinesToKitchen({
+        showSuccessToast: false,
+      });
+      if (!sendResult?.success) {
+        return {
+          success: false,
+          error: sendResult?.error || "Failed to send order before payment",
+        };
+      }
+      if (sendResult.training) {
+        return {
+          success: false,
+          error: "Training mode does not save payments",
+        };
+      }
+      if (Array.isArray(sendResult.orderIds) && sendResult.orderIds.length > 0) {
+        orderIdsToComplete = sendResult.orderIds;
+      }
+    }
+
     if (orderIdsToComplete.length === 0) {
       return {
         success: false,
         error: "Send the order before completing payment",
       };
-    }
-    if (!paymentSummary?.method) {
-      return { success: false, error: "Payment method is required" };
     }
 
     const payload = {
@@ -1505,6 +1573,20 @@ export default function PosTerminal() {
   function handleOpenPayment() {
     if (isViewOnly) return;
 
+    const hasPayableLines = cartLines.some(
+      (line) => !isCancelledCartLine(line),
+    );
+
+    // Pay-first: allow opening payment before Send; complete sale sends then pays.
+    if (isPayFirstMode) {
+      if (!hasPayableLines) {
+        showDismissibleToast("Add items before payment");
+        return;
+      }
+      setIsPaymentDrawerOpen(true);
+      return;
+    }
+
     if (isTrainingMode) {
       if (!cartLines.some(isSentCartLine)) {
         showDismissibleToast("Send to kitchen before payment");
@@ -1567,6 +1649,12 @@ export default function PosTerminal() {
         : "";
   const hasUnsentLines = cartLines.some(isOpenCartLine);
   const hasSentLines = cartLines.some(isSentCartLine);
+  const hasPayableLines = cartLines.some((line) => !isCancelledCartLine(line));
+  const canOpenPayment = isPayFirstMode
+    ? hasPayableLines
+    : isTrainingMode
+      ? hasSentLines
+      : checkOrderIds.length > 0;
 
   return (
     <>
@@ -1830,9 +1918,7 @@ export default function PosTerminal() {
                   onClick={handleOpenPayment}
                   disabled={
                     isViewOnly ||
-                    (isTrainingMode
-                      ? !hasSentLines
-                      : checkOrderIds.length === 0) ||
+                    !canOpenPayment ||
                     isCompletingSale ||
                     isResumingOrder
                   }
