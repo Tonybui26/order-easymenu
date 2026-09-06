@@ -87,6 +87,14 @@ export default function SystemSettings({
               }
             />
             <SettingsToggleRow
+              title="Pay first mode"
+              description="When on, this store runs pay-first: customers pay before kitchen/service. Leave off for pay-later (order and serve first, settle at the end). Other POS options still apply separately."
+              checked={Boolean(draftPosConfig?.payFirstModeEnabled)}
+              onChange={(checked) =>
+                updatePosDraft({ payFirstModeEnabled: checked })
+              }
+            />
+            <SettingsToggleRow
               title="Track food served on table map"
               description="When on, tables show Waiting to serve while kitchen food is outstanding (instead of Order sent), and stay colored after payment until all tickets are served. Aimed at pay-first; also usable on pay-later if you want serve visibility. Best with Mark all dockets served when paid off. When off, paid tables go Available immediately."
               checked={Boolean(draftPosConfig?.trackFoodServedOnTableMap)}
