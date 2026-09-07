@@ -15,11 +15,18 @@ import {
   updatePosHeldCheckStatus,
 } from "@/lib/api/fetchApi";
 import { isNativeApp } from "@/lib/helper/platformDetection";
-import { findPosHeldOrderForTable } from "@/lib/pos/posTableMapHeld";
+import {
+  drawerEntryHasPosCheck,
+  drawerEntryHasQrContext,
+  findHeldOrderForTableMap,
+  findPosHeldOrderForTable,
+  getDrawerPosOrderIds,
+} from "@/lib/pos/posTableMapHeld";
 import { buildSelfOrderTableIndicatorKeys } from "@/lib/pos/posTableMapSelfOrder";
 import {
   getAllTicketIds,
   getTicketIdsNotDelivered,
+  isPosSourceHeldOrder,
 } from "@/lib/pos/posHeldOrder";
 import {
   printBillForHeldCheck,
@@ -73,10 +80,64 @@ function orderIdsCacheKey(orderIds) {
   return (orderIds || []).map(String).join(",");
 }
 
-function previewLinesFromResumeOrders(orders) {
-  return buildCartLinesFromResumeOrders(orders).filter(
-    (line) => String(line.kitchenStatus || "").trim() !== "cancelled",
+function sectionLinesTotal(lines = []) {
+  return (
+    Math.round(
+      lines.reduce((sum, line) => {
+        const qty = Number(line.quantity || 1);
+        const unitPrice = Number(line.price || 0);
+        return sum + unitPrice * qty;
+      }, 0) * 100,
+    ) / 100
   );
+}
+
+function buildTableDrawerPreviewSections(orders) {
+  const sorted = [...(orders || [])].sort(
+    (a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0),
+  );
+  const sections = [];
+
+  for (const order of sorted) {
+    const lines = buildCartLinesFromResumeOrders([order]).filter(
+      (line) => String(line.kitchenStatus || "").trim() !== "cancelled",
+    );
+    if (lines.length === 0) continue;
+
+    const source = String(order?.source || "").trim();
+    const isPaid = String(order?.paymentStatus || "").trim() === "paid";
+    if (source === "pos") {
+      const last = sections[sections.length - 1];
+      if (last?.type === "pos") {
+        last.lines.push(...lines);
+        last.total = sectionLinesTotal(last.lines);
+        // Combined POS fires: paid only if every ticket in the group is paid.
+        last.allPaid = Boolean(last.allPaid) && isPaid;
+      } else {
+        sections.push({
+          type: "pos",
+          id: `pos-${String(order._id)}`,
+          lines: [...lines],
+          total: sectionLinesTotal(lines),
+          allPaid: isPaid,
+        });
+      }
+      continue;
+    }
+
+    const customerName = String(order?.customerName || "").trim();
+    sections.push({
+      type: "qr",
+      id: String(order._id),
+      customerName,
+      label: customerName ? `QR · ${customerName}` : "QR",
+      lines,
+      total: sectionLinesTotal(lines),
+      allPaid: isPaid,
+    });
+  }
+
+  return sections;
 }
 
 export default function PosTableMap() {
@@ -113,7 +174,7 @@ export default function PosTableMap() {
   const [drawerTableName, setDrawerTableName] = useState(null);
   const [drawerHeldOrder, setDrawerHeldOrder] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [previewLines, setPreviewLines] = useState([]);
+  const [previewSections, setPreviewSections] = useState([]);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(null);
   const [deleteDrawerOpen, setDeleteDrawerOpen] = useState(false);
@@ -278,7 +339,7 @@ export default function PosTableMap() {
   // Keep open drawer entry in sync when held poll refreshes this table.
   useEffect(() => {
     if (!drawerTableName) return;
-    const latest = findPosHeldOrderForTable(heldOrders, drawerTableName);
+    const latest = findHeldOrderForTableMap(heldOrders, drawerTableName);
     if (!latest) {
       if (!isProcessing) {
         setDrawerTableName(null);
@@ -290,8 +351,13 @@ export default function PosTableMap() {
       if (
         prev &&
         orderIdsCacheKey(prev.orderIds) === orderIdsCacheKey(latest.orderIds) &&
+        orderIdsCacheKey(prev.posOrderIds) ===
+          orderIdsCacheKey(latest.posOrderIds) &&
+        orderIdsCacheKey(prev.qrOrderIds) ===
+          orderIdsCacheKey(latest.qrOrderIds) &&
         Number(prev.total) === Number(latest.total) &&
-        Boolean(prev.allPaid) === Boolean(latest.allPaid)
+        Boolean(prev.allPaid) === Boolean(latest.allPaid) &&
+        Boolean(prev.posAllPaid) === Boolean(latest.posAllPaid)
       ) {
         return prev;
       }
@@ -303,7 +369,7 @@ export default function PosTableMap() {
 
   useEffect(() => {
     if (!drawerTableName || !drawerOrderIdsKey) {
-      setPreviewLines([]);
+      setPreviewSections([]);
       setPreviewError(null);
       setIsPreviewLoading(false);
       return;
@@ -312,7 +378,7 @@ export default function PosTableMap() {
     const orderIds = drawerOrderIdsKey.split(",");
     const cached = resumeOrdersCacheRef.current.get(drawerOrderIdsKey);
     if (cached) {
-      setPreviewLines(previewLinesFromResumeOrders(cached));
+      setPreviewSections(buildTableDrawerPreviewSections(cached));
       setPreviewError(null);
       setIsPreviewLoading(false);
       return;
@@ -326,13 +392,13 @@ export default function PosTableMap() {
       const result = await fetchPosResumeOrders(orderIds);
       if (cancelled) return;
       if (!result?.success || !result.orders?.length) {
-        setPreviewLines([]);
+        setPreviewSections([]);
         setPreviewError(result?.error || "Could not load items");
         setIsPreviewLoading(false);
         return;
       }
       resumeOrdersCacheRef.current.set(drawerOrderIdsKey, result.orders);
-      setPreviewLines(previewLinesFromResumeOrders(result.orders));
+      setPreviewSections(buildTableDrawerPreviewSections(result.orders));
       setIsPreviewLoading(false);
     })();
 
@@ -345,7 +411,7 @@ export default function PosTableMap() {
     if (isProcessing) return;
     setDrawerTableName(null);
     setDrawerHeldOrder(null);
-    setPreviewLines([]);
+    setPreviewSections([]);
     setPreviewError(null);
     setIsPreviewLoading(false);
   }
@@ -520,7 +586,7 @@ export default function PosTableMap() {
       return;
     }
 
-    const heldOrder = findPosHeldOrderForTable(heldOrders, tableName);
+    const heldOrder = findHeldOrderForTableMap(heldOrders, tableName);
     if (!heldOrder) {
       const localGroup = findMergeGroupForTable(mergeGroups, tableName);
       const seatNames = localGroup?.tableNames?.length
@@ -542,11 +608,11 @@ export default function PosTableMap() {
     const cacheKey = orderIdsCacheKey(heldOrder.orderIds);
     const cached = resumeOrdersCacheRef.current.get(cacheKey);
     if (cached) {
-      setPreviewLines(previewLinesFromResumeOrders(cached));
+      setPreviewSections(buildTableDrawerPreviewSections(cached));
       setPreviewError(null);
       setIsPreviewLoading(false);
     } else {
-      setPreviewLines([]);
+      setPreviewSections([]);
       setPreviewError(null);
       setIsPreviewLoading(true);
     }
@@ -560,13 +626,22 @@ export default function PosTableMap() {
   }
 
   function handlePay() {
-    if (!drawerHeldOrder?.orderIds?.length) return;
-    if (drawerHeldOrder.allPaid) {
+    const posOrderIds = getDrawerPosOrderIds(drawerHeldOrder);
+    if (posOrderIds.length === 0) {
+      showDismissibleToast(
+        "Pay for this QR order from Self Ordering or Live Orders",
+      );
+      return;
+    }
+    if (
+      drawerHeldOrder?.posAllPaid === true ||
+      (isPosSourceHeldOrder(drawerHeldOrder) && drawerHeldOrder.allPaid)
+    ) {
       showDismissibleToast("This check is already paid");
       return;
     }
     navigate(
-      `/pos?resume=${encodeURIComponent(drawerHeldOrder.orderIds.join(","))}&pay=1`,
+      `/pos?resume=${encodeURIComponent(posOrderIds.join(","))}&pay=1`,
     );
   }
 
@@ -584,7 +659,7 @@ export default function PosTableMap() {
     }
     orders = result.orders;
     resumeOrdersCacheRef.current.set(cacheKey, orders);
-    setPreviewLines(previewLinesFromResumeOrders(orders));
+    setPreviewSections(buildTableDrawerPreviewSections(orders));
     setPreviewError(null);
     return orders;
   }
@@ -592,19 +667,33 @@ export default function PosTableMap() {
   async function handlePrintBill() {
     if (!drawerHeldOrder?.orderIds?.length || isProcessing) return;
 
+    const posOrderIds = getDrawerPosOrderIds(drawerHeldOrder);
+    if (posOrderIds.length === 0) {
+      showDismissibleToast("Print bill is only available for POS checks");
+      return;
+    }
+
     setIsProcessing(true);
     try {
       const orders = await loadDrawerCheckOrders();
       if (!orders) return;
 
-      const printResult = await printBillForHeldCheck(orders, {
+      const posOrders = orders.filter(
+        (order) => String(order?.source || "").trim() === "pos",
+      );
+      if (posOrders.length === 0) {
+        showDismissibleToast("Print bill is only available for POS checks");
+        return;
+      }
+
+      const printResult = await printBillForHeldCheck(posOrders, {
         storeProfile,
         heldEntry: drawerHeldOrder,
       });
 
       if (printResult.success) {
         toast.success(printResult.message || "Bill printed");
-        const markResult = await markPosBillPrinted(drawerHeldOrder.orderIds);
+        const markResult = await markPosBillPrinted(posOrderIds);
         if (!markResult?.success) {
           showDismissibleToast(
             markResult?.error || "Bill printed, but status was not updated",
@@ -650,7 +739,9 @@ export default function PosTableMap() {
   }
 
   function buildTableDeleteTarget(order) {
-    const ticketIds = getAllTicketIds(order);
+    const posOrderIds = getDrawerPosOrderIds(order);
+    const ticketIds =
+      posOrderIds.length > 0 ? posOrderIds : getAllTicketIds(order);
     const tableNames = heldEntryTableNames(order);
     const table =
       tableNames.length > 1
@@ -670,6 +761,9 @@ export default function PosTableMap() {
     if (order?.total != null) {
       subtitleParts.push(`$${Number(order.total).toFixed(2)} unpaid`);
     }
+    if (drawerEntryHasQrContext(order)) {
+      subtitleParts.push("POS tickets only");
+    }
 
     return {
       id: order.id,
@@ -683,14 +777,13 @@ export default function PosTableMap() {
   function handleDeleteOrder() {
     if (!drawerHeldOrder || isProcessing || isDeleting) return;
 
-    if (drawerHeldOrder.allPaid) {
-      showDismissibleToast("Paid checks cannot be deleted");
-      return;
-    }
+    const posOrderIds = getDrawerPosOrderIds(drawerHeldOrder);
+    const posAllPaid =
+      drawerHeldOrder?.posAllPaid === true ||
+      (isPosSourceHeldOrder(drawerHeldOrder) && drawerHeldOrder.allPaid);
 
-    const ticketIds = getAllTicketIds(drawerHeldOrder);
-    if (ticketIds.length === 0) {
-      showDismissibleToast("No tickets on this check");
+    if (posOrderIds.length === 0 || posAllPaid) {
+      showDismissibleToast("Paid checks cannot be deleted");
       return;
     }
 
@@ -775,8 +868,22 @@ export default function PosTableMap() {
     trackFoodServedOnTableMap &&
     Boolean(drawerHeldOrder) &&
     undeliveredTicketCount > 0;
-  const showAllServed = needsServe && !drawerHeldOrder?.allPaid;
-  const showComplete = needsServe && Boolean(drawerHeldOrder?.allPaid);
+  const showAllServed =
+    needsServe &&
+    drawerEntryHasPosCheck(drawerHeldOrder) &&
+    !Boolean(drawerHeldOrder?.posAllPaid ?? drawerHeldOrder?.allPaid);
+  const showComplete =
+    needsServe &&
+    Boolean(drawerHeldOrder?.posAllPaid ?? drawerHeldOrder?.allPaid);
+  const hasQrContext = drawerEntryHasQrContext(drawerHeldOrder);
+  // Keep Open when paid QR context is on the table (alone or mixed with POS).
+  const showLoadOrder = !showComplete || hasQrContext;
+  const showPay =
+    Boolean(drawerHeldOrder) &&
+    drawerEntryHasPosCheck(drawerHeldOrder) &&
+    !Boolean(drawerHeldOrder?.posAllPaid ?? false) &&
+    !(isPosSourceHeldOrder(drawerHeldOrder) && drawerHeldOrder.allPaid) &&
+    !showAllServed;
   const mapFloorColor = isMergeMode
     ? TABLE_MAP_MERGE_FLOOR_COLOR
     : TABLE_MAP_FLOOR_COLOR;
@@ -941,11 +1048,13 @@ export default function PosTableMap() {
         onAllServed={handleAllServed}
         onComplete={handleComplete}
         isProcessing={isProcessing || isDeleting}
-        previewLines={previewLines}
+        previewSections={previewSections}
         isPreviewLoading={isPreviewLoading}
         previewError={previewError}
         showAllServed={showAllServed}
         showComplete={showComplete}
+        showLoadOrder={showLoadOrder}
+        showPay={showPay}
       />
 
       <DeleteOrderDrawer

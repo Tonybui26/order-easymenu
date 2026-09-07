@@ -78,7 +78,10 @@ export default function PosCartLine({
   const showVoidSentButton =
     allowVoidSentLine && isSentToKitchen && !isCancelled;
   const showRemoveUnsentButton = !readOnly && !isSentToKitchen && !isCancelled;
-  const canSwipeOptions = !readOnly && !isCancelled;
+  const canSwipeOptions =
+    !readOnly &&
+    !isCancelled &&
+    (!isSentToKitchen || showVoidSentButton);
   const strikeClass = isCancelled ? "line-through decoration-neutral-400" : "";
   const nameOptions = { useKitchenPrintAliases };
   const displayTitle =

@@ -30,7 +30,9 @@ import {
 } from "@/lib/pos/itemCustomization";
 import {
   buildCartLinesFromResumeOrders,
+  buildMixedTableResumeCartLines,
   buildPosResumeState,
+  isExternalContextCartLine,
 } from "@/lib/pos/posResumeOrder";
 import PosTableEntryDrawer from "./PosTableEntryDrawer";
 import PosDiscountDrawer from "./PosDiscountDrawer";
@@ -145,6 +147,10 @@ function isCancelledCartLine(line) {
 
 function isOpenCartLine(line) {
   return !isSentCartLine(line) && !isCancelledCartLine(line);
+}
+
+function isPayableCartLine(line) {
+  return !isCancelledCartLine(line) && !isExternalContextCartLine(line);
 }
 
 const POS_TAB_CHECK_TRANSITION = {
@@ -397,21 +403,69 @@ export default function PosTerminal() {
           return;
         }
 
-        const hasNonPos = result.orders.some(
+        const posOrders = result.orders.filter(
+          (order) => String(order?.source || "").trim() === "pos",
+        );
+        const nonPosOrders = result.orders.filter(
           (order) => String(order?.source || "").trim() !== "pos",
         );
-        if (hasNonPos) {
+        const unpaidNonPos = nonPosOrders.filter(
+          (order) => String(order?.paymentStatus || "").trim() !== "paid",
+        );
+
+        if (unpaidNonPos.length > 0) {
           showDismissibleToast(
-            "Only POS checks can be resumed on the terminal",
+            "Unpaid QR orders cannot be opened on the POS terminal yet",
           );
           resumeLoadedRef.current = null;
           openPayAfterResumeRef.current = false;
-          router.replace("/pos/held");
+          router.replace("/pos");
           return;
         }
 
-        const resumeState = buildPosResumeState(result.orders);
-        const lines = buildCartLinesFromResumeOrders(result.orders);
+        // Paid QR only — context load (new Send/Pay create POS tickets).
+        if (posOrders.length === 0) {
+          const resumeState = buildPosResumeState(nonPosOrders);
+          const lines = buildCartLinesFromResumeOrders(nonPosOrders, {
+            asExternalContext: true,
+          });
+
+          setCustomizingItem(null);
+          setCustomizingLineId(null);
+          setSelectedVariants({});
+          setSelectedModifiers({});
+          setCartLines(lines);
+          setCheckOrderIds([]);
+          setActiveOrderId(null);
+          setPosCheckId(null);
+          setTaxInvoiceNo("");
+          setTableNumber(resumeState.tableNumber);
+          setCustomerName(resumeState.customerName || "");
+          setCustomerPhone(resumeState.customerPhone || "");
+          setCustomerEmail(resumeState.customerEmail || "");
+          const nextOrderType =
+            restaurantMode && resumeState.tableNumber
+              ? "dine-in"
+              : resumeState.orderType;
+          setOrderType(nextOrderType);
+          setIsCheckPaid(false);
+          setIsResumedCheck(true);
+          setCheckDiscount(null);
+          setIsOrderTypeMissing(false);
+          if (restaurantMode && resumeState.tableNumber) {
+            setIsTablePrefilled(true);
+          }
+          openPayAfterResumeRef.current = false;
+          router.replace("/pos");
+          return;
+        }
+
+        // POS check, optionally mixed with paid QR context lines on the same table.
+        const resumeState = buildPosResumeState(posOrders);
+        const lines =
+          nonPosOrders.length > 0
+            ? buildMixedTableResumeCartLines(result.orders)
+            : buildCartLinesFromResumeOrders(posOrders);
 
         setCustomizingItem(null);
         setCustomizingLineId(null);
@@ -1515,6 +1569,10 @@ export default function PosTerminal() {
     if (isViewOnly) return;
     const line = cartLines.find((entry) => entry.lineId === lineId);
     if (!line || !isSentCartLine(line)) return;
+    if (isExternalContextCartLine(line)) {
+      showDismissibleToast("QR order items cannot be voided from POS");
+      return;
+    }
     setCancelSentLineDrawer({ show: true, line });
   }
 
@@ -1523,7 +1581,16 @@ export default function PosTerminal() {
     if (!line || isVoidingLine) return;
 
     if (isTrainingMode) {
+      if (isExternalContextCartLine(line)) {
+        showDismissibleToast("Void is not available for QR order items");
+        return;
+      }
       showDismissibleToast("Void is not available in training mode");
+      return;
+    }
+
+    if (isExternalContextCartLine(line)) {
+      showDismissibleToast("QR order items cannot be voided from POS");
       return;
     }
 
@@ -1616,7 +1683,7 @@ export default function PosTerminal() {
     : { selectedVariants, selectedModifiers };
 
   const cartSubtotal = cartLines.reduce((sum, line) => {
-    if (isCancelledCartLine(line)) return sum;
+    if (!isPayableCartLine(line)) return sum;
     return sum + Number(line.price || 0) * (line.quantity || 1);
   }, 0);
   const discountAmount =
@@ -1649,7 +1716,7 @@ export default function PosTerminal() {
         : "";
   const hasUnsentLines = cartLines.some(isOpenCartLine);
   const hasSentLines = cartLines.some(isSentCartLine);
-  const hasPayableLines = cartLines.some((line) => !isCancelledCartLine(line));
+  const hasPayableLines = cartLines.some(isPayableCartLine);
   const canOpenPayment = isPayFirstMode
     ? hasPayableLines
     : isTrainingMode
@@ -1804,7 +1871,11 @@ export default function PosTerminal() {
                           }
                           isActive={line.lineId === customizingLineId}
                           readOnly={isViewOnly}
-                          allowVoidSentLine={!isViewOnly && !isTrainingMode}
+                          allowVoidSentLine={
+                            !isViewOnly &&
+                            !isTrainingMode &&
+                            !isExternalContextCartLine(line)
+                          }
                           useKitchenPrintAliases={useKitchenPrintAliases}
                           isOptionsOpen={optionsLineId === line.lineId}
                           onOptionsOpenChange={(open) =>

@@ -71,6 +71,100 @@ function PreviewLine({ line }) {
   );
 }
 
+function PreviewSection({ section }) {
+  const lines = section?.lines || [];
+  if (lines.length === 0) return null;
+
+  const isQr = section.type === "qr";
+  const total =
+    section.total != null ? Number(section.total) : sectionLinesTotal(lines);
+  const allPaid = Boolean(section.allPaid);
+
+  return (
+    <li
+      className={cn(
+        "list-none overflow-hidden rounded-xl border",
+        isQr ? "border-violet-200 bg-white" : "border-neutral-200 bg-white",
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-center justify-between gap-2 border-b px-3 py-2",
+          isQr
+            ? "border-violet-100 bg-violet-50/90"
+            : "border-neutral-100 bg-neutral-50",
+        )}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className={cn(
+              "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white",
+              isQr ? "bg-violet-600" : "bg-neutral-700",
+            )}
+          >
+            {isQr ? "QR" : "POS"}
+          </span>
+          <span
+            className={cn(
+              "truncate text-sm font-semibold",
+              isQr ? "text-violet-950" : "text-neutral-900",
+            )}
+          >
+            {isQr ? section.customerName || "Guest" : "Staff order"}
+          </span>
+        </div>
+        <span
+          className={cn(
+            "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+            allPaid
+              ? "bg-emerald-100 text-emerald-800"
+              : "bg-amber-100 text-amber-800",
+          )}
+        >
+          {allPaid ? "Paid" : "Unpaid"}
+        </span>
+      </div>
+      <ul className="divide-y divide-neutral-100">
+        {lines.map((line) => (
+          <PreviewLine
+            key={
+              line.lineId || `${line.itemId}-${line.title}-${line.quantity}`
+            }
+            line={line}
+          />
+        ))}
+      </ul>
+      <div
+        className={cn(
+          "flex items-center justify-between border-t px-3 py-2",
+          isQr
+            ? "border-violet-100 bg-violet-50/50"
+            : "border-neutral-100 bg-neutral-50/80",
+        )}
+      >
+        <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+          {isQr ? "QR total" : "POS total"}
+        </span>
+        <span className="text-sm font-bold tabular-nums text-neutral-900">
+          {formatMoney(total)}
+        </span>
+      </div>
+    </li>
+  );
+}
+
+function sectionLinesTotal(lines = []) {
+  return (
+    Math.round(
+      lines.reduce((sum, line) => {
+        const qty = Number(line.quantity || 1);
+        const unitPrice = Number(line.price || 0);
+        return sum + unitPrice * qty;
+      }, 0) * 100,
+    ) / 100
+  );
+}
+
 const TABLE_MORE_ACTIONS = [
   {
     id: "print-bill",
@@ -105,11 +199,13 @@ export default function PosTableMapTableDrawer({
   onAllServed,
   onComplete,
   isProcessing = false,
-  previewLines = [],
+  previewSections = [],
   isPreviewLoading = false,
   previewError = null,
   showAllServed = false,
   showComplete = false,
+  showLoadOrder: showLoadOrderProp,
+  showPay: showPayProp,
 }) {
   const [showMoreActions, setShowMoreActions] = useState(false);
   // Keep last open snapshot so SideDrawer can play its exit animation after
@@ -120,11 +216,13 @@ export default function PosTableMapTableDrawer({
     openSnapshotRef.current = {
       tableName,
       heldOrder,
-      previewLines,
+      previewSections,
       isPreviewLoading,
       previewError,
       showAllServed,
       showComplete,
+      showLoadOrder: showLoadOrderProp,
+      showPay: showPayProp,
     };
   }
 
@@ -141,18 +239,29 @@ export default function PosTableMapTableDrawer({
   const displayTableName =
     heldTables.length > 1 ? heldTables.join(", ") : snap.tableName;
   const displayHeldOrder = snap.heldOrder;
-  const displayPreviewLines = snap.previewLines || [];
+  const displayPreviewSections = snap.previewSections || [];
   const displayPreviewLoading = Boolean(snap.isPreviewLoading);
   const displayPreviewError = snap.previewError;
   const displayShowAllServed = Boolean(snap.showAllServed);
   const displayShowComplete = Boolean(snap.showComplete);
+  const previewLineCount = displayPreviewSections.reduce(
+    (sum, section) => sum + (section.lines?.length || 0),
+    0,
+  );
 
   const ticketCount = displayHeldOrder?.orderIds?.length || 0;
   const allPaid = Boolean(displayHeldOrder?.allPaid);
-  // Unpaid + track food: Open + All served. Paid + track food: Complete only.
+  // Unpaid + track food: Open + All served. Paid + track food: Complete only
+  // (unless parent forces Open for paid QR context load).
   // Unpaid without serve action: Open + Pay (Print Bill lives under More).
-  const showPay = !allPaid && !displayShowAllServed;
-  const showLoadOrder = !displayShowComplete;
+  const showPay =
+    typeof snap.showPay === "boolean"
+      ? snap.showPay
+      : !allPaid && !displayShowAllServed;
+  const showLoadOrder =
+    typeof snap.showLoadOrder === "boolean"
+      ? snap.showLoadOrder
+      : !displayShowComplete;
   const subtitleParts = [];
   if (displayHeldOrder?.total != null) {
     subtitleParts.push(formatMoney(displayHeldOrder.total));
@@ -169,6 +278,7 @@ export default function PosTableMapTableDrawer({
 
   const visibleMoreActions = TABLE_MORE_ACTIONS.filter((action) => {
     if (action.id === "delete") return !allPaid;
+    if (action.id === "print-bill") return !allPaid;
     return true;
   });
 
@@ -177,7 +287,8 @@ export default function PosTableMapTableDrawer({
       <div
         className={cn(
           "grid gap-2",
-          showLoadOrder && (showPay || displayShowAllServed)
+          showLoadOrder &&
+            (showPay || displayShowAllServed || displayShowComplete)
             ? "grid-cols-2"
             : "grid-cols-1",
         )}
@@ -308,45 +419,67 @@ export default function PosTableMapTableDrawer({
       onBodyOverlayClick={() => setShowMoreActions(false)}
       bottomSlidePanel={moreActionsPanel}
     >
-      <div className="overflow-hidden rounded-xl border border-neutral-100 bg-white">
-        <div className="border-b border-neutral-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+      <div className="space-y-3">
+        <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
           Order items
         </div>
         {displayPreviewLoading ? (
-          <div className="flex items-center justify-center gap-2 px-3 py-8 text-sm text-neutral-500">
+          <div className="flex items-center justify-center gap-2 rounded-xl border border-neutral-100 bg-white px-3 py-8 text-sm text-neutral-500">
             <Loader2 className="size-4 animate-spin" aria-hidden />
             Loading items…
           </div>
         ) : displayPreviewError ? (
-          <p className="px-3 py-4 text-sm text-red-600">
+          <p className="rounded-xl border border-red-100 bg-white px-3 py-4 text-sm text-red-600">
             {displayPreviewError}
           </p>
-        ) : displayPreviewLines.length === 0 ? (
-          <p className="px-3 py-4 text-sm text-neutral-500">
+        ) : previewLineCount === 0 ? (
+          <p className="rounded-xl border border-neutral-100 bg-white px-3 py-4 text-sm text-neutral-500">
             No items on this check.
           </p>
         ) : (
-          <ul className="divide-y divide-neutral-100">
-            {displayPreviewLines.map((line) => (
-              <PreviewLine
-                key={
-                  line.lineId || `${line.itemId}-${line.title}-${line.quantity}`
-                }
-                line={line}
-              />
+          <ul className="space-y-3">
+            {displayPreviewSections.map((section) => (
+              <PreviewSection key={section.id} section={section} />
             ))}
           </ul>
         )}
-        {displayHeldOrder?.total != null &&
+        {previewLineCount > 0 &&
         !displayPreviewLoading &&
         !displayPreviewError ? (
-          <div className="flex items-center justify-between border-t border-neutral-100 bg-neutral-50/80 px-3 py-2.5">
-            <span className="text-sm font-semibold text-neutral-700">
-              Total
-            </span>
-            <span className="text-sm font-bold tabular-nums text-neutral-900">
-              {formatMoney(displayHeldOrder.total)}
-            </span>
+          <div className="space-y-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-neutral-700">
+                Table total
+              </span>
+              <span className="text-sm font-bold tabular-nums text-neutral-900">
+                {formatMoney(
+                  displayHeldOrder?.total != null
+                    ? displayHeldOrder.total
+                    : displayPreviewSections.reduce(
+                        (sum, section) => sum + Number(section.total || 0),
+                        0,
+                      ),
+                )}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2 border-t border-neutral-200/80 pt-2">
+              <span className="text-sm font-semibold text-amber-800">
+                Total due
+              </span>
+              <span className="text-sm font-bold tabular-nums text-amber-900">
+                {formatMoney(
+                  displayHeldOrder?.amountDue != null
+                    ? displayHeldOrder.amountDue
+                    : displayPreviewSections.reduce(
+                        (sum, section) =>
+                          section.allPaid
+                            ? sum
+                            : sum + Number(section.total || 0),
+                        0,
+                      ),
+                )}
+              </span>
+            </div>
           </div>
         ) : null}
       </div>
