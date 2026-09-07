@@ -70,6 +70,7 @@ import { App } from "@capacitor/app";
 import {
   getNotificationSoundUrl,
   NOTIFICATION_SOUND_REPLAY_INTERVAL_MS,
+  playNotificationSoundOnce,
 } from "@/lib/utils/notificationSound";
 import {
   getNewOrderAlertsMuted,
@@ -79,6 +80,10 @@ import {
   isNotificationWorthyOrder,
   isUnpreparedNewOrder,
 } from "@/lib/helper/liveOrderNotifications";
+import {
+  autoPrintAndPrepareOrder,
+  isAutoPrintExcludedPayLaterOrder,
+} from "@/lib/helper/prepareLiveOrder";
 
 /** Re-fire the new-order alert if dismissed but still unprepared after this long. */
 const NEW_ORDER_REALERT_AFTER_MS = 3 * 60 * 1000;
@@ -125,6 +130,8 @@ export default function LiveOrderTerminal() {
   const lastDismissedIdsRef = useRef(new Map());
   const ordersRef = useRef(orders);
   const printedOrderIdsRef = useRef(new Set());
+  /** Paid QR/online ids that already got the one-shot auto-print chime (no re-sound on retry). */
+  const autoPrintAnnouncedIdsRef = useRef(new Set());
 
   const replaceDismissedOrderIds = useCallback((orderIds) => {
     const ids = orderIds instanceof Set ? [...orderIds] : [...orderIds];
@@ -268,74 +275,100 @@ export default function LiveOrderTerminal() {
 
       if (notificationWorthyOrders.length > 0) {
         const isMuted = isMutedForRealert;
+        const autoPrintingEnabled = Boolean(menuConfig?.autoPrinting?.enabled);
+        const canAutoPrint =
+          autoPrintingEnabled && storeProfile && userData?.ownerEmail;
+        const autoPreparedIds = new Set();
 
-        if (!isMuted) {
-          setNotificationOrderCount(notificationWorthyOrders.length);
-        }
-        // Auto-print orders if auto-printing is enabled
-        const autoPrintingEnabled = menuConfig?.autoPrinting?.enabled;
-        if (autoPrintingEnabled && storeProfile && userData?.ownerEmail) {
-          // Filter out orders that have already been printed
-          // Also exclude pending counter orders - they should only print when status changes to "preparing"
-          const unprintedOrders = notificationWorthyOrders.filter((order) => {
-            // Don't auto-print pending counter orders
-            if (
-              order.paymentStatus === "pending" &&
-              isCounterPayment(order.paymentMethod)
-            ) {
-              return false;
-            }
-            return !printedOrderIdsRef.current.has(order._id);
-          });
-          console.log(
-            "printedOrderIds right before filtering:",
-            printedOrderIdsRef.current,
+        // Paid QR/online: sound once → print → preparing on success (no overlay).
+        // Pay-later counter orders stay on the manual Prepare + overlay path.
+        if (canAutoPrint) {
+          const autoPrintCandidates = notificationWorthyOrders.filter(
+            (order) => {
+              if (isAutoPrintExcludedPayLaterOrder(order)) return false;
+              return !printedOrderIdsRef.current.has(order._id);
+            },
           );
-          console.log("unprintedOrders", unprintedOrders);
-          // Print only unprinted orders and collect printed IDs
-          const newlyPrintedIds = [];
-          for (const order of unprintedOrders) {
-            try {
-              const printResult = await handlePrintingOrder(order, null, 0, {
-                source: "auto_print",
+
+          if (autoPrintCandidates.length > 0) {
+            const unannouncedCandidates = autoPrintCandidates.filter(
+              (order) => !autoPrintAnnouncedIdsRef.current.has(order._id),
+            );
+            if (unannouncedCandidates.length > 0) {
+              if (!isMuted && soundEnabled) {
+                void playNotificationSoundOnce(notificationSoundId);
+              }
+              unannouncedCandidates.forEach((order) => {
+                autoPrintAnnouncedIdsRef.current.add(order._id);
               });
-              if (printResult.success) {
-                console.log(
-                  `Auto-printed successfully order ${order._id.slice(-6)}:`,
-                  printResult,
-                );
-                newlyPrintedIds.push(order._id);
-              } else {
+            }
+
+            for (const order of autoPrintCandidates) {
+              try {
+                const result = await autoPrintAndPrepareOrder(order, {
+                  storeProfile,
+                  menuConfig,
+                  itemGroups,
+                });
+
+                if (result.printed) {
+                  printedOrderIdsRef.current.add(order._id);
+                }
+
+                if (result.prepared && result.updatedOrder) {
+                  autoPreparedIds.add(order._id);
+                  setOrders((prev) =>
+                    prev.map((entry) =>
+                      entry._id === result.updatedOrder._id
+                        ? result.updatedOrder
+                        : entry,
+                    ),
+                  );
+                  toast.success(result.message, { duration: 3000 });
+                } else if (result.printed && !result.prepared) {
+                  toast.error(result.message, { duration: 4000 });
+                }
+              } catch (error) {
                 console.error(
                   `Error auto-printing order ${order._id}:`,
-                  printResult.message,
+                  error,
                 );
               }
-            } catch (error) {
-              console.error(`Error auto-printing order ${order._id}:`, error);
-              // Don't block other orders if one fails
             }
-          }
 
-          // Update both the ref and state with all newly printed order IDs at once
-          if (newlyPrintedIds.length > 0) {
-            // Update ref immediately (synchronous)
-            newlyPrintedIds.forEach((id) => printedOrderIdsRef.current.add(id));
-            console.log(
-              "Updated printed order ids ref:",
-              printedOrderIdsRef.current,
-            );
+            if (
+              autoPreparedIds.size > 0 &&
+              viewModeRef.current === "new"
+            ) {
+              setViewMode("preparing");
+            }
           }
         }
 
-        if (isMuted) {
-          addDismissedOrderIds(
-            notificationWorthyOrders.map((order) => order._id),
-          );
-        } else if (!showNotificationRef.current) {
-          setShowNotification(true);
-          showNotificationRef.current = true;
-          playSoundCycle();
+        // Overlay + looping sound only for orders that still need staff tap
+        // (pay-later when auto-print on; all notification-worthy when off).
+        const ordersNeedingOverlay = notificationWorthyOrders.filter(
+          (order) => {
+            if (autoPreparedIds.has(order._id)) return false;
+            if (canAutoPrint) return isAutoPrintExcludedPayLaterOrder(order);
+            return true;
+          },
+        );
+
+        if (ordersNeedingOverlay.length > 0) {
+          if (!isMuted) {
+            setNotificationOrderCount(ordersNeedingOverlay.length);
+          }
+
+          if (isMuted) {
+            addDismissedOrderIds(
+              ordersNeedingOverlay.map((order) => order._id),
+            );
+          } else if (!showNotificationRef.current) {
+            setShowNotification(true);
+            showNotificationRef.current = true;
+            playSoundCycle();
+          }
         }
       }
 
@@ -1118,27 +1151,20 @@ export default function LiveOrderTerminal() {
         }
       }
 
-      // Print order when order status is changed to "preparing"
-      // Counter orders should always print when status changes to "preparing"
-      // Non-counter orders only print if auto-printing is disabled
-      const autoPrintingEnabled = menuConfig?.autoPrinting?.enabled;
+      // Always print kitchen docket on Prepare (recovery path when auto-print
+      // missed or failed; orders already auto-printed are already in Preparing).
       if (newStatus === "preparing" && storeProfile && userData?.ownerEmail) {
         try {
           const order = orders.find((o) => o._id === orderId);
           if (order) {
-            // Always print counter orders when status changes to "preparing"
-            // For non-counter orders, only print if auto-printing is disabled
-            const isCounterOrder = isCounterPayment(order.paymentMethod);
-            if (isCounterOrder || !autoPrintingEnabled) {
-              const printResult = await handlePrintingOrder(order, null, 0, {
-                source: "prepare",
-              });
-              if (!printResult?.success) {
-                console.warn(
-                  `[prepare print] Order ${order._id.slice(-6)} failed:`,
-                  printResult?.message,
-                );
-              }
+            const printResult = await handlePrintingOrder(order, null, 0, {
+              source: "prepare",
+            });
+            if (!printResult?.success) {
+              console.warn(
+                `[prepare print] Order ${order._id.slice(-6)} failed:`,
+                printResult?.message,
+              );
             }
           }
         } catch (error) {
