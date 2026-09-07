@@ -270,6 +270,11 @@ export default function PosPaymentDrawer({
           isSalePersisted={isSalePersisted}
           trainingMode={trainingMode}
           onTrainingDone={onTrainingDone}
+          showManualCardInstruction={
+            paymentSummary.method === "credit-card" &&
+            !tyroApproved &&
+            !trainingMode
+          }
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
@@ -363,6 +368,7 @@ function FinaliseSaleStep({
   isSalePersisted = false,
   trainingMode = false,
   onTrainingDone,
+  showManualCardInstruction = false,
 }) {
   const completeLabel = isSalePersisted
     ? "Done"
@@ -393,6 +399,13 @@ function FinaliseSaleStep({
             {formatMoney(isCard ? amountTendered : change)}
           </span>
         </div>
+
+        {showManualCardInstruction ? (
+          <p className="mt-5 max-w-sm text-base font-bold text-white">
+            Approve the card payment on your EFTPOS terminal, then tap Complete
+            Sale.
+          </p>
+        ) : null}
 
         {hasCardFee ? (
           <p className="mt-3 text-sm font-medium text-white/90">
