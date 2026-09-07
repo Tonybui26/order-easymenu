@@ -76,6 +76,7 @@ import {
   getNewOrderAlertsMuted,
   NEW_ORDER_ALERTS_MUTED_CHANGED_EVENT,
 } from "@/lib/utils/newOrderAlerts";
+import { getAutoPrintingEnabled } from "@/lib/utils/autoPrinting";
 import {
   isNotificationWorthyOrder,
   isUnpreparedNewOrder,
@@ -275,7 +276,8 @@ export default function LiveOrderTerminal() {
 
       if (notificationWorthyOrders.length > 0) {
         const isMuted = isMutedForRealert;
-        const autoPrintingEnabled = Boolean(menuConfig?.autoPrinting?.enabled);
+        // Device-local preference (Settings → Local device settings), not menu config
+        const autoPrintingEnabled = getAutoPrintingEnabled();
         const canAutoPrint =
           autoPrintingEnabled && storeProfile && userData?.ownerEmail;
         const autoPreparedIds = new Set();
@@ -1091,10 +1093,8 @@ export default function LiveOrderTerminal() {
         try {
           const order = orders.find((o) => o._id === orderId);
           if (order) {
-            // Check if auto-printing is enabled
-            const autoPrintingEnabled = menuConfig?.autoPrinting?.enabled;
-
-            // Only create print jobs if auto-printing is DISABLED
+            // Only create print jobs if device auto-printing is DISABLED
+            const autoPrintingEnabled = getAutoPrintingEnabled();
             if (!autoPrintingEnabled) {
               // Determine order type
               const canonical = String(order?.orderType ?? "").trim();

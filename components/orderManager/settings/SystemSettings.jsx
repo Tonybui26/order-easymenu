@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { useMenuContext } from "@/components/context/MenuContext";
+import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import { resolvePosPaymentsConfig } from "@/lib/pos/posPaymentsConfig";
 import SettingsToggleRow from "./SettingsToggleRow";
 import SettingsOnOffBadge from "./SettingsOnOffBadge";
@@ -10,6 +11,7 @@ import SettingsOnOffBadge from "./SettingsOnOffBadge";
 /**
  * Order Manager system settings (printing, POS, and future sections).
  * Draft values are saved from the Settings page save bar.
+ * Local device settings apply immediately on this device only.
  */
 export default function SystemSettings({
   draftPosConfig,
@@ -20,6 +22,7 @@ export default function SystemSettings({
   onDraftStaffPinLockEnabledChange,
 }) {
   const { menuConfig } = useMenuContext();
+  const { autoPrintingEnabled, setAutoPrintingEnabled } = useGlobalAppContext();
   const posEnabled = Boolean(menuConfig?.posEnabled);
   const tyroEnabled = Boolean(
     resolvePosPaymentsConfig(menuConfig).tyro.enabled,
@@ -31,6 +34,26 @@ export default function SystemSettings({
 
   return (
     <div className="space-y-6">
+      <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-100 px-6 py-3">
+          <h2 className="text-sm font-semibold text-neutral-900">
+            Local device settings
+          </h2>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            Applies only on this device. Other tablets or phones in the store
+            keep their own settings.
+          </p>
+        </div>
+        <div className="divide-y divide-gray-100/80">
+          <SettingsToggleRow
+            title="Auto printing"
+            description="When on, this device automatically prints kitchen dockets for new paid QR and online orders and moves them to Preparing. Turn on only on the station next to the printers so other devices do not print the same order."
+            checked={Boolean(autoPrintingEnabled)}
+            onChange={(checked) => setAutoPrintingEnabled(checked)}
+          />
+        </div>
+      </section>
+
       <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 px-6 py-3">
           <h2 className="text-sm font-semibold text-neutral-900">
