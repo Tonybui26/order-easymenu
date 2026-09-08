@@ -819,8 +819,7 @@ export default function PosTableMap() {
     Boolean(drawerHeldOrder) &&
     drawerEntryHasPosCheck(drawerHeldOrder) &&
     !Boolean(drawerHeldOrder?.posAllPaid ?? false) &&
-    !(isPosSourceHeldOrder(drawerHeldOrder) && drawerHeldOrder.allPaid) &&
-    !showAllServed;
+    !(isPosSourceHeldOrder(drawerHeldOrder) && drawerHeldOrder.allPaid);
   const mapFloorColor = isMergeMode
     ? TABLE_MAP_MERGE_FLOOR_COLOR
     : TABLE_MAP_FLOOR_COLOR;

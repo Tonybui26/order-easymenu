@@ -647,9 +647,7 @@ export default function PosHeldOrders() {
     needsServe && Boolean(drawerHeldOrder?.allPaid);
   const showPosDrawerLoadOrder = Boolean(drawerHeldOrder?.orderIds?.length);
   const showPosDrawerPay =
-    Boolean(isPosHeldDrawer) &&
-    !Boolean(drawerHeldOrder?.allPaid) &&
-    !showPosDrawerAllServed;
+    Boolean(isPosHeldDrawer) && !Boolean(drawerHeldOrder?.allPaid);
   const posDrawerTitle = getPosHeldDrawerTitle(drawerHeldOrder);
   const posDrawerTotalLabel = isPosDineInHeldOrder(drawerHeldOrder)
     ? "Table total"

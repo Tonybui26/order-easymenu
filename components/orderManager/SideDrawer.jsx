@@ -31,6 +31,8 @@ export default function SideDrawer({
   onBodyOverlayClick,
   /** Spring slide-up panel over the zoomed body (held / live order card pattern). */
   bottomSlidePanel = null,
+  /** Optional controls rendered in the header, left of the close button. */
+  headerActions = null,
   side = "right",
   widthClassName = "w-[min(100%,28rem)]",
   panelClassName = "bg-white",
@@ -134,15 +136,18 @@ export default function SideDrawer({
                         </p>
                       ) : null}
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleClose}
-                      disabled={closeDisabled}
-                      className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100 disabled:opacity-50"
-                      aria-label="Close"
-                    >
-                      <X size={18} />
-                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {headerActions}
+                      <button
+                        type="button"
+                        onClick={handleClose}
+                        disabled={closeDisabled}
+                        className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100 disabled:opacity-50"
+                        aria-label="Close"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
                   </div>
                 ) : null}
 

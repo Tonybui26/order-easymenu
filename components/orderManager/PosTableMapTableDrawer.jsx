@@ -297,13 +297,10 @@ export default function PosTableMapTableDrawer({
 
   const ticketCount = displayHeldOrder?.orderIds?.length || 0;
   const allPaid = Boolean(displayHeldOrder?.allPaid);
-  // Unpaid + track food: Open + All served. Paid + track food: Complete only
-  // (unless parent forces Open for paid QR context load).
-  // Unpaid without serve action: Open + Pay (Print Bill lives under More).
+  // Unpaid: All Served (optional tracking) can show with Pay together.
+  // Paid + undelivered: Complete. Open lives in the header.
   const showPay =
-    typeof snap.showPay === "boolean"
-      ? snap.showPay
-      : !allPaid && !displayShowAllServed;
+    typeof snap.showPay === "boolean" ? snap.showPay : !allPaid;
   const showLoadOrder =
     typeof snap.showLoadOrder === "boolean"
       ? snap.showLoadOrder
@@ -321,6 +318,11 @@ export default function PosTableMapTableDrawer({
 
   const hasTickets = Boolean(displayHeldOrder?.orderIds?.length);
   const actionsDisabled = isProcessing || !hasTickets;
+  const footerPrimaryCount = [
+    showPay,
+    displayShowAllServed,
+    displayShowComplete,
+  ].filter(Boolean).length;
 
   const visibleMoreActions = TABLE_MORE_ACTIONS.filter((action) => {
     if (action.id === "delete") return !allPaid;
@@ -328,56 +330,61 @@ export default function PosTableMapTableDrawer({
     return true;
   });
 
-  const actionButtons = (
+  const headerActions = showLoadOrder ? (
+    <button
+      type="button"
+      disabled={actionsDisabled}
+      onClick={onLoadOrder}
+      className={cn(
+        "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-blue-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700 active:bg-blue-800",
+        actionsDisabled && "cursor-not-allowed opacity-50",
+      )}
+    >
+      <FolderOpen size={16} strokeWidth={2} aria-hidden />
+      Open
+    </button>
+  ) : null;
+
+  const actionButtons =
+    footerPrimaryCount > 0 || visibleMoreActions.length > 0 ? (
     <div className="flex flex-col gap-2">
-      <div
-        className={cn(
-          "grid gap-2",
-          showLoadOrder &&
-            (showPay || displayShowAllServed || displayShowComplete)
-            ? "grid-cols-2"
-            : "grid-cols-1",
-        )}
-      >
-        {showLoadOrder ? (
-          <PosActionButton
-            tone="blue"
-            icon={FolderOpen}
-            disabled={actionsDisabled}
-            onClick={onLoadOrder}
-          >
-            Open
-          </PosActionButton>
-        ) : null}
-        {showPay ? (
-          <PosActionButton
-            tone="red"
-            icon={CircleDollarSign}
-            disabled={actionsDisabled}
-            onClick={onPay}
-          >
-            Pay
-          </PosActionButton>
-        ) : null}
-        {displayShowAllServed ? (
-          <PosActionButton
-            tone="green"
-            disabled={actionsDisabled}
-            onClick={onAllServed}
-          >
-            {isProcessing ? "Updating…" : "All Served"}
-          </PosActionButton>
-        ) : null}
-        {displayShowComplete ? (
-          <PosActionButton
-            tone="purple"
-            disabled={actionsDisabled}
-            onClick={onComplete}
-          >
-            {isProcessing ? "Updating…" : "Complete"}
-          </PosActionButton>
-        ) : null}
-      </div>
+      {footerPrimaryCount > 0 ? (
+        <div
+          className={cn(
+            "grid gap-2",
+            footerPrimaryCount >= 2 ? "grid-cols-2" : "grid-cols-1",
+          )}
+        >
+          {displayShowAllServed ? (
+            <PosActionButton
+              tone="green"
+              disabled={actionsDisabled}
+              onClick={onAllServed}
+            >
+              {isProcessing ? "Updating…" : "All Served"}
+            </PosActionButton>
+          ) : null}
+          {showPay ? (
+            <PosActionButton
+              tone="red"
+              icon={CircleDollarSign}
+              disabled={actionsDisabled}
+              onClick={onPay}
+            >
+              Pay
+            </PosActionButton>
+          ) : null}
+          {displayShowComplete ? (
+            <PosActionButton
+              tone="purple"
+              disabled={actionsDisabled}
+              onClick={onComplete}
+            >
+              {isProcessing ? "Updating…" : "Complete"}
+            </PosActionButton>
+          ) : null}
+        </div>
+      ) : null}
 
       {visibleMoreActions.length > 0 ? (
         <button
@@ -396,6 +403,7 @@ export default function PosTableMapTableDrawer({
               ? "text-neutral-900 hover:text-neutral-950"
               : "text-neutral-700 hover:text-neutral-800",
             actionsDisabled && "cursor-not-allowed opacity-50",
+            footerPrimaryCount === 0 && "border-t-0 pt-0",
           )}
         >
           <span
@@ -424,7 +432,7 @@ export default function PosTableMapTableDrawer({
         </button>
       ) : null}
     </div>
-  );
+  ) : null;
 
   const moreActionsPanel = showMoreActions ? (
     <div className="flex flex-col gap-2 p-3 pb-6">
@@ -457,6 +465,7 @@ export default function PosTableMapTableDrawer({
           ? subtitleParts.join(" · ")
           : displayEmptySubtitle
       }
+      headerActions={headerActions}
       closeDisabled={isProcessing}
       contentKey={`held-check-drawer-${displayTitle}`}
       footer={actionButtons}
