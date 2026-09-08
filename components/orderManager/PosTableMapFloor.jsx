@@ -38,7 +38,6 @@ export default function PosTableMapFloor({
   tableMap,
   heldOrders = [],
   selfOrderTableKeys = null,
-  trackFoodServedOnTableMap = false,
   floorColor = TABLE_MAP_FLOOR_COLOR,
   solidFloor = false,
   selectedTableNames = [],
@@ -111,9 +110,7 @@ export default function PosTableMapFloor({
               const heldOrder = isInteractive
                 ? findPosHeldOrderForTable(heldOrders, tableName)
                 : null;
-              const status = resolvePosTableMapStatus(heldOrder, {
-                trackFoodServedOnTableMap,
-              });
+              const status = resolvePosTableMapStatus(heldOrder);
               const statusFill = getPosTableMapStatusFill(status);
               const tableKey = normalizeTableMapTableName(tableName);
               const isSelected = tableKey ? selectedKeys.has(tableKey) : false;

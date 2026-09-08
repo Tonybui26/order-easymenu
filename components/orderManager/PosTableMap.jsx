@@ -33,7 +33,6 @@ import {
   reprintHeldCheckKitchen,
 } from "@/lib/pos/posHeldOrderPrint";
 import { buildCartLinesFromResumeOrders } from "@/lib/pos/posResumeOrder";
-import { resolvePosConfig } from "@/lib/pos/posConfig";
 import {
   getPosTableMapLegendStatuses,
   getPosTableMapStatusFill,
@@ -151,13 +150,7 @@ export default function PosTableMap() {
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
   const { posTableMaps, storeProfile, menuConfig, itemGroups } =
     useMenuContext();
-  const trackFoodServedOnTableMap = Boolean(
-    resolvePosConfig(menuConfig).trackFoodServedOnTableMap,
-  );
-  const legendStatuses = useMemo(
-    () => getPosTableMapLegendStatuses(trackFoodServedOnTableMap),
-    [trackFoodServedOnTableMap],
-  );
+  const legendStatuses = useMemo(() => getPosTableMapLegendStatuses(), []);
   const mergeStoreKey = storeProfile?.menuLink || "default";
   const {
     toast: dismissibleToast,
@@ -865,9 +858,7 @@ export default function PosTableMap() {
   const undeliveredTicketCount =
     getTicketIdsNotDelivered(drawerHeldOrder).length;
   const needsServe =
-    trackFoodServedOnTableMap &&
-    Boolean(drawerHeldOrder) &&
-    undeliveredTicketCount > 0;
+    Boolean(drawerHeldOrder) && undeliveredTicketCount > 0;
   const showAllServed =
     needsServe &&
     drawerEntryHasPosCheck(drawerHeldOrder) &&
@@ -1007,7 +998,6 @@ export default function PosTableMap() {
               tableMap={selectedMap}
               heldOrders={heldOrders}
               selfOrderTableKeys={selfOrderTableKeys}
-              trackFoodServedOnTableMap={trackFoodServedOnTableMap}
               floorColor={mapFloorColor}
               solidFloor={isMergeMode}
               selectedTableNames={isMergeMode ? mergeSelectedNames : []}
