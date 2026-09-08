@@ -866,9 +866,8 @@ export default function PosTableMap() {
   const showComplete =
     needsServe &&
     Boolean(drawerHeldOrder?.posAllPaid ?? drawerHeldOrder?.allPaid);
-  const hasQrContext = drawerEntryHasQrContext(drawerHeldOrder);
-  // Keep Open when paid QR context is on the table (alone or mixed with POS).
-  const showLoadOrder = !showComplete || hasQrContext;
+  // Always allow Open so staff can add more on a paid-but-not-complete table.
+  const showLoadOrder = Boolean(drawerHeldOrder?.orderIds?.length);
   const showPay =
     Boolean(drawerHeldOrder) &&
     drawerEntryHasPosCheck(drawerHeldOrder) &&

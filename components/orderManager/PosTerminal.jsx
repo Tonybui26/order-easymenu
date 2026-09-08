@@ -460,22 +460,35 @@ export default function PosTerminal() {
           return;
         }
 
-        // POS check, optionally mixed with paid QR context lines on the same table.
-        const resumeState = buildPosResumeState(posOrders);
-        const lines =
-          nonPosOrders.length > 0
-            ? buildMixedTableResumeCartLines(result.orders)
-            : buildCartLinesFromResumeOrders(posOrders);
+        // POS check, optionally mixed with paid QR / prior paid POS on the same table.
+        const unpaidPosOrders = posOrders.filter(
+          (order) => String(order?.paymentStatus || "").trim() !== "paid",
+        );
+        const hasActiveUnpaidPos = unpaidPosOrders.length > 0;
+        const resumeState = buildPosResumeState(
+          hasActiveUnpaidPos ? unpaidPosOrders : posOrders,
+        );
+
+        // Paid-only POS (pay-first, not yet Complete): prior tickets are context;
+        // new Send starts a fresh unpaid check (API rejects paid posCheckId).
+        // Mixed paid+unpaid on the same table: only unpaid tickets bind Send/Pay.
+        const lines = hasActiveUnpaidPos
+          ? buildMixedTableResumeCartLines(result.orders)
+          : buildCartLinesFromResumeOrders(result.orders, {
+              asExternalContext: true,
+            });
 
         setCustomizingItem(null);
         setCustomizingLineId(null);
         setSelectedVariants({});
         setSelectedModifiers({});
         setCartLines(lines);
-        setCheckOrderIds(resumeState.orderIds);
-        setActiveOrderId(resumeState.activeOrderId);
-        setPosCheckId(resumeState.posCheckId);
-        setTaxInvoiceNo(resumeState.taxInvoiceNo || "");
+        setCheckOrderIds(hasActiveUnpaidPos ? resumeState.orderIds : []);
+        setActiveOrderId(hasActiveUnpaidPos ? resumeState.activeOrderId : null);
+        setPosCheckId(hasActiveUnpaidPos ? resumeState.posCheckId : null);
+        setTaxInvoiceNo(
+          hasActiveUnpaidPos ? resumeState.taxInvoiceNo || "" : "",
+        );
         setTableNumber(resumeState.tableNumber);
         setCustomerName(resumeState.customerName || "");
         setCustomerPhone(resumeState.customerPhone || "");
@@ -486,9 +499,11 @@ export default function PosTerminal() {
             ? "dine-in"
             : resumeState.orderType;
         setOrderType(nextOrderType);
-        setIsCheckPaid(resumeState.isCheckPaid);
+        setIsCheckPaid(false);
         setIsResumedCheck(true);
-        setCheckDiscount(resumeState.checkDiscount || null);
+        setCheckDiscount(
+          hasActiveUnpaidPos ? resumeState.checkDiscount || null : null,
+        );
         setIsOrderTypeMissing(false);
         if (restaurantMode && resumeState.tableNumber) {
           setIsTablePrefilled(true);
@@ -497,7 +512,7 @@ export default function PosTerminal() {
 
         if (
           openPayAfterResumeRef.current &&
-          !resumeState.isCheckPaid &&
+          hasActiveUnpaidPos &&
           resumeState.orderIds?.length > 0
         ) {
           setIsPaymentDrawerOpen(true);
