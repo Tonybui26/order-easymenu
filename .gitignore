@@ -20,6 +20,7 @@ node_modules/
 printer-tcp-socket/android/build/
 printer-usb/android/build/
 immersive-mode/android/build/
+customer-display/android/build/
 
 # misc
 .DS_Store

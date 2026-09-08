@@ -11,6 +11,9 @@ project(':capacitor-network').projectDir = new File('../node_modules/@capacitor/
 include ':capacitor-splash-screen'
 project(':capacitor-splash-screen').projectDir = new File('../node_modules/@capacitor/splash-screen/android')
 
+include ':customer-display'
+project(':customer-display').projectDir = new File('../customer-display/android')
+
 include ':immersive-mode'
 project(':immersive-mode').projectDir = new File('../immersive-mode/android')
 

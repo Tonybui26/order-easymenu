@@ -11,6 +11,7 @@ import { Toaster } from "react-hot-toast";
 import VersionBanner from "@/components/VersionBanner";
 import PrintToastHost from "@/components/print/PrintToastHost";
 import PosImmersiveHost from "@/components/orderManager/PosImmersiveHost";
+import CustomerDisplayHost from "@/components/orderManager/CustomerDisplayHost";
 import { ActiveOperatorProvider } from "@/components/context/ActiveOperatorContext";
 import { PosRegisterSessionProvider } from "@/components/context/PosRegisterSessionContext";
 import { PosNavigateProvider } from "@/components/context/PosNavigateContext";
@@ -68,6 +69,7 @@ export default async function RootLayout({ children }) {
                         {children}
                         <PrintToastHost />
                         <PosImmersiveHost />
+                        <CustomerDisplayHost />
                       </RequireOpenRegister>
                     </RequireActiveOperator>
                   </PosNavigateProvider>
