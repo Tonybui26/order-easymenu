@@ -16,6 +16,7 @@ import PosActionButton from "./PosActionButton";
 import {
   getHeldAggregateStatusLabel,
   getPosHeldCardActions,
+  getPosHeldDrawerTitle,
   isPosDineInHeldOrder,
   isTakeawayPickupHeldOrder,
 } from "@/lib/pos/posHeldOrder";
@@ -55,18 +56,7 @@ function orderTypeLabel(order) {
 }
 
 function heldCardPrimaryLabel(order) {
-  if (isPosDineInHeldOrder(order)) {
-    const tables = Array.isArray(order?.tables)
-      ? order.tables.map((name) => String(name || "").trim()).filter(Boolean)
-      : [];
-    if (tables.length > 1) return `Table ${tables.join(", ")}`;
-    const table = String(order?.table || "").trim();
-    return table ? `Table ${table}` : "Dine-in";
-  }
-  if (isTakeawayPickupHeldOrder(order)) {
-    return customerLabel(order);
-  }
-  return orderNumberLabel(order);
+  return getPosHeldDrawerTitle(order);
 }
 
 function heldCardSecondaryLabel(order) {
@@ -223,7 +213,7 @@ export default function PosHeldOrderCard({
           <div
             role="button"
             tabIndex={showMoreActions ? -1 : 0}
-            aria-label={`Resume ${heldCardPrimaryLabel(order)}`}
+            aria-label={`Open ${heldCardPrimaryLabel(order)}`}
             aria-hidden={showMoreActions}
             onClick={() => {
               if (showMoreActions) {

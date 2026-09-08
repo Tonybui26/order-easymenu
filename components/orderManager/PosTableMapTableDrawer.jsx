@@ -186,10 +186,24 @@ const TABLE_MORE_ACTIONS = [
   },
 ];
 
+function resolveDrawerTitle(title, tableName, heldOrder) {
+  const explicit = String(title || "").trim();
+  if (explicit) return explicit;
+
+  const heldTables = Array.isArray(heldOrder?.tables)
+    ? heldOrder.tables.map((name) => String(name || "").trim()).filter(Boolean)
+    : [];
+  if (heldTables.length > 1) return `Table ${heldTables.join(", ")}`;
+
+  const name = String(tableName || heldOrder?.table || "").trim();
+  return name ? `Table ${name}` : "Held check";
+}
+
 export default function PosTableMapTableDrawer({
   isOpen,
   onClose,
   tableName,
+  title,
   heldOrder,
   onLoadOrder,
   onPay,
@@ -206,15 +220,18 @@ export default function PosTableMapTableDrawer({
   showComplete = false,
   showLoadOrder: showLoadOrderProp,
   showPay: showPayProp,
+  totalLabel = "Table total",
+  emptySubtitle = "Open check on this table",
 }) {
   const [showMoreActions, setShowMoreActions] = useState(false);
   // Keep last open snapshot so SideDrawer can play its exit animation after
   // the parent clears tableName / heldOrder on close.
   const openSnapshotRef = useRef(null);
+  const resolvedTitle = resolveDrawerTitle(title, tableName, heldOrder);
 
-  if (isOpen && tableName) {
+  if (isOpen && resolvedTitle) {
     openSnapshotRef.current = {
-      tableName,
+      title: resolvedTitle,
       heldOrder,
       previewSections,
       isPreviewLoading,
@@ -223,27 +240,27 @@ export default function PosTableMapTableDrawer({
       showComplete,
       showLoadOrder: showLoadOrderProp,
       showPay: showPayProp,
+      totalLabel,
+      emptySubtitle,
     };
   }
 
   useEffect(() => {
     if (!isOpen) setShowMoreActions(false);
-  }, [isOpen, tableName]);
+  }, [isOpen, resolvedTitle]);
 
   const snap = openSnapshotRef.current;
-  if (!snap?.tableName) return null;
+  if (!snap?.title) return null;
 
-  const heldTables = Array.isArray(snap.heldOrder?.tables)
-    ? snap.heldOrder.tables.filter(Boolean)
-    : [];
-  const displayTableName =
-    heldTables.length > 1 ? heldTables.join(", ") : snap.tableName;
+  const displayTitle = snap.title;
   const displayHeldOrder = snap.heldOrder;
   const displayPreviewSections = snap.previewSections || [];
   const displayPreviewLoading = Boolean(snap.isPreviewLoading);
   const displayPreviewError = snap.previewError;
   const displayShowAllServed = Boolean(snap.showAllServed);
   const displayShowComplete = Boolean(snap.showComplete);
+  const displayTotalLabel = snap.totalLabel || "Table total";
+  const displayEmptySubtitle = snap.emptySubtitle || "Open check on this table";
   const previewLineCount = displayPreviewSections.reduce(
     (sum, section) => sum + (section.lines?.length || 0),
     0,
@@ -340,7 +357,7 @@ export default function PosTableMapTableDrawer({
           aria-label={
             showMoreActions
               ? "Close more actions"
-              : `More actions for table ${displayTableName}`
+              : `More actions for ${displayTitle}`
           }
           disabled={actionsDisabled}
           onClick={() => setShowMoreActions((open) => !open)}
@@ -405,14 +422,14 @@ export default function PosTableMapTableDrawer({
     <SideDrawer
       isOpen={isOpen}
       onClose={onClose}
-      title={`Table ${displayTableName}`}
+      title={displayTitle}
       subtitle={
         subtitleParts.length > 0
           ? subtitleParts.join(" · ")
-          : "Open check on this table"
+          : displayEmptySubtitle
       }
       closeDisabled={isProcessing}
-      contentKey={`table-map-drawer-${displayTableName}`}
+      contentKey={`held-check-drawer-${displayTitle}`}
       footer={actionButtons}
       footerClassName="shadow-[0_-8px_24px_rgba(0,0,0,0.06)]"
       bodyOverlay={showMoreActions}
@@ -449,7 +466,7 @@ export default function PosTableMapTableDrawer({
           <div className="space-y-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-semibold text-neutral-700">
-                Table total
+                {displayTotalLabel}
               </span>
               <span className="text-sm font-bold tabular-nums text-neutral-900">
                 {formatMoney(

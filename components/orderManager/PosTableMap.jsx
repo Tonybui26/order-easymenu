@@ -32,7 +32,7 @@ import {
   printBillForHeldCheck,
   reprintHeldCheckKitchen,
 } from "@/lib/pos/posHeldOrderPrint";
-import { buildCartLinesFromResumeOrders } from "@/lib/pos/posResumeOrder";
+import { buildHeldDrawerPreviewSections } from "@/lib/pos/posHeldDrawerPreview";
 import {
   getPosTableMapLegendStatuses,
   getPosTableMapStatusFill,
@@ -79,64 +79,10 @@ function orderIdsCacheKey(orderIds) {
   return (orderIds || []).map(String).join(",");
 }
 
-function sectionLinesTotal(lines = []) {
-  return (
-    Math.round(
-      lines.reduce((sum, line) => {
-        const qty = Number(line.quantity || 1);
-        const unitPrice = Number(line.price || 0);
-        return sum + unitPrice * qty;
-      }, 0) * 100,
-    ) / 100
-  );
-}
-
-function buildTableDrawerPreviewSections(orders) {
-  const sorted = [...(orders || [])].sort(
-    (a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0),
-  );
-  const sections = [];
-
-  for (const order of sorted) {
-    const lines = buildCartLinesFromResumeOrders([order]).filter(
-      (line) => String(line.kitchenStatus || "").trim() !== "cancelled",
-    );
-    if (lines.length === 0) continue;
-
-    const source = String(order?.source || "").trim();
-    const isPaid = String(order?.paymentStatus || "").trim() === "paid";
-    if (source === "pos") {
-      const last = sections[sections.length - 1];
-      if (last?.type === "pos") {
-        last.lines.push(...lines);
-        last.total = sectionLinesTotal(last.lines);
-        // Combined POS fires: paid only if every ticket in the group is paid.
-        last.allPaid = Boolean(last.allPaid) && isPaid;
-      } else {
-        sections.push({
-          type: "pos",
-          id: `pos-${String(order._id)}`,
-          lines: [...lines],
-          total: sectionLinesTotal(lines),
-          allPaid: isPaid,
-        });
-      }
-      continue;
-    }
-
-    const customerName = String(order?.customerName || "").trim();
-    sections.push({
-      type: "qr",
-      id: String(order._id),
-      customerName,
-      label: customerName ? `QR · ${customerName}` : "QR",
-      lines,
-      total: sectionLinesTotal(lines),
-      allPaid: isPaid,
-    });
-  }
-
-  return sections;
+function ticketsStatusKey(heldOrder) {
+  return (heldOrder?.tickets || [])
+    .map((ticket) => `${ticket.orderId}:${String(ticket.status || "").trim()}`)
+    .join(",");
 }
 
 export default function PosTableMap() {
@@ -349,8 +295,10 @@ export default function PosTableMap() {
         orderIdsCacheKey(prev.qrOrderIds) ===
           orderIdsCacheKey(latest.qrOrderIds) &&
         Number(prev.total) === Number(latest.total) &&
+        Number(prev.amountDue) === Number(latest.amountDue) &&
         Boolean(prev.allPaid) === Boolean(latest.allPaid) &&
-        Boolean(prev.posAllPaid) === Boolean(latest.posAllPaid)
+        Boolean(prev.posAllPaid) === Boolean(latest.posAllPaid) &&
+        ticketsStatusKey(prev) === ticketsStatusKey(latest)
       ) {
         return prev;
       }
@@ -371,7 +319,7 @@ export default function PosTableMap() {
     const orderIds = drawerOrderIdsKey.split(",");
     const cached = resumeOrdersCacheRef.current.get(drawerOrderIdsKey);
     if (cached) {
-      setPreviewSections(buildTableDrawerPreviewSections(cached));
+      setPreviewSections(buildHeldDrawerPreviewSections(cached));
       setPreviewError(null);
       setIsPreviewLoading(false);
       return;
@@ -391,7 +339,7 @@ export default function PosTableMap() {
         return;
       }
       resumeOrdersCacheRef.current.set(drawerOrderIdsKey, result.orders);
-      setPreviewSections(buildTableDrawerPreviewSections(result.orders));
+      setPreviewSections(buildHeldDrawerPreviewSections(result.orders));
       setIsPreviewLoading(false);
     })();
 
@@ -601,7 +549,7 @@ export default function PosTableMap() {
     const cacheKey = orderIdsCacheKey(heldOrder.orderIds);
     const cached = resumeOrdersCacheRef.current.get(cacheKey);
     if (cached) {
-      setPreviewSections(buildTableDrawerPreviewSections(cached));
+      setPreviewSections(buildHeldDrawerPreviewSections(cached));
       setPreviewError(null);
       setIsPreviewLoading(false);
     } else {
@@ -652,7 +600,7 @@ export default function PosTableMap() {
     }
     orders = result.orders;
     resumeOrdersCacheRef.current.set(cacheKey, orders);
-    setPreviewSections(buildTableDrawerPreviewSections(orders));
+    setPreviewSections(buildHeldDrawerPreviewSections(orders));
     setPreviewError(null);
     return orders;
   }
@@ -839,7 +787,6 @@ export default function PosTableMap() {
       }
       toast.success(successMessage);
       await loadHeldOrders();
-      handleCloseDrawer();
     } catch (error) {
       showDismissibleToast(error?.message || "Failed to update tickets");
     } finally {

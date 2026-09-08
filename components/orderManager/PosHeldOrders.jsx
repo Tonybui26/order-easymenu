@@ -16,9 +16,11 @@ import {
   printHeldCheckKitchenOnPrepare,
   reprintHeldCheckKitchen,
 } from "@/lib/pos/posHeldOrderPrint";
+import { buildHeldDrawerPreviewSections } from "@/lib/pos/posHeldDrawerPreview";
 import { buildCartLinesFromResumeOrders } from "@/lib/pos/posResumeOrder";
 import {
   getAllTicketIds,
+  getPosHeldDrawerTitle,
   getTicketIdsNotDelivered,
   getTicketIdsByStatus,
   isPosDineInHeldOrder,
@@ -30,6 +32,7 @@ import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 import PosHeldOrderCard from "./PosHeldOrderCard";
 import SelfOrderingHeldOrderCard from "./SelfOrderingHeldOrderCard";
 import PosSelfOrderingHeldDrawer from "./PosSelfOrderingHeldDrawer";
+import PosTableMapTableDrawer from "./PosTableMapTableDrawer";
 import DeleteOrderDrawer from "./DeleteOrderDrawer";
 import { buildHeldCheckCancelTarget } from "@/lib/helper/buildCancelOrderTarget";
 import DismissibleToast, {
@@ -93,6 +96,7 @@ export default function PosHeldOrders() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [drawerHeldOrder, setDrawerHeldOrder] = useState(null);
   const [previewLines, setPreviewLines] = useState([]);
+  const [previewSections, setPreviewSections] = useState([]);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(null);
   const resumeOrdersCacheRef = useRef(new Map());
@@ -151,8 +155,8 @@ export default function PosHeldOrders() {
 
     const latest = heldOrders.find((entry) => entry.id === drawerHeldOrder.id);
     if (!latest) {
-      if (!processingCheckId && !isCancelling) {
-        handleCloseSelfOrderingDrawer();
+      if (!processingCheckId && !isCancelling && !isDeleting) {
+        handleCloseHeldDrawer();
       }
       return;
     }
@@ -162,6 +166,7 @@ export default function PosHeldOrders() {
         prev &&
         orderIdsCacheKey(prev.orderIds) === orderIdsCacheKey(latest.orderIds) &&
         Number(prev.total) === Number(latest.total) &&
+        Number(prev.amountDue) === Number(latest.amountDue) &&
         Boolean(prev.allPaid) === Boolean(latest.allPaid) &&
         ticketsStatusKey(prev) === ticketsStatusKey(latest)
       ) {
@@ -169,13 +174,26 @@ export default function PosHeldOrders() {
       }
       return latest;
     });
-  }, [heldOrders, drawerHeldOrder?.id, processingCheckId, isCancelling]);
+  }, [
+    heldOrders,
+    drawerHeldOrder?.id,
+    processingCheckId,
+    isCancelling,
+    isDeleting,
+  ]);
 
   const drawerOrderIdsKey = orderIdsCacheKey(drawerHeldOrder?.orderIds);
+  const isPosHeldDrawer = Boolean(
+    drawerHeldOrder && isPosSourceHeldOrder(drawerHeldOrder),
+  );
+  const isSelfOrderingHeldDrawer = Boolean(
+    drawerHeldOrder && !isPosSourceHeldOrder(drawerHeldOrder),
+  );
 
   useEffect(() => {
     if (!drawerHeldOrder || !drawerOrderIdsKey) {
       setPreviewLines([]);
+      setPreviewSections([]);
       setPreviewError(null);
       setIsPreviewLoading(false);
       return;
@@ -183,8 +201,18 @@ export default function PosHeldOrders() {
 
     const orderIds = drawerOrderIdsKey.split(",");
     const cached = resumeOrdersCacheRef.current.get(drawerOrderIdsKey);
+    const applyPreview = (orders) => {
+      if (isPosSourceHeldOrder(drawerHeldOrder)) {
+        setPreviewSections(buildHeldDrawerPreviewSections(orders));
+        setPreviewLines([]);
+      } else {
+        setPreviewLines(previewLinesFromResumeOrders(orders));
+        setPreviewSections([]);
+      }
+    };
+
     if (cached) {
-      setPreviewLines(previewLinesFromResumeOrders(cached));
+      applyPreview(cached);
       setPreviewError(null);
       setIsPreviewLoading(false);
       return;
@@ -199,12 +227,13 @@ export default function PosHeldOrders() {
       if (cancelled) return;
       if (!result?.success || !result.orders?.length) {
         setPreviewLines([]);
+        setPreviewSections([]);
         setPreviewError(result?.error || "Could not load items");
         setIsPreviewLoading(false);
         return;
       }
       resumeOrdersCacheRef.current.set(drawerOrderIdsKey, result.orders);
-      setPreviewLines(previewLinesFromResumeOrders(result.orders));
+      applyPreview(result.orders);
       setIsPreviewLoading(false);
     })();
 
@@ -224,32 +253,68 @@ export default function PosHeldOrders() {
   const visibleHeldOrders =
     activeTab === "pos" ? posHeldOrders : selfOrderingHeldOrders;
 
-  function handleCloseSelfOrderingDrawer() {
-    if (processingCheckId || isCancelling) return;
+  function clearHeldDrawer() {
     setDrawerHeldOrder(null);
     setPreviewLines([]);
+    setPreviewSections([]);
     setPreviewError(null);
     setIsPreviewLoading(false);
   }
 
-  function handleSelectHeldOrder(order) {
-    if (!order?.orderIds?.length) return;
-    if (!isPosSourceHeldOrder(order)) {
-      const cacheKey = orderIdsCacheKey(order.orderIds);
-      const cached = resumeOrdersCacheRef.current.get(cacheKey);
-      setDrawerHeldOrder(order);
+  function handleCloseHeldDrawer() {
+    if (processingCheckId || isCancelling || isDeleting) return;
+    clearHeldDrawer();
+  }
+
+  function openHeldDrawer(order) {
+    const cacheKey = orderIdsCacheKey(order.orderIds);
+    const cached = resumeOrdersCacheRef.current.get(cacheKey);
+    setDrawerHeldOrder(order);
+    setPreviewError(null);
+
+    if (isPosSourceHeldOrder(order)) {
+      setPreviewLines([]);
       if (cached) {
-        setPreviewLines(previewLinesFromResumeOrders(cached));
-        setPreviewError(null);
+        setPreviewSections(buildHeldDrawerPreviewSections(cached));
         setIsPreviewLoading(false);
       } else {
-        setPreviewLines([]);
-        setPreviewError(null);
+        setPreviewSections([]);
         setIsPreviewLoading(true);
       }
       return;
     }
-    navigate(`/pos?resume=${encodeURIComponent(order.orderIds.join(","))}`);
+
+    setPreviewSections([]);
+    if (cached) {
+      setPreviewLines(previewLinesFromResumeOrders(cached));
+      setIsPreviewLoading(false);
+    } else {
+      setPreviewLines([]);
+      setIsPreviewLoading(true);
+    }
+  }
+
+  function handleSelectHeldOrder(order) {
+    if (!order?.orderIds?.length) return;
+    openHeldDrawer(order);
+  }
+
+  function handlePosDrawerLoadOrder() {
+    if (!drawerHeldOrder?.orderIds?.length) return;
+    navigate(
+      `/pos?resume=${encodeURIComponent(drawerHeldOrder.orderIds.join(","))}`,
+    );
+  }
+
+  function handlePosDrawerPay() {
+    if (!drawerHeldOrder?.orderIds?.length) return;
+    if (drawerHeldOrder.allPaid) {
+      showDismissibleToast("This check is already paid");
+      return;
+    }
+    navigate(
+      `/pos?resume=${encodeURIComponent(drawerHeldOrder.orderIds.join(","))}&pay=1`,
+    );
   }
 
   async function markTicketsDelivered(order, orderIds, successMessage) {
@@ -526,7 +591,7 @@ export default function PosHeldOrders() {
       );
       setCancelDrawerOpen(false);
       setCancelTarget(null);
-      handleCloseSelfOrderingDrawer();
+      clearHeldDrawer();
       await loadHeldOrders({ silent: true });
     } catch (error) {
       showDismissibleToast(error?.message || "Failed to cancel order");
@@ -560,6 +625,7 @@ export default function PosHeldOrders() {
       );
       setDeleteDrawerOpen(false);
       setDeleteTarget(null);
+      clearHeldDrawer();
       await loadHeldOrders({ silent: true });
     } catch (error) {
       showDismissibleToast(error?.message || "Failed to delete check");
@@ -571,6 +637,26 @@ export default function PosHeldOrders() {
 
   const tabCount =
     activeTab === "pos" ? posHeldOrders.length : selfOrderingHeldOrders.length;
+
+  const undeliveredTicketCount = getTicketIdsNotDelivered(drawerHeldOrder).length;
+  const needsServe =
+    Boolean(isPosHeldDrawer) && undeliveredTicketCount > 0;
+  const showPosDrawerAllServed =
+    needsServe && !Boolean(drawerHeldOrder?.allPaid);
+  const showPosDrawerComplete =
+    needsServe && Boolean(drawerHeldOrder?.allPaid);
+  const showPosDrawerLoadOrder = Boolean(drawerHeldOrder?.orderIds?.length);
+  const showPosDrawerPay =
+    Boolean(isPosHeldDrawer) &&
+    !Boolean(drawerHeldOrder?.allPaid) &&
+    !showPosDrawerAllServed;
+  const posDrawerTitle = getPosHeldDrawerTitle(drawerHeldOrder);
+  const posDrawerTotalLabel = isPosDineInHeldOrder(drawerHeldOrder)
+    ? "Table total"
+    : "Order total";
+  const isDrawerProcessing =
+    Boolean(drawerHeldOrder) &&
+    (processingCheckId === drawerHeldOrder?.id || isDeleting);
 
   return (
     <>
@@ -687,9 +773,33 @@ export default function PosHeldOrders() {
         className="right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))]"
       />
 
+      <PosTableMapTableDrawer
+        isOpen={isPosHeldDrawer}
+        onClose={handleCloseHeldDrawer}
+        title={posDrawerTitle}
+        heldOrder={drawerHeldOrder}
+        onLoadOrder={handlePosDrawerLoadOrder}
+        onPay={handlePosDrawerPay}
+        onPrintBill={() => handlePrintBillHeldOrder(drawerHeldOrder)}
+        onReprintOrder={() => handleReprintHeldOrder(drawerHeldOrder)}
+        onDelete={() => handleDeleteHeldOrder(drawerHeldOrder)}
+        onAllServed={() => handleAllItemsServedHeldOrder(drawerHeldOrder)}
+        onComplete={() => handleCompleteHeldOrder(drawerHeldOrder)}
+        isProcessing={isDrawerProcessing}
+        previewSections={previewSections}
+        isPreviewLoading={isPreviewLoading}
+        previewError={previewError}
+        showAllServed={showPosDrawerAllServed}
+        showComplete={showPosDrawerComplete}
+        showLoadOrder={showPosDrawerLoadOrder}
+        showPay={showPosDrawerPay}
+        totalLabel={posDrawerTotalLabel}
+        emptySubtitle="Open this held check"
+      />
+
       <PosSelfOrderingHeldDrawer
-        isOpen={Boolean(drawerHeldOrder)}
-        onClose={handleCloseSelfOrderingDrawer}
+        isOpen={isSelfOrderingHeldDrawer}
+        onClose={handleCloseHeldDrawer}
         heldOrder={drawerHeldOrder}
         onPrepare={handlePrepareHeldOrder}
         onReady={handleReadyHeldOrder}
@@ -697,9 +807,7 @@ export default function PosHeldOrders() {
         onPrintBill={handlePrintBillHeldOrder}
         onReprintOrder={handleReprintHeldOrder}
         onCancel={handleCancelHeldOrder}
-        isProcessing={
-          Boolean(drawerHeldOrder) && processingCheckId === drawerHeldOrder?.id
-        }
+        isProcessing={isDrawerProcessing}
         previewLines={previewLines}
         isPreviewLoading={isPreviewLoading}
         previewError={previewError}
