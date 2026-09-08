@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
@@ -48,6 +48,7 @@ export default function SideDrawer({
   const reactId = useId();
   const titleId = `${reactId}-title`;
   const [portalReady, setPortalReady] = useState(false);
+  const backdropPointerDownRef = useRef(false);
   const isLeft = side === "left";
   const drawerKey = contentKey || `${reactId}-drawer`;
 
@@ -60,10 +61,22 @@ export default function SideDrawer({
     setPortalReady(true);
   }, []);
 
+  useEffect(() => {
+    if (!isOpen) backdropPointerDownRef.current = false;
+  }, [isOpen]);
+
   if (!portalReady) return null;
 
   function handleClose() {
     if (!closeDisabled) onClose?.();
+  }
+
+  function handleBackdropClick() {
+    // Ignore orphan/synthesized clicks that land on a newly mounted backdrop
+    // after a touch control opened this drawer (pointerdown was elsewhere).
+    if (!backdropPointerDownRef.current) return;
+    backdropPointerDownRef.current = false;
+    handleClose();
   }
 
   const panelSafeArea = isLeft
@@ -87,7 +100,10 @@ export default function SideDrawer({
             className="absolute inset-0 bg-black/30"
             variants={BACKDROP_VARIANTS}
             transition={{ duration: 0.18, ease: "easeOut" }}
-            onClick={handleClose}
+            onPointerDown={() => {
+              backdropPointerDownRef.current = true;
+            }}
+            onClick={handleBackdropClick}
             disabled={closeDisabled}
           />
 

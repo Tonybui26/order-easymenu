@@ -93,7 +93,6 @@ export default function PosCartLine({
   const suppressClickRef = useRef(false);
   const suppressTimerRef = useRef(null);
   const optionArmedRef = useRef(false);
-  const lastOptionActivateAtRef = useRef(0);
   const [isRevealed, setIsRevealed] = useState(false);
 
   useMotionValueEvent(x, "change", (latest) => {
@@ -179,10 +178,9 @@ export default function PosCartLine({
     event.stopPropagation();
     if (!optionArmedRef.current && !isRevealed && !isOptionsOpen) return;
     if (isDraggingRef.current) return;
-    // pointerup + click both fire on some devices; only handle once.
-    const now = performance.now();
-    if (now - lastOptionActivateAtRef.current < 350) return;
-    lastOptionActivateAtRef.current = now;
+    // Open on click only (not pointerup). On touch, opening on pointerup
+    // mounts the drawer before the browser's synthesized click, which then
+    // hits SideDrawer's backdrop and closes it immediately (flicker).
     onOptionsClick?.(line.lineId);
   }
 
@@ -218,7 +216,6 @@ export default function PosCartLine({
         >
           <button
             type="button"
-            onPointerUp={handleOptionActivate}
             onClick={handleOptionActivate}
             className="flex h-full w-full flex-col items-center justify-center rounded-r-[0.75rem] bg-[#301C0F] px-2 text-center text-xs font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#3d2614] active:bg-[#24150b]"
             aria-label={`Options for ${displayTitle}`}
