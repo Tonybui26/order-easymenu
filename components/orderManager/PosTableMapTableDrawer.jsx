@@ -71,46 +71,43 @@ function PreviewLine({ line }) {
   );
 }
 
-function PreviewSection({ section }) {
+/** Plain POS item list — no Staff order / Paid grouping chrome. */
+function PosPreviewLines({ sectionId, lines }) {
+  if (!lines?.length) return null;
+
+  return (
+    <li className="list-none overflow-hidden rounded-xl border border-neutral-200 bg-white">
+      <ul className="divide-y divide-neutral-100">
+        {lines.map((line) => (
+          <PreviewLine
+            key={
+              line.lineId || `${sectionId}-${line.itemId}-${line.title}-${line.quantity}`
+            }
+            line={line}
+          />
+        ))}
+      </ul>
+    </li>
+  );
+}
+
+function QrPreviewSection({ section }) {
   const lines = section?.lines || [];
   if (lines.length === 0) return null;
 
-  const isQr = section.type === "qr";
   const total =
     section.total != null ? Number(section.total) : sectionLinesTotal(lines);
   const allPaid = Boolean(section.allPaid);
 
   return (
-    <li
-      className={cn(
-        "list-none overflow-hidden rounded-xl border",
-        isQr ? "border-violet-200 bg-white" : "border-neutral-200 bg-white",
-      )}
-    >
-      <div
-        className={cn(
-          "flex items-center justify-between gap-2 border-b px-3 py-2",
-          isQr
-            ? "border-violet-100 bg-violet-50/90"
-            : "border-neutral-100 bg-neutral-50",
-        )}
-      >
+    <li className="list-none overflow-hidden rounded-xl border border-violet-200 bg-white">
+      <div className="flex items-center justify-between gap-2 border-b border-violet-100 bg-violet-50/90 px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span
-            className={cn(
-              "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white",
-              isQr ? "bg-violet-600" : "bg-neutral-700",
-            )}
-          >
-            {isQr ? "QR" : "POS"}
+          <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white bg-violet-600">
+            QR
           </span>
-          <span
-            className={cn(
-              "truncate text-sm font-semibold",
-              isQr ? "text-violet-950" : "text-neutral-900",
-            )}
-          >
-            {isQr ? section.customerName || "Guest" : "Staff order"}
+          <span className="truncate text-sm font-semibold text-violet-950">
+            {section.customerName || "Guest"}
           </span>
         </div>
         <span
@@ -134,16 +131,9 @@ function PreviewSection({ section }) {
           />
         ))}
       </ul>
-      <div
-        className={cn(
-          "flex items-center justify-between border-t px-3 py-2",
-          isQr
-            ? "border-violet-100 bg-violet-50/50"
-            : "border-neutral-100 bg-neutral-50/80",
-        )}
-      >
+      <div className="flex items-center justify-between border-t border-violet-100 bg-violet-50/50 px-3 py-2">
         <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-          {isQr ? "QR total" : "POS total"}
+          QR total
         </span>
         <span className="text-sm font-bold tabular-nums text-neutral-900">
           {formatMoney(total)}
@@ -151,6 +141,45 @@ function PreviewSection({ section }) {
       </div>
     </li>
   );
+}
+
+/**
+ * Render QR sections as grouped cards; merge adjacent POS sections into a
+ * plain item list (no Staff order chrome).
+ */
+function PreviewSectionsList({ sections }) {
+  const nodes = [];
+  let posLines = [];
+  let posKey = null;
+
+  function flushPos() {
+    if (posLines.length === 0) return;
+    nodes.push(
+      <PosPreviewLines
+        key={posKey || `pos-${nodes.length}`}
+        sectionId={posKey || `pos-${nodes.length}`}
+        lines={posLines}
+      />,
+    );
+    posLines = [];
+    posKey = null;
+  }
+
+  for (const section of sections || []) {
+    if (section?.type === "qr") {
+      flushPos();
+      nodes.push(
+        <QrPreviewSection key={section.id} section={section} />,
+      );
+      continue;
+    }
+
+    if (!posKey) posKey = section?.id || `pos-${nodes.length}`;
+    posLines.push(...(section?.lines || []));
+  }
+  flushPos();
+
+  return <ul className="space-y-3">{nodes}</ul>;
 }
 
 function sectionLinesTotal(lines = []) {
@@ -454,11 +483,7 @@ export default function PosTableMapTableDrawer({
             No items on this check.
           </p>
         ) : (
-          <ul className="space-y-3">
-            {displayPreviewSections.map((section) => (
-              <PreviewSection key={section.id} section={section} />
-            ))}
-          </ul>
+          <PreviewSectionsList sections={displayPreviewSections} />
         )}
         {previewLineCount > 0 &&
         !displayPreviewLoading &&
