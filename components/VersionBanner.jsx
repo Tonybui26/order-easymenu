@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 import { RefreshCw, X } from "lucide-react";
 
 export default function VersionBanner() {
+  const pathname = usePathname();
   const [showBanner, setShowBanner] = useState(false);
   const [isDismissed, setIsDismissed] = useState(false);
   const initialBuildIdRef = useRef(null);
@@ -72,6 +74,10 @@ export default function VersionBanner() {
   function handleDismiss() {
     setShowBanner(false);
     setIsDismissed(true);
+  }
+
+  if (pathname === "/customer-display") {
+    return null;
   }
 
   if (!showBanner) {

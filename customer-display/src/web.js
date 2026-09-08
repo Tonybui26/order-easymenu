@@ -13,6 +13,10 @@ export class CustomerDisplayWeb extends WebPlugin {
     return;
   }
 
+  async updateCart() {
+    return;
+  }
+
   async close() {
     return;
   }

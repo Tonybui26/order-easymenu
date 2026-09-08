@@ -34,6 +34,10 @@ import {
   buildPosResumeState,
   isExternalContextCartLine,
 } from "@/lib/pos/posResumeOrder";
+import {
+  buildCustomerDisplayCartSnapshot,
+  updateCustomerDisplayCart,
+} from "@/lib/customerDisplay/customerDisplay";
 import PosTableEntryDrawer from "./PosTableEntryDrawer";
 import PosDiscountDrawer from "./PosDiscountDrawer";
 import PosTakeawayCustomerDrawer from "./PosTakeawayCustomerDrawer";
@@ -1732,6 +1736,24 @@ export default function PosTerminal() {
   const hasUnsentLines = cartLines.some(isOpenCartLine);
   const hasSentLines = cartLines.some(isSentCartLine);
   const hasPayableLines = cartLines.some(isPayableCartLine);
+
+  useEffect(() => {
+    const snapshot = buildCustomerDisplayCartSnapshot({
+      cartLines,
+      isPayableLine: isPayableCartLine,
+      subtotal: cartSubtotal,
+      discountAmount: discountAmount || 0,
+      total: cartTotalAfterDiscount,
+    });
+    updateCustomerDisplayCart(snapshot).catch(() => {});
+  }, [cartLines, cartSubtotal, discountAmount, cartTotalAfterDiscount]);
+
+  useEffect(() => {
+    return () => {
+      updateCustomerDisplayCart({ mode: "idle", lines: [] }).catch(() => {});
+    };
+  }, []);
+
   const canOpenPayment = isPayFirstMode
     ? hasPayableLines
     : isTrainingMode

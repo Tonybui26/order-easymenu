@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { App } from "@capacitor/app";
+import { usePathname } from "next/navigation";
 import { useMenuContext } from "@/components/context/MenuContext";
 import {
   activateImmersiveMode,
@@ -12,13 +13,20 @@ import {
 /**
  * When POS is enabled on native Android: enter immersive (hide system bars)
  * and re-apply on resume. No-op on web / iOS / when POS is off.
+ * Skips the customer-display rear WebView so it does not toggle the main activity.
  */
 export default function PosImmersiveHost() {
+  const pathname = usePathname();
   const { menuConfig } = useMenuContext();
   const posEnabled = Boolean(menuConfig?.posEnabled);
-  const enabled = posEnabled && canUseImmersiveMode();
+  const enabled =
+    pathname !== "/customer-display" &&
+    posEnabled &&
+    canUseImmersiveMode();
 
   useEffect(() => {
+    if (pathname === "/customer-display") return undefined;
+
     if (!enabled) {
       deactivateImmersiveMode().catch(() => {});
       return undefined;
@@ -39,7 +47,7 @@ export default function PosImmersiveHost() {
       listener?.remove?.();
       deactivateImmersiveMode().catch(() => {});
     };
-  }, [enabled]);
+  }, [enabled, pathname]);
 
   return null;
 }

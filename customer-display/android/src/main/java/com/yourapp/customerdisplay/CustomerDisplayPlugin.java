@@ -1,17 +1,19 @@
 package com.yourapp.customerdisplay;
 
+import android.annotation.SuppressLint;
 import android.app.Presentation;
 import android.content.Context;
 import android.graphics.Color;
-import android.graphics.Typeface;
 import android.hardware.display.DisplayManager;
 import android.os.Bundle;
-import android.util.TypedValue;
 import android.view.Display;
-import android.view.Gravity;
 import android.view.ViewGroup;
-import android.widget.LinearLayout;
-import android.widget.TextView;
+import android.webkit.CookieManager;
+import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -20,13 +22,14 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 /**
- * Show a simple idle UI on an Android secondary / customer-facing display
- * (e.g. iMin Swan 2 rear screen) via {@link Presentation}.
+ * Customer-facing secondary display via Android {@link Presentation} + {@link WebView}.
+ * Loads a URL (e.g. /customer-display) and receives cart snapshots from the main Capacitor WebView.
  */
 @CapacitorPlugin(name = "CustomerDisplay")
 public class CustomerDisplayPlugin extends Plugin {
 
-    private IdlePresentation presentation;
+    private CustomerDisplayPresentation presentation;
+    private String pendingCartJson = "{\"mode\":\"idle\",\"lines\":[]}";
 
     @PluginMethod
     public void isAvailable(PluginCall call) {
@@ -37,6 +40,13 @@ public class CustomerDisplayPlugin extends Plugin {
 
     @PluginMethod
     public void open(PluginCall call) {
+        String url = call.getString("url", "");
+        if (url == null || url.trim().isEmpty()) {
+            call.reject("url is required");
+            return;
+        }
+        final String loadUrl = url.trim();
+
         getActivity().runOnUiThread(() -> {
             try {
                 Display display = findSecondaryDisplay();
@@ -47,17 +57,38 @@ public class CustomerDisplayPlugin extends Plugin {
 
                 if (presentation != null && presentation.isShowing()) {
                     if (presentation.getDisplay().getDisplayId() == display.getDisplayId()) {
+                        presentation.loadUrlIfNeeded(loadUrl);
                         call.resolve();
                         return;
                     }
                     dismissPresentation();
                 }
 
-                presentation = new IdlePresentation(getActivity(), display);
+                presentation = new CustomerDisplayPresentation(getActivity(), display, loadUrl);
+                presentation.setCartJson(pendingCartJson);
                 presentation.show();
                 call.resolve();
             } catch (Exception e) {
                 call.reject("Failed to open customer display: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    @PluginMethod
+    public void updateCart(PluginCall call) {
+        JSObject data = call.getData();
+        final String json = data != null ? data.toString() : "{\"mode\":\"idle\",\"lines\":[]}";
+        pendingCartJson = json;
+
+        getActivity().runOnUiThread(() -> {
+            try {
+                if (presentation != null && presentation.isShowing()) {
+                    presentation.setCartJson(json);
+                    presentation.deliverCartJson();
+                }
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("Failed to update customer display: " + e.getMessage(), e);
             }
         });
     }
@@ -131,65 +162,111 @@ public class CustomerDisplayPlugin extends Plugin {
     }
 
     /**
-     * Idle customer-facing screen: centered Welcome + Powered by Easy Menu.
+     * Full-screen WebView on the secondary display.
      */
-    private static class IdlePresentation extends Presentation {
+    private static class CustomerDisplayPresentation extends Presentation {
 
-        IdlePresentation(Context outerContext, Display display) {
+        private final String initialUrl;
+        private WebView webView;
+        private String cartJson = "{\"mode\":\"idle\",\"lines\":[]}";
+        private String loadedUrl = "";
+        private boolean pageReady = false;
+
+        CustomerDisplayPresentation(Context outerContext, Display display, String url) {
             super(outerContext, display);
+            this.initialUrl = url;
         }
 
+        void setCartJson(String json) {
+            if (json != null && !json.isEmpty()) {
+                cartJson = json;
+            }
+        }
+
+        void loadUrlIfNeeded(String url) {
+            if (webView == null || url == null || url.isEmpty()) return;
+            if (url.equals(loadedUrl)) return;
+            pageReady = false;
+            loadedUrl = url;
+            webView.loadUrl(url);
+        }
+
+        void deliverCartJson() {
+            if (webView == null || !pageReady) return;
+            // cartJson is already JSON from Capacitor JSObject — embed as a JS object literal.
+            String script =
+                "(function(){try{"
+                    + "var data=" + cartJson + ";"
+                    + "window.dispatchEvent(new CustomEvent('customer-display-cart',{detail:data}));"
+                    + "if(typeof window.__onCustomerDisplayCart==='function'){window.__onCustomerDisplayCart(data);}"
+                    + "}catch(e){}})();";
+            webView.evaluateJavascript(script, null);
+        }
+
+        @SuppressLint("SetJavaScriptEnabled")
         @Override
         protected void onCreate(Bundle savedInstanceState) {
             super.onCreate(savedInstanceState);
 
-            LinearLayout root = new LinearLayout(getContext());
-            root.setOrientation(LinearLayout.VERTICAL);
-            root.setGravity(Gravity.CENTER);
-            root.setBackgroundColor(Color.WHITE);
+            FrameLayout root = new FrameLayout(getContext());
             root.setLayoutParams(
                 new ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
             );
-            int pad = dp(24);
-            root.setPadding(pad, pad, pad, pad);
+            root.setBackgroundColor(Color.WHITE);
 
-            TextView welcome = new TextView(getContext());
-            welcome.setText("Welcome");
-            welcome.setTextColor(Color.parseColor("#171717"));
-            welcome.setTextSize(TypedValue.COMPLEX_UNIT_SP, 42);
-            welcome.setTypeface(Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD));
-            welcome.setGravity(Gravity.CENTER);
-            root.addView(
-                welcome,
-                new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
+            webView = new WebView(getContext());
+            webView.setLayoutParams(
+                new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
                 )
             );
 
-            TextView powered = new TextView(getContext());
-            powered.setText("Powered by Easy Menu");
-            powered.setTextColor(Color.parseColor("#737373"));
-            powered.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
-            powered.setTypeface(Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL));
-            powered.setGravity(Gravity.CENTER);
-            LinearLayout.LayoutParams poweredLp =
-                new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                );
-            poweredLp.topMargin = dp(12);
-            root.addView(powered, poweredLp);
+            WebSettings settings = webView.getSettings();
+            settings.setJavaScriptEnabled(true);
+            settings.setDomStorageEnabled(true);
+            settings.setDatabaseEnabled(true);
+            settings.setLoadWithOverviewMode(true);
+            settings.setUseWideViewPort(true);
+            settings.setMediaPlaybackRequiresUserGesture(false);
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+                CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+            }
+            CookieManager.getInstance().setAcceptCookie(true);
 
+            webView.setWebChromeClient(new WebChromeClient());
+            webView.setWebViewClient(new WebViewClient() {
+                @Override
+                public void onPageFinished(WebView view, String url) {
+                    pageReady = true;
+                    loadedUrl = url != null ? url : loadedUrl;
+                    deliverCartJson();
+                }
+            });
+
+            root.addView(webView);
             setContentView(root);
+
+            loadedUrl = initialUrl;
+            webView.loadUrl(initialUrl);
         }
 
-        private int dp(int value) {
-            float density = getContext().getResources().getDisplayMetrics().density;
-            return Math.round(value * density);
+        @Override
+        public void dismiss() {
+            if (webView != null) {
+                try {
+                    webView.stopLoading();
+                    webView.destroy();
+                } catch (Exception ignored) {
+                    // Best-effort cleanup.
+                }
+                webView = null;
+            }
+            super.dismiss();
         }
     }
 }

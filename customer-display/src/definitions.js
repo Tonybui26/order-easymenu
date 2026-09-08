@@ -1,13 +1,42 @@
 /**
+ * @typedef {'idle' | 'cart'} CustomerDisplayMode
+ */
+
+/**
+ * @typedef {Object} CustomerDisplayCartLine
+ * @property {string} id
+ * @property {string} name
+ * @property {number} quantity
+ * @property {number} unitPrice
+ * @property {number} lineTotal
+ * @property {string[]} [options]
+ */
+
+/**
+ * @typedef {Object} CustomerDisplayCartPayload
+ * @property {CustomerDisplayMode} mode
+ * @property {CustomerDisplayCartLine[]} [lines]
+ * @property {number} [subtotal]
+ * @property {number} [discountAmount]
+ * @property {number} [total]
+ */
+
+/**
  * @typedef {Object} CustomerDisplayAvailableResult
- * @property {boolean} available - True when Android reports a secondary/presentation display.
+ * @property {boolean} available
+ */
+
+/**
+ * @typedef {Object} CustomerDisplayOpenOptions
+ * @property {string} url - Absolute URL for the rear WebView (e.g. origin + /customer-display).
  */
 
 /**
  * @typedef {Object} CustomerDisplayPlugin
  * @property {() => Promise<CustomerDisplayAvailableResult>} isAvailable
- * @property {() => Promise<void>} open - Show idle Welcome UI on the secondary display (no-op if none).
- * @property {() => Promise<void>} close - Dismiss the secondary Presentation if open.
+ * @property {(options: CustomerDisplayOpenOptions) => Promise<void>} open
+ * @property {(payload: CustomerDisplayCartPayload) => Promise<void>} updateCart
+ * @property {() => Promise<void>} close
  */
 
 export {};

@@ -8,7 +8,7 @@ import { useMenuContext } from "@/components/context/MenuContext";
 import { isStaffPinLockEnabled } from "@/lib/staff/staffRoles";
 import { getPosHomePath } from "@/lib/pos/posConfig";
 
-const AUTH_PUBLIC_PATHS = ["/signin", "/signup"];
+const AUTH_PUBLIC_PATHS = ["/signin", "/signup", "/customer-display"];
 
 export default function RequireActiveOperator({ children }) {
   const pathname = usePathname();
