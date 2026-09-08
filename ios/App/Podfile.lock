@@ -1,12 +1,12 @@
 PODS:
-  - Capacitor (7.4.3):
+  - Capacitor (8.5.1):
     - CapacitorCordova
-  - CapacitorApp (7.1.0):
+  - CapacitorApp (8.1.1):
     - Capacitor
-  - CapacitorCordova (7.4.3)
-  - CapacitorNetwork (7.0.2):
+  - CapacitorCordova (8.5.1)
+  - CapacitorNetwork (8.0.1):
     - Capacitor
-  - CapacitorSplashScreen (7.0.2):
+  - CapacitorSplashScreen (8.0.2):
     - Capacitor
   - PrinterTcpSocket (0.0.1):
     - Capacitor
@@ -34,13 +34,13 @@ EXTERNAL SOURCES:
     :path: "../../printer-tcp-socket"
 
 SPEC CHECKSUMS:
-  Capacitor: 28d6c01026a9a3f7156529498ec1f389a2a28dbc
-  CapacitorApp: 26587c2ce485d88ddb39adb21cac64f8e481afe3
-  CapacitorCordova: 435121e81a2df4d0034f0fb11fcefab5104cfdb5
-  CapacitorNetwork: 695069886b3c5ed514db69aa3d026b8dc3c03a6b
-  CapacitorSplashScreen: 157947576b59d913792063a8d442a79e6d283ee5
+  Capacitor: 8ca6676b3b1147b00f7f3a547ccf68defd658d55
+  CapacitorApp: 305bd13c44f6f9d164e2ee66a4faa956ed8c0e06
+  CapacitorCordova: eb79411a3a0ed517eeb4c6dcf5933ce4bcbb5c9e
+  CapacitorNetwork: 8812ce60d11fb63d8f2e4ba51a49b2e59892ebe2
+  CapacitorSplashScreen: 7bf61c2001557ff9e195e601c6b87344480d3c65
   PrinterTcpSocket: 7e98c3a4ea4c6bb335ab753e563d18505bb16f03
 
-PODFILE CHECKSUM: c76fcb5decf148b6e9d0593880784b99a9ee8d75
+PODFILE CHECKSUM: 6a84b61cf3908434af65661c3a6b8cc5835102fe
 
 COCOAPODS: 1.16.2
