@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   MoreVertical,
   Search,
@@ -26,6 +26,7 @@ import {
   isHistoryOrder,
   pickHistoryReceiptEmail,
   pickHistoryReceiptOrder,
+  pickHistoryRefundConfirmationOrder,
   ORDER_HISTORY_DATE_FILTER_OPTIONS,
   ORDER_HISTORY_DATE_FILTER_TODAY,
   ORDER_HISTORY_PAYMENT_FILTER_ALL,
@@ -38,6 +39,7 @@ import {
   printBillForHistoryCheck,
   printReceiptForHistoryCheck,
 } from "@/lib/pos/posHistoryOrderPrint";
+import SendRefundConfirmationModal from "./SendRefundConfirmationModal";
 
 const TABLE_COLUMNS = [
   { key: "invoice", label: "Invoice Number", className: "min-w-[9rem]" },
@@ -106,17 +108,23 @@ export default function OrderHistory() {
   const [deleteDrawerOpen, setDeleteDrawerOpen] = useState(false);
   const [receiptTarget, setReceiptTarget] = useState(null);
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+  const [refundConfirmationOrder, setRefundConfirmationOrder] = useState(null);
+  const [refundConfirmationModalOpen, setRefundConfirmationModalOpen] =
+    useState(false);
+  const reopenRowIdAfterRefundRef = useRef(null);
 
   const loadOrders = useCallback(async () => {
     setIsLoading(true);
     try {
       const { startDate, endDate } = getOrderHistoryDateRangeUTC(dateFilter);
       const data = await fetchCompletedOrders(startDate, endDate);
-      const rows = (data.orders || []).filter(isHistoryOrder);
-      setOrders(rows);
+      const nextOrders = (data.orders || []).filter(isHistoryOrder);
+      setOrders(nextOrders);
+      return nextOrders;
     } catch (error) {
       console.error("Error fetching order history:", error);
       setOrders([]);
+      return [];
     } finally {
       setIsLoading(false);
     }
@@ -205,6 +213,17 @@ export default function OrderHistory() {
     setReceiptModalOpen(true);
   }
 
+  function handleSendRefundConfirmation(row) {
+    const order = pickHistoryRefundConfirmationOrder(row?.orders);
+    if (!order?._id) {
+      toast.error("Could not load refund details");
+      return;
+    }
+
+    setRefundConfirmationOrder(order);
+    setRefundConfirmationModalOpen(true);
+  }
+
   function handleRefund(row) {
     const order = buildHistoryRefundOrder(row);
     if (!order) {
@@ -217,6 +236,7 @@ export default function OrderHistory() {
       return;
     }
 
+    reopenRowIdAfterRefundRef.current = row?.id || null;
     setRefundOrder(order);
     setRefundModalOpen(true);
     closeActionsPanel();
@@ -262,10 +282,18 @@ export default function OrderHistory() {
     }
   }
 
-  function handleRefundSuccess() {
+  async function handleRefundSuccess() {
+    const reopenRowId = reopenRowIdAfterRefundRef.current;
+    reopenRowIdAfterRefundRef.current = null;
     setRefundModalOpen(false);
     setRefundOrder(null);
-    loadOrders();
+
+    const nextOrders = await loadOrders();
+    if (!reopenRowId) return;
+
+    const nextRows = buildOrderHistoryRows(nextOrders, storeTimezone);
+    const match = nextRows.find((row) => row.id === reopenRowId);
+    if (match) openActionsPanel(match);
   }
 
   return (
@@ -427,6 +455,7 @@ export default function OrderHistory() {
         onPrintBill={handlePrintBill}
         onPrintReceipt={handlePrintReceipt}
         onEmailReceipt={handleEmailReceipt}
+        onSendRefundConfirmation={handleSendRefundConfirmation}
         onRefund={handleRefund}
         onDelete={handleDelete}
       />
@@ -442,9 +471,19 @@ export default function OrderHistory() {
         onSent={closeActionsPanel}
       />
 
+      <SendRefundConfirmationModal
+        isOpen={refundConfirmationModalOpen}
+        onClose={() => {
+          setRefundConfirmationModalOpen(false);
+          setRefundConfirmationOrder(null);
+        }}
+        order={refundConfirmationOrder}
+      />
+
       <RefundModal
         isOpen={refundModalOpen}
         onClose={() => {
+          reopenRowIdAfterRefundRef.current = null;
           setRefundModalOpen(false);
           setRefundOrder(null);
         }}

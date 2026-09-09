@@ -2,9 +2,20 @@
 
 import { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { FileText, Mail, Receipt, RotateCcw, Trash2, X } from "lucide-react";
+import {
+  FileText,
+  Mail,
+  Receipt,
+  RotateCcw,
+  Send,
+  Trash2,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/helper";
-import { historyRowSupportsEmailReceipt } from "@/lib/helper/orderHistoryDisplay";
+import {
+  historyRowSupportsEmailReceipt,
+  historyRowSupportsSendRefundConfirmation,
+} from "@/lib/helper/orderHistoryDisplay";
 import OrderHistoryCheckDetails from "./OrderHistoryCheckDetails";
 
 const PRINT_ACTIONS = [
@@ -29,6 +40,13 @@ const EMAIL_RECEIPT_ACTION = {
   className: "bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white",
 };
 
+const SEND_REFUND_CONFIRMATION_ACTION = {
+  id: "send-refund-confirmation",
+  label: "Send refund confirmation",
+  icon: Send,
+  className: "bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white",
+};
+
 const DESTRUCTIVE_ACTIONS = [
   {
     id: "refund",
@@ -46,14 +64,33 @@ const DESTRUCTIVE_ACTIONS = [
 ];
 
 function buildVisibleActions(row) {
-  if (row?.isCancelled) return [];
-
   const actions = [];
+  const canEmail = historyRowSupportsEmailReceipt(row);
+  const canSendRefundConfirmation =
+    historyRowSupportsSendRefundConfirmation(row);
 
-  if (historyRowSupportsEmailReceipt(row)) {
+  // Cancelled unpaid: no footer actions.
+  // Cancelled paid: Refund (+ Email if Online). Cancelled refunded: confirmation email.
+  if (row?.isCancelled) {
+    if (canEmail) actions.push(EMAIL_RECEIPT_ACTION);
+    if (canSendRefundConfirmation) {
+      actions.push(SEND_REFUND_CONFIRMATION_ACTION);
+    }
+    if (row?.primaryAction === "refund") {
+      actions.push(DESTRUCTIVE_ACTIONS.find((action) => action.id === "refund"));
+    }
+    return actions;
+  }
+
+  if (canEmail) {
     actions.push(EMAIL_RECEIPT_ACTION);
-  } else {
+  } else if (row?.payment !== "Online") {
+    // Online rows use email (or refund confirmation), not thermal print.
     actions.push(...PRINT_ACTIONS);
+  }
+
+  if (canSendRefundConfirmation) {
+    actions.push(SEND_REFUND_CONFIRMATION_ACTION);
   }
 
   if (row?.primaryAction === "refund") {
@@ -80,6 +117,7 @@ export default function OrderHistoryActionsPanel({
   onPrintBill,
   onPrintReceipt,
   onEmailReceipt,
+  onSendRefundConfirmation,
   onRefund,
   onDelete,
 }) {
@@ -168,6 +206,7 @@ export default function OrderHistoryActionsPanel({
                   isProcessing &&
                   (action.id === "print-bill" || action.id === "print-receipt");
                 const spansFullWidth =
+                  action.id === "send-refund-confirmation" ||
                   (action.id === "refund" && !hasEmailReceipt) ||
                   action.id === "delete" ||
                   (action.id === "email-receipt" && visibleActions.length === 1);
@@ -183,6 +222,8 @@ export default function OrderHistoryActionsPanel({
                         onPrintReceipt?.(displayRow);
                       if (action.id === "email-receipt")
                         onEmailReceipt?.(displayRow);
+                      if (action.id === "send-refund-confirmation")
+                        onSendRefundConfirmation?.(displayRow);
                       if (action.id === "refund") onRefund?.(displayRow);
                       if (action.id === "delete") onDelete?.(displayRow);
                     }}
