@@ -282,7 +282,7 @@ export default function LiveOrderTerminal() {
           autoPrintingEnabled && storeProfile && userData?.ownerEmail;
         const autoPreparedIds = new Set();
 
-        // Paid QR/online: sound once → print → preparing on success (no overlay).
+        // Paid QR/online: preparing first, kitchen print in background (no overlay).
         // Pay-later counter orders stay on the manual Prepare + overlay path.
         if (canAutoPrint) {
           const autoPrintCandidates = notificationWorthyOrders.filter(

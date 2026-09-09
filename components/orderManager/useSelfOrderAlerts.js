@@ -27,6 +27,9 @@ const POLLING_INTERVALS = {
   ERROR_MAX: 60000,
 };
 
+/** Keep auto-print alerts visible briefly so they don't flash off. */
+const AUTO_PRINT_ALERT_MIN_VISIBLE_MS = 3500;
+
 export const SELF_ORDER_BATCH_ALERT_ID = "__self_order_batch__";
 
 function normalizeOrderId(orderId) {
@@ -224,10 +227,9 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
   }, []);
 
   /**
-   * Same path as Live Order Terminal: when device auto-print is on, print +
-   * prepare paid QR/online arrivals; pay-later still surfaces as alerts.
-   * Sound comes from SelfOrderAlertStack when alerts are shown — do not chime
-   * here before print finishes (kitchen retries can take several seconds).
+   * Same path as Live Order Terminal: when device auto-print is on, move paid
+   * QR/online to preparing immediately and kitchen-print in the background.
+   * Pay-later still surfaces as alerts for manual Prepare.
    */
   const autoPrintEligibleSelfOrders = useCallback(
     async (activeOrders) => {
@@ -264,8 +266,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
             itemGroups,
           });
 
-          // Only skip future retries once prepare succeeded. Printed-but-not-
-          // prepared must stay alertable / retryable on the next poll.
+          // Only skip future retries once prepare succeeded.
           if (result.prepared && result.updatedOrder) {
             printedOrderIdsRef.current.add(orderId);
             autoPreparedIds.add(orderId);
@@ -275,7 +276,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
                 : entry,
             );
             toast.success(result.message, { duration: 3000 });
-          } else if (result.printed && !result.prepared) {
+          } else if (!result.prepared) {
             toast.error(result.message, { duration: 4000 });
           }
         } catch (error) {
@@ -284,7 +285,10 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
             error,
           );
         } finally {
-          setOrderAutoPrinting(orderId, false);
+          // Keep Auto sending… until the min-visible hold finishes for successes.
+          if (!autoPreparedIds.has(orderId)) {
+            setOrderAutoPrinting(orderId, false);
+          }
         }
       }
 
@@ -310,12 +314,24 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
       let activeOrders = filterOrdersForActiveList(data, menuConfig);
       consecutiveErrorsRef.current = 0;
 
-      // Show alerts immediately so sound + popup are not blocked by kitchen
-      // print retries (can take ~10s). Auto-print then dismisses on success.
+      // Show alerts immediately; auto-print prepare is fast, so hold dismiss
+      // briefly so the popup doesn't flash.
+      const alertShownAt = Date.now();
       syncAlertsFromOrders(activeOrders);
 
       const autoPrintResult = await autoPrintEligibleSelfOrders(activeOrders);
       activeOrders = autoPrintResult.orders;
+
+      if (autoPrintResult.autoPreparedIds.size > 0) {
+        const remainingMs =
+          AUTO_PRINT_ALERT_MIN_VISIBLE_MS - (Date.now() - alertShownAt);
+        if (remainingMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, remainingMs));
+        }
+        for (const orderId of autoPrintResult.autoPreparedIds) {
+          setOrderAutoPrinting(orderId, false);
+        }
+      }
 
       syncAlertsFromOrders(activeOrders);
       return { success: true, hasActiveOrders: activeOrders.length > 0 };
@@ -326,7 +342,12 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
     } finally {
       isPollingInProgressRef.current = false;
     }
-  }, [autoPrintEligibleSelfOrders, menuConfig, syncAlertsFromOrders]);
+  }, [
+    autoPrintEligibleSelfOrders,
+    menuConfig,
+    setOrderAutoPrinting,
+    syncAlertsFromOrders,
+  ]);
 
   const pollingOrders = useCallback(async () => {
     if (!isPollingActive || !menuConfig) return;
