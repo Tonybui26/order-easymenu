@@ -7,7 +7,7 @@ import logoIcon from "../../public/images/logo.svg";
 const IDLE_PAYLOAD = { mode: "idle", lines: [] };
 
 /** Flip to `true` to preview the cart layout without live POS updates. */
-const USE_SAMPLE_CART = true;
+const USE_SAMPLE_CART = false;
 
 const SAMPLE_CART_PAYLOAD = {
   mode: "cart",
