@@ -16,6 +16,8 @@ import SettingsOnOffBadge from "./SettingsOnOffBadge";
 export default function SystemSettings({
   draftPosConfig,
   onDraftPosChange,
+  draftKitchenPrintingEnabled = true,
+  onDraftKitchenPrintingEnabledChange,
   draftSkipKitchenDocketGroupHeaders = false,
   onDraftSkipKitchenDocketGroupHeadersChange,
   draftStaffPinLockEnabled = false,
@@ -27,6 +29,7 @@ export default function SystemSettings({
   const tyroEnabled = Boolean(
     resolvePosPaymentsConfig(menuConfig).tyro.enabled,
   );
+  const kitchenPrintingOn = Boolean(draftKitchenPrintingEnabled);
 
   function updatePosDraft(patch) {
     onDraftPosChange?.({ ...draftPosConfig, ...patch });
@@ -50,6 +53,7 @@ export default function SystemSettings({
             description="When on, this device automatically prints kitchen dockets for new paid QR and online orders and moves them to Preparing. Turn on only on the station next to the printers so other devices do not print the same order."
             checked={Boolean(autoPrintingEnabled)}
             onChange={(checked) => setAutoPrintingEnabled(checked)}
+            disabled={!kitchenPrintingOn}
           />
         </div>
       </section>
@@ -62,12 +66,21 @@ export default function SystemSettings({
         </div>
         <div className="divide-y divide-gray-100/80">
           <SettingsToggleRow
+            title="Enable kitchen printing"
+            description="When on, kitchen dockets print on Send, Prepare, and auto-print, and Reprint Order is available. Turn off for stores that run without kitchen docket printers."
+            checked={kitchenPrintingOn}
+            onChange={(checked) =>
+              onDraftKitchenPrintingEnabledChange?.(checked)
+            }
+          />
+          <SettingsToggleRow
             title="Hide group names on kitchen dockets"
             description="When on, kitchen tickets print variant and modifier options without group headers (for example Size / Extras). You can still hide a single group with ((__)) in the group name. Leave off to keep current docket layout."
             checked={Boolean(draftSkipKitchenDocketGroupHeaders)}
             onChange={(checked) =>
               onDraftSkipKitchenDocketGroupHeadersChange?.(checked)
             }
+            disabled={!kitchenPrintingOn}
           />
         </div>
       </section>

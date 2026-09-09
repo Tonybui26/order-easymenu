@@ -15,6 +15,8 @@ import {
   isPosDineInHeldOrder,
   isTakeawayPickupHeldOrder,
 } from "@/lib/pos/posHeldOrder";
+import { isKitchenPrintingEnabled } from "@/lib/pos/kitchenPrintingConfig";
+import { useMenuContext } from "@/components/context/MenuContext";
 import PosActionButton from "./PosActionButton";
 import SideDrawer from "./SideDrawer";
 
@@ -138,6 +140,8 @@ export default function PosSelfOrderingHeldDrawer({
   isPreviewLoading = false,
   previewError = null,
 }) {
+  const { menuConfig } = useMenuContext();
+  const kitchenPrintingEnabled = isKitchenPrintingEnabled(menuConfig);
   const [showMoreActions, setShowMoreActions] = useState(false);
   const openSnapshotRef = useRef(null);
 
@@ -179,6 +183,7 @@ export default function PosSelfOrderingHeldDrawer({
   const visibleMoreActions = SELF_ORDER_MORE_ACTIONS.filter((action) => {
     if (action.id === "print-bill") return !displayHeldOrder?.allPaid;
     if (action.id === "cancel") return showCancel;
+    if (action.id === "reprint-order") return kitchenPrintingEnabled;
     return true;
   });
 

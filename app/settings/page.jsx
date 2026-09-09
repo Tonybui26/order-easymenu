@@ -23,10 +23,14 @@ export default function SettingsPage() {
   const savedSkipKitchenDocketGroupHeaders = Boolean(
     menuConfig?.skipKitchenDocketGroupHeaders,
   );
+  const savedKitchenPrintingEnabled =
+    menuConfig?.kitchenPrintingEnabled !== false;
   const savedStaffPinLockEnabled = Boolean(menuConfig?.staffPinLockEnabled);
   const [draftPosConfig, setDraftPosConfig] = useState(savedPosConfig);
   const [draftSkipKitchenDocketGroupHeaders, setDraftSkipKitchenDocketGroupHeaders] =
     useState(savedSkipKitchenDocketGroupHeaders);
+  const [draftKitchenPrintingEnabled, setDraftKitchenPrintingEnabled] =
+    useState(savedKitchenPrintingEnabled);
   const [draftStaffPinLockEnabled, setDraftStaffPinLockEnabled] = useState(
     savedStaffPinLockEnabled,
   );
@@ -37,12 +41,15 @@ export default function SettingsPage() {
       !posConfigDraftEquals(draftPosConfig, savedPosConfig) ||
       draftSkipKitchenDocketGroupHeaders !==
         savedSkipKitchenDocketGroupHeaders ||
+      draftKitchenPrintingEnabled !== savedKitchenPrintingEnabled ||
       draftStaffPinLockEnabled !== savedStaffPinLockEnabled,
     [
       draftPosConfig,
       savedPosConfig,
       draftSkipKitchenDocketGroupHeaders,
       savedSkipKitchenDocketGroupHeaders,
+      draftKitchenPrintingEnabled,
+      savedKitchenPrintingEnabled,
       draftStaffPinLockEnabled,
       savedStaffPinLockEnabled,
     ],
@@ -54,11 +61,13 @@ export default function SettingsPage() {
       setDraftSkipKitchenDocketGroupHeaders(
         savedSkipKitchenDocketGroupHeaders,
       );
+      setDraftKitchenPrintingEnabled(savedKitchenPrintingEnabled);
       setDraftStaffPinLockEnabled(savedStaffPinLockEnabled);
     }
   }, [
     savedPosConfig,
     savedSkipKitchenDocketGroupHeaders,
+    savedKitchenPrintingEnabled,
     savedStaffPinLockEnabled,
     isDirty,
   ]);
@@ -72,6 +81,7 @@ export default function SettingsPage() {
       const freshConfig = latestData?.config || {};
       const configToSave = {
         ...freshConfig,
+        kitchenPrintingEnabled: draftKitchenPrintingEnabled,
         skipKitchenDocketGroupHeaders: draftSkipKitchenDocketGroupHeaders,
         staffPinLockEnabled: draftStaffPinLockEnabled,
         pos: {
@@ -116,6 +126,10 @@ export default function SettingsPage() {
             <SystemSettings
               draftPosConfig={draftPosConfig}
               onDraftPosChange={setDraftPosConfig}
+              draftKitchenPrintingEnabled={draftKitchenPrintingEnabled}
+              onDraftKitchenPrintingEnabledChange={
+                setDraftKitchenPrintingEnabled
+              }
               draftSkipKitchenDocketGroupHeaders={
                 draftSkipKitchenDocketGroupHeaders
               }

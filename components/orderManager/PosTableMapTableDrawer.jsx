@@ -12,6 +12,8 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/helper";
+import { isKitchenPrintingEnabled } from "@/lib/pos/kitchenPrintingConfig";
+import { useMenuContext } from "@/components/context/MenuContext";
 import PosActionButton from "./PosActionButton";
 import SideDrawer from "./SideDrawer";
 
@@ -252,6 +254,8 @@ export default function PosTableMapTableDrawer({
   totalLabel = "Table total",
   emptySubtitle = "Open check on this table",
 }) {
+  const { menuConfig } = useMenuContext();
+  const kitchenPrintingEnabled = isKitchenPrintingEnabled(menuConfig);
   const [showMoreActions, setShowMoreActions] = useState(false);
   // Keep last open snapshot so SideDrawer can play its exit animation after
   // the parent clears tableName / heldOrder on close.
@@ -327,6 +331,7 @@ export default function PosTableMapTableDrawer({
   const visibleMoreActions = TABLE_MORE_ACTIONS.filter((action) => {
     if (action.id === "delete") return !allPaid;
     if (action.id === "print-bill") return !allPaid;
+    if (action.id === "reprint-order") return kitchenPrintingEnabled;
     return true;
   });
 

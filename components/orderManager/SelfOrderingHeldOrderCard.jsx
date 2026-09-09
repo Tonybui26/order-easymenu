@@ -19,6 +19,8 @@ import {
   isPosDineInHeldOrder,
   isTakeawayPickupHeldOrder,
 } from "@/lib/pos/posHeldOrder";
+import { isKitchenPrintingEnabled } from "@/lib/pos/kitchenPrintingConfig";
+import { useMenuContext } from "@/components/context/MenuContext";
 
 function formatMoney(amount) {
   return `$${Number(amount || 0).toFixed(2)}`;
@@ -153,6 +155,8 @@ export default function SelfOrderingHeldOrderCard({
   isProcessing = false,
   className,
 }) {
+  const { menuConfig } = useMenuContext();
+  const kitchenPrintingEnabled = isKitchenPrintingEnabled(menuConfig);
   const heldAt = order?.heldAt || order?.createdAt;
   const [now, setNow] = useState(() => Date.now());
   const [showMoreActions, setShowMoreActions] = useState(false);
@@ -178,6 +182,7 @@ export default function SelfOrderingHeldOrderCard({
   const visibleMoreActions = HELD_MORE_ACTIONS.filter((action) => {
     if (action.id === "print-bill") return !order?.allPaid;
     if (action.id === "cancel") return showCancel;
+    if (action.id === "reprint-order") return kitchenPrintingEnabled;
     return true;
   });
 
