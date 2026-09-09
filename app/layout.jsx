@@ -12,6 +12,7 @@ import VersionBanner from "@/components/VersionBanner";
 import PrintToastHost from "@/components/print/PrintToastHost";
 import PosImmersiveHost from "@/components/orderManager/PosImmersiveHost";
 import CustomerDisplayHost from "@/components/orderManager/CustomerDisplayHost";
+import SelfOrderAlertsHost from "@/components/orderManager/SelfOrderAlertsHost";
 import { ActiveOperatorProvider } from "@/components/context/ActiveOperatorContext";
 import { PosRegisterSessionProvider } from "@/components/context/PosRegisterSessionContext";
 import { PosNavigateProvider } from "@/components/context/PosNavigateContext";
@@ -71,6 +72,8 @@ export default async function RootLayout({ children }) {
                         <PosImmersiveHost />
                       </RequireOpenRegister>
                     </RequireActiveOperator>
+                    {/* Outside auth gate: lock screen still gets QR alerts + auto-print. */}
+                    <SelfOrderAlertsHost />
                     {/* Outside auth gate so Logout → /lock does not close/reopen the rear WebView. */}
                     <CustomerDisplayHost />
                   </PosNavigateProvider>

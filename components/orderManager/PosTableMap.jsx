@@ -61,12 +61,6 @@ import PosTableMapFloor from "./PosTableMapFloor";
 import PosTableMapTableDrawer from "./PosTableMapTableDrawer";
 import PosTableMapUndoMergeModal from "./PosTableMapUndoMergeModal";
 import DeleteOrderDrawer from "./DeleteOrderDrawer";
-import SelfOrderAlertStack from "./SelfOrderAlertStack";
-import {
-  SELF_ORDER_BATCH_ALERT_ID,
-  useSelfOrderAlerts,
-} from "./useSelfOrderAlerts";
-import { POS_HELD_ORDERS_TAB_SELF_ORDERING } from "./PosHeldOrders";
 import DismissibleToast, {
   useDismissibleToast,
 } from "@/components/orderManager/DismissibleToast";
@@ -87,12 +81,6 @@ function ticketsStatusKey(heldOrder) {
 
 export default function PosTableMap() {
   const { navigate, isPending } = usePosNavigate();
-  const {
-    alerts: selfOrderAlerts,
-    dismissSelfOrderAlert,
-    prepareSelfOrderAlert,
-    pollSelfOrderAlerts,
-  } = useSelfOrderAlerts({ externalPolling: true });
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
   const { posTableMaps, storeProfile, menuConfig, itemGroups } =
     useMenuContext();
@@ -190,11 +178,7 @@ export default function PosTableMap() {
     }
   }, []);
 
-  const pollTableMap = useCallback(async () => {
-    await Promise.all([loadHeldOrders(), pollSelfOrderAlerts()]);
-  }, [loadHeldOrders, pollSelfOrderAlerts]);
-
-  // Shared poll clock: held-order dots + self-order alert popups refresh together.
+  // Held-order dots only — self-order alerts/auto-print come from SelfOrderAlertsHost.
   useEffect(() => {
     let intervalId = null;
     let cancelled = false;
@@ -209,13 +193,13 @@ export default function PosTableMap() {
     const startPollInterval = () => {
       clearPollInterval();
       intervalId = setInterval(() => {
-        if (!cancelled) void pollTableMap();
+        if (!cancelled) void loadHeldOrders();
       }, TABLE_MAP_POLL_MS);
     };
 
     const resumePolling = () => {
       if (cancelled) return;
-      void pollTableMap();
+      void loadHeldOrders();
       startPollInterval();
     };
 
@@ -255,7 +239,7 @@ export default function PosTableMap() {
       clearPollInterval();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [pollTableMap]);
+  }, [loadHeldOrders]);
 
   useEffect(() => {
     if (!isPending) {
@@ -824,26 +808,8 @@ export default function PosTableMap() {
     ? TABLE_MAP_MERGE_FLOOR_COLOR
     : TABLE_MAP_FLOOR_COLOR;
 
-  const handleSelfOrderAlertSend = useCallback(
-    (alertId) => {
-      if (alertId === SELF_ORDER_BATCH_ALERT_ID) {
-        navigate(`/pos/held?tab=${POS_HELD_ORDERS_TAB_SELF_ORDERING}`);
-        return;
-      }
-
-      void prepareSelfOrderAlert(alertId);
-    },
-    [prepareSelfOrderAlert, navigate],
-  );
-
   return (
     <>
-      <SelfOrderAlertStack
-        alerts={selfOrderAlerts}
-        onDismiss={dismissSelfOrderAlert}
-        onSend={handleSelfOrderAlertSend}
-      />
-
       <DismissibleToast
         toast={dismissibleToast}
         onDismiss={hideDismissibleToast}
