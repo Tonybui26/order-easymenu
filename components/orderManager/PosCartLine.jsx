@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import {
   animate,
   motion,
@@ -17,8 +18,10 @@ const CART_LINE_LAYOUT_SPRING = { type: "spring", damping: 28, stiffness: 320 };
 const OPEN_OFFSET = -OPTION_WIDTH;
 const OPEN_THRESHOLD = OPTION_WIDTH * 0.35;
 const OPEN_VELOCITY = -400;
-/** WebViews often synthesize a click well after touchend; keep ignoring it. */
+/** Ignore content clicks synthesized after a swipe (WebViews fire these late). */
 const POST_DRAG_CLICK_SUPPRESS_MS = 450;
+/** Dedupe pointerup + click so Option only opens once per gesture. */
+const OPTION_ACTIVATE_DEDUPE_MS = 400;
 
 const CART_LINE_ITEM_VARIANTS = {
   hidden: { opacity: 0, y: -20, scale: 0.97 },
@@ -90,24 +93,37 @@ export default function PosCartLine({
   const x = useMotionValue(0);
   const isOpenRef = useRef(false);
   const isDraggingRef = useRef(false);
+  const dragPointerIdRef = useRef(null);
   const suppressClickRef = useRef(false);
   const suppressTimerRef = useRef(null);
   const optionArmedRef = useRef(false);
+  const optionLayerRef = useRef(null);
+  const lastOptionActivateAtRef = useRef(0);
   const [isRevealed, setIsRevealed] = useState(false);
 
   useMotionValueEvent(x, "change", (latest) => {
     isOpenRef.current = latest <= OPEN_OFFSET / 2;
   });
 
+  function syncOptionLayerInteractive(active) {
+    const el = optionLayerRef.current;
+    if (!el) return;
+    // Apply immediately so the next tap hits Option without waiting for paint.
+    el.style.pointerEvents = active ? "auto" : "";
+    el.style.zIndex = active ? "3" : "";
+  }
+
   useEffect(() => {
     if (!canSwipeOptions) {
       setIsRevealed(false);
       optionArmedRef.current = false;
+      syncOptionLayerInteractive(false);
       animate(x, 0, SWIPE_SPRING);
       return;
     }
     setIsRevealed(isOptionsOpen);
     optionArmedRef.current = isOptionsOpen;
+    syncOptionLayerInteractive(isOptionsOpen);
     animate(x, isOptionsOpen ? OPEN_OFFSET : 0, SWIPE_SPRING);
   }, [canSwipeOptions, isOptionsOpen, x]);
 
@@ -128,17 +144,23 @@ export default function PosCartLine({
 
   function snapTo(open) {
     if (!canSwipeOptions) {
-      setIsRevealed(false);
+      flushSync(() => {
+        setIsRevealed(false);
+      });
       optionArmedRef.current = false;
+      syncOptionLayerInteractive(false);
       animate(x, 0, SWIPE_SPRING);
       onOptionsOpenChange?.(false);
       return;
     }
 
-    // Elevate Option immediately so the next tap hits the button, not the
-    // sliding row (real-device spring still covers Option mid-animation).
-    setIsRevealed(open);
+    // Flush reveal before drag handlers return so Option is tappable immediately
+    // (className pointer-events otherwise waits a frame; WebViews drop that tap).
+    flushSync(() => {
+      setIsRevealed(open);
+    });
     optionArmedRef.current = open;
+    syncOptionLayerInteractive(open);
     if (open) {
       x.set(OPEN_OFFSET);
     } else {
@@ -147,11 +169,12 @@ export default function PosCartLine({
     onOptionsOpenChange?.(open);
   }
 
-  function handleDragStart() {
+  function handleDragStart(event) {
     if (!canSwipeOptions) return;
     // While revealed, only tap-to-close — horizontal drag fights list scroll on device.
     if (isRevealed || isOptionsOpen || optionArmedRef.current) return;
     isDraggingRef.current = true;
+    dragPointerIdRef.current = event?.pointerId ?? null;
     suppressClickRef.current = true;
   }
 
@@ -162,6 +185,10 @@ export default function PosCartLine({
       info.offset.x < -OPEN_THRESHOLD || info.velocity.x < OPEN_VELOCITY;
     snapTo(shouldOpen);
     armPostDragClickSuppress();
+    // Drop swipe pointer id after the gesture settles so Option can accept the next tap.
+    window.setTimeout(() => {
+      dragPointerIdRef.current = null;
+    }, 0);
   }
 
   function handleContentActivate() {
@@ -178,9 +205,28 @@ export default function PosCartLine({
     event.stopPropagation();
     if (!optionArmedRef.current && !isRevealed && !isOptionsOpen) return;
     if (isDraggingRef.current) return;
-    // Open on click only (not pointerup). On touch, opening on pointerup
-    // mounts the drawer before the browser's synthesized click, which then
-    // hits SideDrawer's backdrop and closes it immediately (flicker).
+    // Ignore the finger that performed the swipe if it lifts on Option.
+    if (
+      event.pointerId != null &&
+      dragPointerIdRef.current != null &&
+      event.pointerId === dragPointerIdRef.current
+    ) {
+      return;
+    }
+
+    const now = performance.now();
+    if (now - lastOptionActivateAtRef.current < OPTION_ACTIVATE_DEDUPE_MS) {
+      return;
+    }
+    lastOptionActivateAtRef.current = now;
+    // Clear content-click suppress so we don't leave a dead zone after opening notes.
+    suppressClickRef.current = false;
+    if (suppressTimerRef.current) {
+      clearTimeout(suppressTimerRef.current);
+      suppressTimerRef.current = null;
+    }
+    // Prefer pointerup on touch: after a swipe, WebViews often swallow the first click.
+    // SideDrawer ignores orphan backdrop clicks, so pointerup-open is safe.
     onOptionsClick?.(line.lineId);
   }
 
@@ -206,6 +252,7 @@ export default function PosCartLine({
     >
       {canSwipeOptions ? (
         <div
+          ref={optionLayerRef}
           className={cn(
             "absolute inset-y-0 right-0 flex",
             // When revealed, sit above the sliding row so taps reach Option
@@ -216,6 +263,7 @@ export default function PosCartLine({
         >
           <button
             type="button"
+            onPointerUp={handleOptionActivate}
             onClick={handleOptionActivate}
             className="flex h-full w-full flex-col items-center justify-center rounded-r-[0.75rem] bg-[#301C0F] px-2 text-center text-xs font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#3d2614] active:bg-[#24150b]"
             aria-label={`Options for ${displayTitle}`}
