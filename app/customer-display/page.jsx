@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
+import logoIcon from "../../public/images/logo.svg";
 
 const IDLE_PAYLOAD = { mode: "idle", lines: [] };
 
@@ -40,20 +42,37 @@ export default function CustomerDisplayPage() {
   }, []);
 
   const isCart =
-    payload?.mode === "cart" && Array.isArray(payload.lines) && payload.lines.length > 0;
+    payload?.mode === "cart" &&
+    Array.isArray(payload.lines) &&
+    payload.lines.length > 0;
   const lines = isCart ? payload.lines : [];
   const discountAmount = Number(payload?.discountAmount || 0);
   const total = Number(payload?.total ?? payload?.subtotal ?? 0);
 
   if (!isCart) {
     return (
-      <main className="flex min-h-[100dvh] flex-col items-center justify-center bg-white px-8 text-center">
-        <h1 className="text-5xl font-bold tracking-tight text-neutral-900 sm:text-6xl">
+      <main className="relative flex min-h-[100dvh] flex-col items-center justify-center bg-[#301C0F] px-8 text-center text-white">
+        <h1 className="text-5xl font-bold tracking-tight sm:text-6xl">
           Welcome
         </h1>
-        <p className="mt-4 text-lg text-neutral-500 sm:text-xl">
-          Powered by Easy Menu
-        </p>
+        <footer className="fixed inset-x-0 bottom-0 flex items-center justify-center border-t-4 border-[#331f11] bg-[#24160c] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="inline-flex items-center gap-2.5 text-left">
+            <Image
+              src={logoIcon}
+              alt=""
+              className="h-9 w-auto sm:h-10"
+              priority
+            />
+            <div className="flex flex-col leading-tight">
+              <span className="text-sm font-semibold text-white/60">
+                Powered by
+              </span>
+              <span className="font-brand text-xl font-extrabold leading-[1.05] text-white sm:text-2xl sm:leading-[1.05]">
+                Easy<span className="text-brand_accent">Menu</span>
+              </span>
+            </div>
+          </div>
+        </footer>
       </main>
     );
   }
