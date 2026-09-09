@@ -56,6 +56,7 @@ const ALERT_ITEM_VARIANTS = {
  *   customerName?: string,
  *   createdAt?: number | string | Date,
  *   isSending?: boolean,
+ *   isAutoSending?: boolean,
  *   sendLabel?: string,
  * }>} alerts — newest entries first
  */
@@ -115,6 +116,7 @@ export default function SelfOrderAlertStack({
                 customerName={alert.customerName}
                 createdAt={alert.createdAt}
                 isSending={alert.isSending}
+                isAutoSending={alert.isAutoSending}
                 sendLabel={alert.sendLabel}
                 onDismiss={
                   typeof onDismiss === "function"

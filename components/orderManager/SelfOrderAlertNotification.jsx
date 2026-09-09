@@ -23,6 +23,7 @@ export default function SelfOrderAlertNotification({
   onSend,
   onDismiss,
   isSending = false,
+  isAutoSending = false,
   className,
 }) {
   const description =
@@ -37,6 +38,9 @@ export default function SelfOrderAlertNotification({
   }, [createdAt]);
 
   const timeAgo = formatNotificationTimeAgo(createdAt ?? nowMs, nowMs);
+  const sendDisabled = isSending || typeof onSend !== "function";
+  // Auto-print keeps running after dismiss; only block dismiss during manual Send.
+  const dismissDisabled = isSending && !isAutoSending;
 
   return (
     <div
@@ -78,7 +82,7 @@ export default function SelfOrderAlertNotification({
           <button
             type="button"
             onClick={onDismiss}
-            disabled={isSending}
+            disabled={dismissDisabled}
             className="px-1 py-1 text-xs font-medium text-neutral-500 transition-colors hover:text-neutral-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Dismiss
@@ -87,10 +91,14 @@ export default function SelfOrderAlertNotification({
         <button
           type="button"
           onClick={onSend}
-          disabled={isSending || typeof onSend !== "function"}
+          disabled={sendDisabled}
           className="flex-grow rounded-lg bg-[#984B28] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#7f3f22] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isSending ? "…" : sendLabel}
+          {isAutoSending
+            ? "Auto sending…"
+            : isSending
+              ? "…"
+              : sendLabel}
         </button>
       </div>
     </div>

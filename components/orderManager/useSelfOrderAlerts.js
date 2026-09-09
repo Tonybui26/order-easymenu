@@ -6,12 +6,17 @@ import toast from "react-hot-toast";
 import { fetchOrders } from "@/lib/api/fetchApi";
 import { filterOrdersForActiveList } from "@/lib/helper/payLater";
 import { isSelfOrderNotificationCandidate } from "@/lib/helper/liveOrderNotifications";
-import { prepareOrderForKitchen } from "@/lib/helper/prepareLiveOrder";
+import {
+  autoPrintAndPrepareOrder,
+  isAutoPrintExcludedPayLaterOrder,
+  prepareOrderForKitchen,
+} from "@/lib/helper/prepareLiveOrder";
 import { isNativeApp } from "@/lib/helper/platformDetection";
 import {
   formatSelfOrderBatchDescription,
   formatSelfOrderBatchTitle,
 } from "@/lib/pos/selfOrderAlertDisplay";
+import { getAutoPrintingEnabled } from "@/lib/utils/autoPrinting";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 
@@ -53,6 +58,7 @@ function batchToAlert(orders) {
     kind: "batch",
     id: SELF_ORDER_BATCH_ALERT_ID,
     count: sorted.length,
+    orderIds: sorted.map((order) => normalizeOrderId(order._id)).filter(Boolean),
     createdAt: sorted[0]?.createdAt,
     title: formatSelfOrderBatchTitle(sorted.length),
     description: formatSelfOrderBatchDescription(sorted),
@@ -91,6 +97,11 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
   const [alerts, setAlerts] = useState([]);
   const [processingAlertIds, setProcessingAlertIds] = useState(() => new Set());
   const processingAlertIdsRef = useRef(new Set());
+  const printedOrderIdsRef = useRef(new Set());
+  const autoPrintingOrderIdsRef = useRef(new Set());
+  const [autoPrintingOrderIds, setAutoPrintingOrderIds] = useState(
+    () => new Set(),
+  );
   const [isPollingActive, setIsPollingActive] = useState(!externalPolling);
 
   const isReturnSyncDoneRef = useRef(false);
@@ -100,6 +111,14 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
   const isPollingInProgressRef = useRef(false);
   const isNative = isNativeApp();
 
+  const setOrderAutoPrinting = useCallback((orderId, isPrinting) => {
+    const id = normalizeOrderId(orderId);
+    if (!id) return;
+    if (isPrinting) autoPrintingOrderIdsRef.current.add(id);
+    else autoPrintingOrderIdsRef.current.delete(id);
+    setAutoPrintingOrderIds(new Set(autoPrintingOrderIdsRef.current));
+  }, []);
+
   const dismissSelfOrderAlert = useCallback((alertId) => {
     setAlerts((prev) => prev.filter((alert) => alert.id !== alertId));
   }, []);
@@ -107,6 +126,9 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
   const prepareSelfOrderAlert = useCallback(
     async (alertId) => {
       if (!menuConfig || processingAlertIdsRef.current.has(alertId)) return;
+      if (autoPrintingOrderIdsRef.current.has(normalizeOrderId(alertId))) {
+        return;
+      }
 
       processingAlertIdsRef.current.add(alertId);
       setProcessingAlertIds(new Set(processingAlertIdsRef.current));
@@ -155,11 +177,25 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
 
   const alertsWithProcessing = useMemo(
     () =>
-      alerts.map((alert) => ({
-        ...alert,
-        isSending: processingAlertIds.has(alert.id),
-      })),
-    [alerts, processingAlertIds],
+      alerts.map((alert) => {
+        const isManualSending = processingAlertIds.has(alert.id);
+        const isAutoSending =
+          alert.kind === "batch"
+            ? (alert.orderIds || []).some((id) =>
+                autoPrintingOrderIds.has(normalizeOrderId(id)),
+              )
+            : autoPrintingOrderIds.has(normalizeOrderId(alert.id));
+
+        return {
+          ...alert,
+          isSending: isManualSending || isAutoSending,
+          isAutoSending,
+          sendLabel: isAutoSending
+            ? "Auto sending…"
+            : alert.sendLabel || "Send",
+        };
+      }),
+    [alerts, autoPrintingOrderIds, processingAlertIds],
   );
 
   const syncAlertsFromOrders = useCallback((activeOrders) => {
@@ -187,6 +223,82 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
     );
   }, []);
 
+  /**
+   * Same path as Live Order Terminal: when device auto-print is on, print +
+   * prepare paid QR/online arrivals; pay-later still surfaces as alerts.
+   * Sound comes from SelfOrderAlertStack when alerts are shown — do not chime
+   * here before print finishes (kitchen retries can take several seconds).
+   */
+  const autoPrintEligibleSelfOrders = useCallback(
+    async (activeOrders) => {
+      const autoPrintingEnabled = getAutoPrintingEnabled();
+      const canAutoPrint =
+        autoPrintingEnabled && storeProfile && userData?.ownerEmail;
+      if (!canAutoPrint) {
+        return { orders: activeOrders, autoPreparedIds: new Set() };
+      }
+
+      const autoPrintCandidates = activeOrders.filter((order) => {
+        if (!isSelfOrderNotificationCandidate(order)) return false;
+        if (isAutoPrintExcludedPayLaterOrder(order)) return false;
+        const orderId = normalizeOrderId(order._id);
+        if (printedOrderIdsRef.current.has(orderId)) return false;
+        if (autoPrintingOrderIdsRef.current.has(orderId)) return false;
+        return true;
+      });
+
+      if (autoPrintCandidates.length === 0) {
+        return { orders: activeOrders, autoPreparedIds: new Set() };
+      }
+
+      let nextOrders = activeOrders;
+      const autoPreparedIds = new Set();
+
+      for (const order of autoPrintCandidates) {
+        const orderId = normalizeOrderId(order._id);
+        setOrderAutoPrinting(orderId, true);
+        try {
+          const result = await autoPrintAndPrepareOrder(order, {
+            storeProfile,
+            menuConfig,
+            itemGroups,
+          });
+
+          // Only skip future retries once prepare succeeded. Printed-but-not-
+          // prepared must stay alertable / retryable on the next poll.
+          if (result.prepared && result.updatedOrder) {
+            printedOrderIdsRef.current.add(orderId);
+            autoPreparedIds.add(orderId);
+            nextOrders = nextOrders.map((entry) =>
+              entry._id === result.updatedOrder._id
+                ? result.updatedOrder
+                : entry,
+            );
+            toast.success(result.message, { duration: 3000 });
+          } else if (result.printed && !result.prepared) {
+            toast.error(result.message, { duration: 4000 });
+          }
+        } catch (error) {
+          console.error(
+            `[table-map auto-print] Error auto-printing order ${order._id}:`,
+            error,
+          );
+        } finally {
+          setOrderAutoPrinting(orderId, false);
+        }
+      }
+
+      return { orders: nextOrders, autoPreparedIds };
+    },
+    [
+      itemGroups,
+      menuConfig,
+      setOrderAutoPrinting,
+      storeProfile,
+      userData?.ownerEmail,
+    ],
+  );
+
   const pollSelfOrderAlerts = useCallback(async () => {
     if (!menuConfig) return { skipped: true };
     if (isPollingInProgressRef.current) return { skipped: true };
@@ -195,8 +307,16 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
 
     try {
       const data = await fetchOrders();
-      const activeOrders = filterOrdersForActiveList(data, menuConfig);
+      let activeOrders = filterOrdersForActiveList(data, menuConfig);
       consecutiveErrorsRef.current = 0;
+
+      // Show alerts immediately so sound + popup are not blocked by kitchen
+      // print retries (can take ~10s). Auto-print then dismisses on success.
+      syncAlertsFromOrders(activeOrders);
+
+      const autoPrintResult = await autoPrintEligibleSelfOrders(activeOrders);
+      activeOrders = autoPrintResult.orders;
+
       syncAlertsFromOrders(activeOrders);
       return { success: true, hasActiveOrders: activeOrders.length > 0 };
     } catch (error) {
@@ -206,7 +326,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
     } finally {
       isPollingInProgressRef.current = false;
     }
-  }, [menuConfig, syncAlertsFromOrders]);
+  }, [autoPrintEligibleSelfOrders, menuConfig, syncAlertsFromOrders]);
 
   const pollingOrders = useCallback(async () => {
     if (!isPollingActive || !menuConfig) return;
