@@ -6,6 +6,50 @@ import logoIcon from "../../public/images/logo.svg";
 
 const IDLE_PAYLOAD = { mode: "idle", lines: [] };
 
+/** Flip to `true` to preview the cart layout without live POS updates. */
+const USE_SAMPLE_CART = true;
+
+const SAMPLE_CART_PAYLOAD = {
+  mode: "cart",
+  lines: [
+    {
+      id: "sample-1",
+      name: "Pad Thai",
+      quantity: 2,
+      unitPrice: 18.5,
+      lineTotal: 37,
+      options: ["Chicken", "No peanuts", "Extra lime"],
+    },
+    {
+      id: "sample-2",
+      name: "Green Curry",
+      quantity: 1,
+      unitPrice: 22,
+      lineTotal: 22,
+      options: ["Medium spice", "Jasmine rice"],
+    },
+    {
+      id: "sample-3",
+      name: "Mango Sticky Rice",
+      quantity: 1,
+      unitPrice: 12,
+      lineTotal: 12,
+      options: [],
+    },
+    {
+      id: "sample-4",
+      name: "Thai Iced Tea",
+      quantity: 2,
+      unitPrice: 5.5,
+      lineTotal: 11,
+      options: ["Less sugar"],
+    },
+  ],
+  subtotal: 82,
+  discountAmount: 5,
+  total: 77,
+};
+
 function getTimeGreeting(date = new Date()) {
   const hour = date.getHours();
   if (hour < 12) return "Good Morning ☀️";
@@ -40,10 +84,14 @@ function CustomerDisplayPoweredByFooter() {
  * Receives cart snapshots from the main POS via CustomEvent / global hook.
  */
 export default function CustomerDisplayPage() {
-  const [payload, setPayload] = useState(IDLE_PAYLOAD);
+  const [payload, setPayload] = useState(
+    USE_SAMPLE_CART ? SAMPLE_CART_PAYLOAD : IDLE_PAYLOAD,
+  );
   const [greeting, setGreeting] = useState(getTimeGreeting);
 
   useEffect(() => {
+    if (USE_SAMPLE_CART) return undefined;
+
     function apply(next) {
       if (!next || typeof next !== "object") {
         setPayload(IDLE_PAYLOAD);
