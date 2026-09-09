@@ -6,6 +6,13 @@ import logoIcon from "../../public/images/logo.svg";
 
 const IDLE_PAYLOAD = { mode: "idle", lines: [] };
 
+function getTimeGreeting(date = new Date()) {
+  const hour = date.getHours();
+  if (hour < 12) return "Good Morning ☀️";
+  if (hour < 17) return "Good Afternoon ⛅️";
+  return "Good Evening 🌙";
+}
+
 function formatMoney(amount) {
   return `$${Number(amount || 0).toFixed(2)}`;
 }
@@ -16,6 +23,7 @@ function formatMoney(amount) {
  */
 export default function CustomerDisplayPage() {
   const [payload, setPayload] = useState(IDLE_PAYLOAD);
+  const [greeting, setGreeting] = useState(getTimeGreeting);
 
   useEffect(() => {
     function apply(next) {
@@ -41,6 +49,16 @@ export default function CustomerDisplayPage() {
     };
   }, []);
 
+  useEffect(() => {
+    function refreshGreeting() {
+      setGreeting(getTimeGreeting());
+    }
+
+    refreshGreeting();
+    const intervalId = window.setInterval(refreshGreeting, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   const isCart =
     payload?.mode === "cart" &&
     Array.isArray(payload.lines) &&
@@ -53,7 +71,7 @@ export default function CustomerDisplayPage() {
     return (
       <main className="relative flex min-h-[100dvh] flex-col items-center justify-center bg-[#301C0F] px-8 text-center text-white">
         <h1 className="text-5xl font-bold tracking-tight sm:text-6xl">
-          Welcome
+          {greeting}
         </h1>
         <footer className="fixed inset-x-0 bottom-0 flex items-center justify-center border-t-4 border-[#331f11] bg-[#24160c] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="inline-flex items-center gap-2.5 text-left">
