@@ -17,6 +17,24 @@ function formatMoney(amount) {
   return `$${Number(amount || 0).toFixed(2)}`;
 }
 
+function CustomerDisplayPoweredByFooter() {
+  return (
+    <footer className="flex shrink-0 items-center justify-center border-t-4 border-[#331f11] bg-[#24160c] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div className="inline-flex items-center gap-2.5 text-left">
+        <Image src={logoIcon} alt="" className="h-9 w-auto sm:h-10" priority />
+        <div className="flex flex-col leading-tight">
+          <span className="text-sm font-semibold text-white/60">
+            Powered by
+          </span>
+          <span className="font-brand text-xl font-extrabold leading-[1.05] text-white sm:text-2xl sm:leading-[1.05]">
+            Easy<span className="text-brand_accent">Menu</span>
+          </span>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
 /**
  * Customer-facing rear display page (loaded in Presentation WebView).
  * Receives cart snapshots from the main POS via CustomEvent / global hook.
@@ -69,28 +87,13 @@ export default function CustomerDisplayPage() {
 
   if (!isCart) {
     return (
-      <main className="relative flex min-h-[100dvh] flex-col items-center justify-center bg-[#301C0F] px-8 text-center text-white">
-        <h1 className="text-5xl font-bold tracking-tight sm:text-6xl">
-          {greeting}
-        </h1>
-        <footer className="fixed inset-x-0 bottom-0 flex items-center justify-center border-t-4 border-[#331f11] bg-[#24160c] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <div className="inline-flex items-center gap-2.5 text-left">
-            <Image
-              src={logoIcon}
-              alt=""
-              className="h-9 w-auto sm:h-10"
-              priority
-            />
-            <div className="flex flex-col leading-tight">
-              <span className="text-sm font-semibold text-white/60">
-                Powered by
-              </span>
-              <span className="font-brand text-xl font-extrabold leading-[1.05] text-white sm:text-2xl sm:leading-[1.05]">
-                Easy<span className="text-brand_accent">Menu</span>
-              </span>
-            </div>
-          </div>
-        </footer>
+      <main className="flex min-h-[100dvh] flex-col bg-[#301C0F] text-center text-white">
+        <div className="flex flex-1 items-center justify-center px-8">
+          <h1 className="text-5xl font-bold tracking-tight sm:text-6xl">
+            {greeting}
+          </h1>
+        </div>
+        <CustomerDisplayPoweredByFooter />
       </main>
     );
   }
@@ -131,7 +134,7 @@ export default function CustomerDisplayPage() {
         </ul>
       </div>
 
-      <footer className="border-t border-neutral-200 px-6 py-5">
+      <div className="shrink-0 border-t border-neutral-200 px-6 py-5">
         {discountAmount > 0 ? (
           <div className="mb-2 flex items-center justify-between text-base text-neutral-500">
             <span>Discount</span>
@@ -144,10 +147,9 @@ export default function CustomerDisplayPage() {
             {formatMoney(total)}
           </span>
         </div>
-        <p className="mt-3 text-center text-sm text-neutral-400">
-          Powered by Easy Menu
-        </p>
-      </footer>
+      </div>
+
+      <CustomerDisplayPoweredByFooter />
     </main>
   );
 }
