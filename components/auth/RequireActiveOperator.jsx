@@ -61,12 +61,11 @@ export default function RequireActiveOperator({ children }) {
 
   if (isLockPath) return children;
 
+  // Authenticated but no operator → redirect effect sends us to /lock.
+  // Do not blank the tree with a spinner: that unmounts hosts (customer display)
+  // and flashes white on both screens during Header Logout → lock.
   if (status === "authenticated" && !activeOperator) {
-    return (
-      <div className="flex min-h-[100vh] items-center justify-center bg-[#fff8f4]">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand_accent/30 border-t-brand_accent" />
-      </div>
-    );
+    return null;
   }
 
   return children;

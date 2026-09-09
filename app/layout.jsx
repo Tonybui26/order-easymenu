@@ -69,9 +69,10 @@ export default async function RootLayout({ children }) {
                         {children}
                         <PrintToastHost />
                         <PosImmersiveHost />
-                        <CustomerDisplayHost />
                       </RequireOpenRegister>
                     </RequireActiveOperator>
+                    {/* Outside auth gate so Logout → /lock does not close/reopen the rear WebView. */}
+                    <CustomerDisplayHost />
                   </PosNavigateProvider>
                 </PosRegisterSessionProvider>
               </ActiveOperatorProvider>

@@ -154,9 +154,8 @@ export default function LockPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-[100vh] items-center justify-center bg-[#fff8f4]">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand_accent/30 border-t-brand_accent" />
-        </div>
+        // Same cream canvas as the PIN screen — avoid a spinner flash during hydrate.
+        <div className="min-h-[100vh] bg-[#fff8f4]" />
       }
     >
       <LockScreen />

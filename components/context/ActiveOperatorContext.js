@@ -64,10 +64,25 @@ export function ActiveOperatorProvider({ children }) {
 
   const lock = useCallback(() => {
     if (!pinLockEnabled) return;
+    // Persist locked flag first, but keep React operator until /lock is showing.
+    // Clearing operator while still on a POS route makes RequireActiveOperator
+    // swap the whole tree for a spinner and unmount CustomerDisplayHost.
     clearActiveOperator({ locked: true });
-    setActiveOperator(null);
-    if (pathname !== "/lock") router.push("/lock");
+    if (pathname === "/lock") {
+      setActiveOperator(null);
+      return;
+    }
+    router.replace("/lock");
   }, [pathname, pinLockEnabled, router]);
+
+  // Finish lock only after /lock is active so the auth gate never blanks POS.
+  useEffect(() => {
+    if (!pinLockEnabled || !hydrated) return;
+    if (pathname !== "/lock") return;
+    if (!isTerminalLocked()) return;
+    if (!activeOperator) return;
+    setActiveOperator(null);
+  }, [activeOperator, hydrated, pathname, pinLockEnabled]);
 
   const unlock = useCallback(async (pinCode) => {
     const result = await verifyStaffPinAction(pinCode);
