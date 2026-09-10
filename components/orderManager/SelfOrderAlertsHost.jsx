@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import { usePosNavigate } from "@/components/context/PosNavigateContext";
 import { POS_HELD_ORDERS_TAB_SELF_ORDERING } from "./PosHeldOrders";
 import SelfOrderAlertStack from "./SelfOrderAlertStack";
@@ -49,14 +50,17 @@ function SelfOrderAlertsHostActive() {
 /**
  * Single app-wide self-order alert + auto-print host.
  * Mounted outside RequireActiveOperator so the lock screen still receives
- * new QR order alerts and kitchen auto-print. Skips Live Orders (own poller)
- * and public/rear-display routes so only one alert system runs at a time.
+ * new QR order alerts and kitchen auto-print. Skips Live Orders (own poller),
+ * public/rear-display routes, and non-master devices.
  */
 export default function SelfOrderAlertsHost() {
   const pathname = usePathname();
   const { status } = useSession();
+  const { masterDeviceEnabled } = useGlobalAppContext();
   const enabled =
-    status === "authenticated" && !DISABLED_PATHS.has(pathname || "");
+    status === "authenticated" &&
+    Boolean(masterDeviceEnabled) &&
+    !DISABLED_PATHS.has(pathname || "");
 
   if (!enabled) return null;
 

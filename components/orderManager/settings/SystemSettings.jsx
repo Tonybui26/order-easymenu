@@ -24,7 +24,12 @@ export default function SystemSettings({
   onDraftStaffPinLockEnabledChange,
 }) {
   const { menuConfig } = useMenuContext();
-  const { autoPrintingEnabled, setAutoPrintingEnabled } = useGlobalAppContext();
+  const {
+    autoPrintingEnabled,
+    setAutoPrintingEnabled,
+    masterDeviceEnabled,
+    setMasterDeviceEnabled,
+  } = useGlobalAppContext();
   const posEnabled = Boolean(menuConfig?.posEnabled);
   const tyroEnabled = Boolean(
     resolvePosPaymentsConfig(menuConfig).tyro.enabled,
@@ -49,11 +54,17 @@ export default function SystemSettings({
         </div>
         <div className="divide-y divide-gray-100/80">
           <SettingsToggleRow
+            title="Master device"
+            description="When on, this device shows self-order alert popups and runs QR auto-print from the shared alerts host (including on the lock screen). Turn off on secondary tablets so only one station alerts and auto-prints."
+            checked={Boolean(masterDeviceEnabled)}
+            onChange={(checked) => setMasterDeviceEnabled(checked)}
+          />
+          <SettingsToggleRow
             title="Auto printing"
             description="When on, this device automatically prints kitchen dockets for new paid QR and online orders and moves them to Preparing. Turn on only on the station next to the printers so other devices do not print the same order."
             checked={Boolean(autoPrintingEnabled)}
             onChange={(checked) => setAutoPrintingEnabled(checked)}
-            disabled={!kitchenPrintingOn}
+            disabled={!kitchenPrintingOn || !masterDeviceEnabled}
           />
         </div>
       </section>

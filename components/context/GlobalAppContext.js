@@ -16,6 +16,11 @@ import {
   setAutoPrintingEnabled as persistAutoPrintingEnabled,
   AUTO_PRINTING_ENABLED_CHANGED_EVENT,
 } from "@/lib/utils/autoPrinting";
+import {
+  getMasterDeviceEnabled,
+  setMasterDeviceEnabled as persistMasterDeviceEnabled,
+  MASTER_DEVICE_ENABLED_CHANGED_EVENT,
+} from "@/lib/utils/masterDevice";
 
 const GlobalAppContext = createContext();
 
@@ -26,11 +31,13 @@ export const GlobalAppContextProvider = ({ children, userData }) => {
   const [notificationSoundId, setNotificationSoundIdState] = useState("sound1");
   const [newOrderAlertsMuted, setNewOrderAlertsMutedState] = useState(false);
   const [autoPrintingEnabled, setAutoPrintingEnabledState] = useState(false);
+  const [masterDeviceEnabled, setMasterDeviceEnabledState] = useState(true);
 
   useEffect(() => {
     setNotificationSoundIdState(getNotificationSoundId());
     setNewOrderAlertsMutedState(getNewOrderAlertsMuted());
     setAutoPrintingEnabledState(getAutoPrintingEnabled());
+    setMasterDeviceEnabledState(getMasterDeviceEnabled());
 
     function onSoundChanged(event) {
       const id = event?.detail?.soundId;
@@ -54,6 +61,14 @@ export const GlobalAppContextProvider = ({ children, userData }) => {
       }
     }
 
+    function onMasterDeviceEnabledChanged(event) {
+      if (typeof event?.detail?.enabled === "boolean") {
+        setMasterDeviceEnabledState(event.detail.enabled);
+      } else {
+        setMasterDeviceEnabledState(getMasterDeviceEnabled());
+      }
+    }
+
     window.addEventListener(
       "order-manager-notification-sound-changed",
       onSoundChanged,
@@ -65,6 +80,10 @@ export const GlobalAppContextProvider = ({ children, userData }) => {
     window.addEventListener(
       AUTO_PRINTING_ENABLED_CHANGED_EVENT,
       onAutoPrintingEnabledChanged,
+    );
+    window.addEventListener(
+      MASTER_DEVICE_ENABLED_CHANGED_EVENT,
+      onMasterDeviceEnabledChanged,
     );
     return () => {
       window.removeEventListener(
@@ -78,6 +97,10 @@ export const GlobalAppContextProvider = ({ children, userData }) => {
       window.removeEventListener(
         AUTO_PRINTING_ENABLED_CHANGED_EVENT,
         onAutoPrintingEnabledChanged,
+      );
+      window.removeEventListener(
+        MASTER_DEVICE_ENABLED_CHANGED_EVENT,
+        onMasterDeviceEnabledChanged,
       );
     };
   }, []);
@@ -97,6 +120,11 @@ export const GlobalAppContextProvider = ({ children, userData }) => {
     setAutoPrintingEnabledState(getAutoPrintingEnabled());
   }, []);
 
+  const setMasterDeviceEnabled = useCallback((enabled) => {
+    persistMasterDeviceEnabled(enabled);
+    setMasterDeviceEnabledState(getMasterDeviceEnabled());
+  }, []);
+
   return (
     <GlobalAppContext.Provider
       value={{
@@ -113,6 +141,9 @@ export const GlobalAppContextProvider = ({ children, userData }) => {
         // Device-local auto-print (not store-wide)
         autoPrintingEnabled,
         setAutoPrintingEnabled,
+        // Device-local master station for self-order alerts
+        masterDeviceEnabled,
+        setMasterDeviceEnabled,
         // User data (from server-side verification)
         userData,
         // Session status (for loading states)
