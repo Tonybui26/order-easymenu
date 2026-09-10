@@ -105,14 +105,17 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
   const [autoPrintingOrderIds, setAutoPrintingOrderIds] = useState(
     () => new Set(),
   );
-  const [isPollingActive, setIsPollingActive] = useState(!externalPolling);
 
   const isReturnSyncDoneRef = useRef(false);
   const returnSyncCandidateIdsRef = useRef(new Set());
   const consecutiveErrorsRef = useRef(0);
   const pollingTimeoutRef = useRef(null);
   const isPollingInProgressRef = useRef(false);
+  const isPollingActiveRef = useRef(!externalPolling);
+  const pollSelfOrderAlertsRef = useRef(null);
+  const runPollLoopRef = useRef(null);
   const isNative = isNativeApp();
+  const hasMenuConfig = Boolean(menuConfig);
 
   const setOrderAutoPrinting = useCallback((orderId, isPrinting) => {
     const id = normalizeOrderId(orderId);
@@ -349,12 +352,14 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
     syncAlertsFromOrders,
   ]);
 
-  const pollingOrders = useCallback(async () => {
-    if (!isPollingActive || !menuConfig) return;
+  pollSelfOrderAlertsRef.current = pollSelfOrderAlerts;
 
-    const result = await pollSelfOrderAlerts();
+  runPollLoopRef.current = async () => {
+    if (!isPollingActiveRef.current) return;
 
-    if (!isPollingActive) return;
+    const result = await pollSelfOrderAlertsRef.current?.();
+
+    if (!isPollingActiveRef.current) return;
 
     let nextInterval = POLLING_INTERVALS.ACTIVE;
     if (result?.success === false) {
@@ -371,11 +376,13 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
       clearTimeout(pollingTimeoutRef.current);
     }
     pollingTimeoutRef.current = setTimeout(() => {
-      pollingOrders();
+      void runPollLoopRef.current?.();
     }, nextInterval);
-  }, [isPollingActive, menuConfig, pollSelfOrderAlerts]);
+  };
 
   const startPolling = useCallback(() => {
+    isPollingActiveRef.current = true;
+
     if (isPollingInProgressRef.current) return;
 
     if (pollingTimeoutRef.current) {
@@ -383,15 +390,11 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
       pollingTimeoutRef.current = null;
     }
 
-    setIsPollingActive(true);
-
-    if (!isPollingInProgressRef.current) {
-      pollingOrders();
-    }
-  }, [pollingOrders]);
+    void runPollLoopRef.current?.();
+  }, []);
 
   const stopPolling = useCallback(() => {
-    setIsPollingActive(false);
+    isPollingActiveRef.current = false;
 
     if (pollingTimeoutRef.current) {
       clearTimeout(pollingTimeoutRef.current);
@@ -399,6 +402,8 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
     }
   }, []);
 
+  // Start once when the host is ready; do not restart when menuConfig identity
+  // changes (Settings save). Reset return-sync only on unmount.
   useEffect(() => {
     if (externalPolling) {
       return () => {
@@ -407,7 +412,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
       };
     }
 
-    if (!menuConfig) return;
+    if (!hasMenuConfig) return undefined;
 
     startPolling();
 
@@ -415,12 +420,8 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
       stopPolling();
       isReturnSyncDoneRef.current = false;
       returnSyncCandidateIdsRef.current = new Set();
-      if (pollingTimeoutRef.current) {
-        clearTimeout(pollingTimeoutRef.current);
-        pollingTimeoutRef.current = null;
-      }
     };
-  }, [externalPolling, menuConfig, startPolling, stopPolling]);
+  }, [externalPolling, hasMenuConfig, startPolling, stopPolling]);
 
   useEffect(() => {
     if (externalPolling) return undefined;
