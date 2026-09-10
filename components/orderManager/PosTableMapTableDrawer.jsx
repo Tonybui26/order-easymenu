@@ -83,7 +83,8 @@ function PosPreviewLines({ sectionId, lines }) {
         {lines.map((line) => (
           <PreviewLine
             key={
-              line.lineId || `${sectionId}-${line.itemId}-${line.title}-${line.quantity}`
+              line.lineId ||
+              `${sectionId}-${line.sourceOrderId}-${line.itemId}-${line.title}-${line.quantity}`
             }
             line={line}
           />
@@ -127,7 +128,8 @@ function QrPreviewSection({ section }) {
         {lines.map((line) => (
           <PreviewLine
             key={
-              line.lineId || `${line.itemId}-${line.title}-${line.quantity}`
+              line.lineId ||
+              `${line.sourceOrderId}-${line.itemId}-${line.title}-${line.quantity}`
             }
             line={line}
           />

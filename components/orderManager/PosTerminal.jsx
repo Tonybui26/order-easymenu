@@ -33,6 +33,7 @@ import {
   buildMixedTableResumeCartLines,
   buildPosResumeState,
   isExternalContextCartLine,
+  posCartLineReactKey,
 } from "@/lib/pos/posResumeOrder";
 import {
   buildCustomerDisplayCartSnapshot,
@@ -1623,7 +1624,7 @@ export default function PosTerminal() {
     try {
       const result = await cancelPosOrderItem({
         orderId,
-        lineId: line.lineId,
+        lineId: line.sourceLineId || line.lineId,
         reason,
       });
       if (!result?.success) {
@@ -1898,9 +1899,9 @@ export default function PosTerminal() {
                 <LayoutGroup id="pos-cart-lines">
                   <ul>
                     <AnimatePresence initial={false} mode="popLayout">
-                      {cartLines.map((line) => (
+                      {cartLines.map((line, index) => (
                         <PosCartLine
-                          key={line.lineId}
+                          key={posCartLineReactKey(line, index)}
                           line={line}
                           enterAnimation={enteringLineIds.has(line.lineId)}
                           onEnterAnimationComplete={() =>

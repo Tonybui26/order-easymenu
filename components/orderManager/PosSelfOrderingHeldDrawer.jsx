@@ -332,7 +332,8 @@ export default function PosSelfOrderingHeldDrawer({
             {displayPreviewLines.map((line) => (
               <PreviewLine
                 key={
-                  line.lineId || `${line.itemId}-${line.title}-${line.quantity}`
+                  line.lineId ||
+                  `${line.sourceOrderId}-${line.itemId}-${line.title}-${line.quantity}`
                 }
                 line={line}
               />
