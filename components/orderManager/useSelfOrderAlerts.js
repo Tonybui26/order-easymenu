@@ -20,12 +20,8 @@ import { getAutoPrintingEnabled } from "@/lib/utils/autoPrinting";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 
-const POLLING_INTERVALS = {
-  ACTIVE: 10000,
-  IDLE: 30000,
-  ERROR_BASE: 20000,
-  ERROR_MAX: 60000,
-};
+/** Fixed interval — next tick is independent of the last fetch finishing. */
+const SELF_ORDER_ALERT_POLL_MS = 10000;
 
 /** Keep auto-print alerts visible briefly so they don't flash off. */
 const AUTO_PRINT_ALERT_MIN_VISIBLE_MS = 3500;
@@ -109,11 +105,11 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
   const isReturnSyncDoneRef = useRef(false);
   const returnSyncCandidateIdsRef = useRef(new Set());
   const consecutiveErrorsRef = useRef(0);
-  const pollingTimeoutRef = useRef(null);
   const isPollingInProgressRef = useRef(false);
-  const isPollingActiveRef = useRef(!externalPolling);
   const pollSelfOrderAlertsRef = useRef(null);
-  const runPollLoopRef = useRef(null);
+  /** Order ids kept on screen until min-visible setTimeout fires (UX only). */
+  const minVisibleAlertIdsRef = useRef(new Set());
+  const autoPrintDismissTimeoutsRef = useRef(new Map());
   const isNative = isNativeApp();
   const hasMenuConfig = Boolean(menuConfig);
 
@@ -204,29 +200,114 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
     [alerts, autoPrintingOrderIds, processingAlertIds],
   );
 
-  const syncAlertsFromOrders = useCallback((activeOrders) => {
-    const candidates = sortCandidatesNewestFirst(
-      activeOrders.filter(isSelfOrderNotificationCandidate),
-    );
-    const candidateIds = new Set(
-      candidates.map((order) => normalizeOrderId(order._id)).filter(Boolean),
-    );
+  const mergePinnedMinVisibleAlerts = useCallback((built, prev) => {
+    const builtIdSet = new Set(built.map((alert) => alert.id));
+    const pinned = prev.filter((alert) => {
+      if (builtIdSet.has(alert.id)) return false;
+      if (alert.kind === "order") {
+        return minVisibleAlertIdsRef.current.has(normalizeOrderId(alert.id));
+      }
+      if (alert.kind === "batch" && alert.orderIds?.length) {
+        return alert.orderIds.some((id) =>
+          minVisibleAlertIdsRef.current.has(normalizeOrderId(id)),
+        );
+      }
+      return false;
+    });
+    return pinned.length > 0 ? [...built, ...pinned] : built;
+  }, []);
 
-    if (!isReturnSyncDoneRef.current) {
-      isReturnSyncDoneRef.current = true;
-      returnSyncCandidateIdsRef.current = new Set(candidateIds);
-      setAlerts(
-        buildAlertsFromCandidates(
-          candidates,
-          returnSyncCandidateIdsRef.current,
+  const syncAlertsFromOrders = useCallback(
+    (activeOrders) => {
+      const candidates = sortCandidatesNewestFirst(
+        activeOrders.filter(isSelfOrderNotificationCandidate),
+      );
+      const candidateIds = new Set(
+        candidates.map((order) => normalizeOrderId(order._id)).filter(Boolean),
+      );
+
+      if (!isReturnSyncDoneRef.current) {
+        isReturnSyncDoneRef.current = true;
+        returnSyncCandidateIdsRef.current = new Set(candidateIds);
+        setAlerts(
+          buildAlertsFromCandidates(
+            candidates,
+            returnSyncCandidateIdsRef.current,
+          ),
+        );
+        return;
+      }
+
+      setAlerts((prev) =>
+        mergePinnedMinVisibleAlerts(
+          buildAlertsFromCandidates(
+            candidates,
+            returnSyncCandidateIdsRef.current,
+          ),
+          prev,
         ),
       );
-      return;
-    }
+    },
+    [mergePinnedMinVisibleAlerts],
+  );
 
-    setAlerts(
-      buildAlertsFromCandidates(candidates, returnSyncCandidateIdsRef.current),
-    );
+  const dismissAutoPrintAlertForOrder = useCallback(
+    (orderId) => {
+      const id = normalizeOrderId(orderId);
+      if (!id) return;
+
+      autoPrintDismissTimeoutsRef.current.delete(id);
+      minVisibleAlertIdsRef.current.delete(id);
+      setOrderAutoPrinting(id, false);
+
+      setAlerts((prev) =>
+        prev.filter((alert) => {
+          if (alert.kind === "order") {
+            return normalizeOrderId(alert.id) !== id;
+          }
+          if (alert.kind === "batch" && alert.orderIds?.length) {
+            return !alert.orderIds.every(
+              (entryId) => normalizeOrderId(entryId) === id,
+            );
+          }
+          return true;
+        }),
+      );
+    },
+    [setOrderAutoPrinting],
+  );
+
+  const scheduleAutoPrintAlertDismiss = useCallback(
+    (autoPreparedIds, delayMs) => {
+      const waitMs = Math.max(0, delayMs);
+      const orderIds = [...autoPreparedIds]
+        .map(normalizeOrderId)
+        .filter(Boolean);
+      if (orderIds.length === 0) return;
+
+      for (const orderId of orderIds) {
+        minVisibleAlertIdsRef.current.add(orderId);
+
+        const existing = autoPrintDismissTimeoutsRef.current.get(orderId);
+        if (existing) clearTimeout(existing);
+
+        autoPrintDismissTimeoutsRef.current.set(
+          orderId,
+          setTimeout(() => {
+            dismissAutoPrintAlertForOrder(orderId);
+          }, waitMs),
+        );
+      }
+    },
+    [dismissAutoPrintAlertForOrder],
+  );
+
+  const clearAutoPrintDismissTimeouts = useCallback(() => {
+    for (const timeoutId of autoPrintDismissTimeoutsRef.current.values()) {
+      clearTimeout(timeoutId);
+    }
+    autoPrintDismissTimeoutsRef.current.clear();
+    minVisibleAlertIdsRef.current.clear();
   }, []);
 
   /**
@@ -288,7 +369,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
             error,
           );
         } finally {
-          // Keep Auto sending… until the min-visible hold finishes for successes.
+          // Keep Auto sending… until min-visible setTimeout dismisses successes.
           if (!autoPreparedIds.has(orderId)) {
             setOrderAutoPrinting(orderId, false);
           }
@@ -315,10 +396,15 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
     try {
       const data = await fetchOrders();
       let activeOrders = filterOrdersForActiveList(data, menuConfig);
-      consecutiveErrorsRef.current = 0;
 
-      // Show alerts immediately; auto-print prepare is fast, so hold dismiss
-      // briefly so the popup doesn't flash.
+      const hadErrors = consecutiveErrorsRef.current > 0;
+      consecutiveErrorsRef.current = 0;
+      if (hadErrors) {
+        toast.success("Connection restored!", { duration: 2000 });
+      }
+
+      // Show alerts immediately; dismiss after min-visible delay via setTimeout
+      // (does not block the poll).
       const alertShownAt = Date.now();
       syncAlertsFromOrders(activeOrders);
 
@@ -328,19 +414,27 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
       if (autoPrintResult.autoPreparedIds.size > 0) {
         const remainingMs =
           AUTO_PRINT_ALERT_MIN_VISIBLE_MS - (Date.now() - alertShownAt);
-        if (remainingMs > 0) {
-          await new Promise((resolve) => setTimeout(resolve, remainingMs));
-        }
-        for (const orderId of autoPrintResult.autoPreparedIds) {
-          setOrderAutoPrinting(orderId, false);
-        }
+        scheduleAutoPrintAlertDismiss(
+          autoPrintResult.autoPreparedIds,
+          remainingMs,
+        );
       }
 
       syncAlertsFromOrders(activeOrders);
-      return { success: true, hasActiveOrders: activeOrders.length > 0 };
+      return { success: true };
     } catch (error) {
       console.error("Self-order alert polling error:", error);
       consecutiveErrorsRef.current += 1;
+
+      if (consecutiveErrorsRef.current === 1) {
+        toast.error("Connection lost. Retrying...", { duration: 3000 });
+      } else if (consecutiveErrorsRef.current % 3 === 0) {
+        toast.error(
+          `Still retrying... (attempt ${consecutiveErrorsRef.current})`,
+          { duration: 2000 },
+        );
+      }
+
       return { success: false, error };
     } finally {
       isPollingInProgressRef.current = false;
@@ -348,65 +442,18 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
   }, [
     autoPrintEligibleSelfOrders,
     menuConfig,
-    setOrderAutoPrinting,
+    scheduleAutoPrintAlertDismiss,
     syncAlertsFromOrders,
   ]);
 
   pollSelfOrderAlertsRef.current = pollSelfOrderAlerts;
 
-  runPollLoopRef.current = async () => {
-    if (!isPollingActiveRef.current) return;
-
-    const result = await pollSelfOrderAlertsRef.current?.();
-
-    if (!isPollingActiveRef.current) return;
-
-    let nextInterval = POLLING_INTERVALS.ACTIVE;
-    if (result?.success === false) {
-      nextInterval = Math.min(
-        POLLING_INTERVALS.ERROR_BASE *
-          Math.pow(2, Math.min(consecutiveErrorsRef.current - 1, 4)),
-        POLLING_INTERVALS.ERROR_MAX,
-      );
-    } else if (result?.success && !result.hasActiveOrders) {
-      nextInterval = POLLING_INTERVALS.IDLE;
-    }
-
-    if (pollingTimeoutRef.current) {
-      clearTimeout(pollingTimeoutRef.current);
-    }
-    pollingTimeoutRef.current = setTimeout(() => {
-      void runPollLoopRef.current?.();
-    }, nextInterval);
-  };
-
-  const startPolling = useCallback(() => {
-    isPollingActiveRef.current = true;
-
-    if (isPollingInProgressRef.current) return;
-
-    if (pollingTimeoutRef.current) {
-      clearTimeout(pollingTimeoutRef.current);
-      pollingTimeoutRef.current = null;
-    }
-
-    void runPollLoopRef.current?.();
-  }, []);
-
-  const stopPolling = useCallback(() => {
-    isPollingActiveRef.current = false;
-
-    if (pollingTimeoutRef.current) {
-      clearTimeout(pollingTimeoutRef.current);
-      pollingTimeoutRef.current = null;
-    }
-  }, []);
-
-  // Start once when the host is ready; do not restart when menuConfig identity
-  // changes (Settings save). Reset return-sync only on unmount.
+  // Fixed setInterval clock (Held / table map style). Skip a tick when a poll
+  // is still in progress; always restart the interval on foreground resume.
   useEffect(() => {
     if (externalPolling) {
       return () => {
+        clearAutoPrintDismissTimeouts();
         isReturnSyncDoneRef.current = false;
         returnSyncCandidateIdsRef.current = new Set();
       };
@@ -414,58 +461,96 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
 
     if (!hasMenuConfig) return undefined;
 
-    startPolling();
+    let intervalId = null;
+    let cancelled = false;
 
-    return () => {
-      stopPolling();
-      isReturnSyncDoneRef.current = false;
-      returnSyncCandidateIdsRef.current = new Set();
+    const clearPollInterval = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
     };
-  }, [externalPolling, hasMenuConfig, startPolling, stopPolling]);
 
-  useEffect(() => {
-    if (externalPolling) return undefined;
+    const tickPoll = () => {
+      if (cancelled) return;
+      void pollSelfOrderAlertsRef.current?.();
+    };
+
+    const startPollInterval = () => {
+      clearPollInterval();
+      intervalId = setInterval(tickPoll, SELF_ORDER_ALERT_POLL_MS);
+    };
+
+    const resumePolling = () => {
+      if (cancelled) return;
+      tickPoll();
+      startPollInterval();
+    };
+
+    const pausePolling = () => {
+      clearPollInterval();
+    };
+
+    resumePolling();
 
     let appStateListener = null;
 
     if (isNative) {
-      const handleAppStateChange = ({ isActive }) => {
-        if (isActive) {
-          startPolling();
-        } else {
-          stopPolling();
+      App.addListener("appStateChange", ({ isActive }) => {
+        if (isActive) resumePolling();
+        else pausePolling();
+      }).then((handle) => {
+        if (cancelled) {
+          handle.remove();
+          return;
         }
-      };
-
-      appStateListener = App.addListener(
-        "appStateChange",
-        handleAppStateChange,
-      );
+        appStateListener = handle;
+      });
     } else {
       const handleVisibilityChange = () => {
-        if (!document.hidden) {
-          startPolling();
-        } else {
-          stopPolling();
-        }
+        if (document.hidden) pausePolling();
+        else resumePolling();
       };
 
       document.addEventListener("visibilitychange", handleVisibilityChange);
 
       return () => {
+        cancelled = true;
+        clearPollInterval();
+        clearAutoPrintDismissTimeouts();
         document.removeEventListener(
           "visibilitychange",
           handleVisibilityChange,
         );
+        isReturnSyncDoneRef.current = false;
+        returnSyncCandidateIdsRef.current = new Set();
       };
     }
 
     return () => {
+      cancelled = true;
+      clearPollInterval();
+      clearAutoPrintDismissTimeouts();
       if (appStateListener) {
         appStateListener.remove();
       }
+      isReturnSyncDoneRef.current = false;
+      returnSyncCandidateIdsRef.current = new Set();
     };
-  }, [externalPolling, isNative, startPolling, stopPolling]);
+  }, [clearAutoPrintDismissTimeouts, externalPolling, hasMenuConfig, isNative]);
+
+  useEffect(() => {
+    if (externalPolling || !hasMenuConfig) return undefined;
+
+    const handleOnline = () => {
+      void pollSelfOrderAlertsRef.current?.();
+    };
+
+    window.addEventListener("online", handleOnline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [externalPolling, hasMenuConfig]);
 
   return {
     alerts: alertsWithProcessing,
