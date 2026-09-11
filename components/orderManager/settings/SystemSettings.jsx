@@ -105,11 +105,16 @@ export default function SystemSettings({
         <div className="divide-y divide-gray-100/80">
           <SettingsToggleRow
             title="PIN lock screen"
-            description="After sign-in, staff switch users with a PIN. Header Logout returns to the lock screen; only Store managers can fully log out of the app. Requires PIN codes on staff accounts in Admin."
-            checked={Boolean(draftStaffPinLockEnabled)}
+            description={
+              posEnabled
+                ? "Always on while POS is enabled. After sign-in, staff must enter a PIN. Header Logout returns to the lock screen; only Store managers can fully log out of the app. Requires PIN codes on staff accounts in Admin."
+                : "After sign-in, staff switch users with a PIN. Header Logout returns to the lock screen; only Store managers can fully log out of the app. Requires PIN codes on staff accounts in Admin."
+            }
+            checked={posEnabled ? true : Boolean(draftStaffPinLockEnabled)}
             onChange={(checked) =>
               onDraftStaffPinLockEnabledChange?.(checked)
             }
+            disabled={posEnabled}
           />
         </div>
       </section>

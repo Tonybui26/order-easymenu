@@ -4,9 +4,10 @@ import SignInForm from "@/components/auth/SignInForm";
 import { getServerUserSession } from "@/lib/auth/serverSession";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getAuthRedirectUrl } from "@/lib/constants/auth";
+import { getPostSignInUrl } from "@/lib/constants/auth";
 import { fetchGetMenuByOwnerEmail } from "@/lib/api/fetchApi";
 import { resolvePosConfig } from "@/lib/pos/posConfig";
+import { isStaffPinLockEnabled } from "@/lib/staff/staffRoles";
 
 export default async function SignInPage({ searchParams }) {
   const callbackUrl = searchParams?.callbackUrl;
@@ -14,12 +15,14 @@ export default async function SignInPage({ searchParams }) {
   if (userSession) {
     let posEnabled = false;
     let restaurantModeEnabled = false;
+    let menuConfig = {};
     if (userSession.ownerEmail) {
       try {
         const menu = await fetchGetMenuByOwnerEmail(userSession.ownerEmail);
-        posEnabled = Boolean(menu?.config?.posEnabled);
+        menuConfig = menu?.config || {};
+        posEnabled = Boolean(menuConfig.posEnabled);
         restaurantModeEnabled = Boolean(
-          resolvePosConfig(menu?.config).restaurantModeEnabled,
+          resolvePosConfig(menuConfig).restaurantModeEnabled,
         );
       } catch {
         posEnabled = false;
@@ -27,7 +30,12 @@ export default async function SignInPage({ searchParams }) {
       }
     }
     redirect(
-      getAuthRedirectUrl(callbackUrl, posEnabled, restaurantModeEnabled),
+      getPostSignInUrl(
+        callbackUrl,
+        posEnabled,
+        restaurantModeEnabled,
+        isStaffPinLockEnabled(menuConfig),
+      ),
     );
   }
 

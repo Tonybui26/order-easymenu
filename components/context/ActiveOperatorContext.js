@@ -51,7 +51,9 @@ export function ActiveOperatorProvider({ children }) {
       return;
     }
 
-    if (!pinLockEnabled || !isTerminalLocked()) {
+    // When PIN lock is on (including all POS stores), never seed from the
+    // session user — staff must unlock on /lock first.
+    if (!pinLockEnabled) {
       const seeded = operatorFromSessionUser(session?.user);
       if (seeded) {
         writeActiveOperator(seeded);

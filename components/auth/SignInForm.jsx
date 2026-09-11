@@ -3,13 +3,15 @@ import { getSession, signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { Eye, EyeOff, AlertCircle } from "lucide-react";
-import { getAuthRedirectUrl } from "@/lib/constants/auth";
+import { getPostSignInUrl } from "@/lib/constants/auth";
 import {
+  clearActiveOperator,
   operatorFromSessionUser,
   writeActiveOperator,
 } from "@/lib/staff/activeOperatorStorage";
 import { fetchGetMenuByOwnerEmail } from "@/lib/api/fetchApi";
 import { resolvePosConfig } from "@/lib/pos/posConfig";
+import { isStaffPinLockEnabled } from "@/lib/staff/staffRoles";
 
 function SignInFormInner() {
   const [username, setUsername] = useState("");
@@ -42,17 +44,17 @@ function SignInFormInner() {
       }
       if (result?.ok) {
         const session = await getSession();
-        const operator = operatorFromSessionUser(session?.user);
-        if (operator) writeActiveOperator(operator);
 
         let posEnabled = false;
         let restaurantModeEnabled = false;
+        let menuConfig = {};
         if (session?.user?.ownerEmail) {
           try {
             const menu = await fetchGetMenuByOwnerEmail(session.user.ownerEmail);
-            posEnabled = Boolean(menu?.config?.posEnabled);
+            menuConfig = menu?.config || {};
+            posEnabled = Boolean(menuConfig.posEnabled);
             restaurantModeEnabled = Boolean(
-              resolvePosConfig(menu?.config).restaurantModeEnabled,
+              resolvePosConfig(menuConfig).restaurantModeEnabled,
             );
           } catch {
             posEnabled = false;
@@ -60,8 +62,22 @@ function SignInFormInner() {
           }
         }
 
+        const pinLockEnabled = isStaffPinLockEnabled(menuConfig);
+        if (pinLockEnabled) {
+          // Do not seed an operator — staff must enter PIN on /lock.
+          clearActiveOperator({ locked: true });
+        } else {
+          const operator = operatorFromSessionUser(session?.user);
+          if (operator) writeActiveOperator(operator);
+        }
+
         router.push(
-          getAuthRedirectUrl(callbackUrl, posEnabled, restaurantModeEnabled),
+          getPostSignInUrl(
+            callbackUrl,
+            posEnabled,
+            restaurantModeEnabled,
+            pinLockEnabled,
+          ),
         );
         router.refresh();
       }
