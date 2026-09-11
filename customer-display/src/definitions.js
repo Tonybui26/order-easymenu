@@ -29,6 +29,7 @@
 /**
  * @typedef {Object} CustomerDisplayOpenOptions
  * @property {string} url - Absolute URL for the rear WebView (e.g. origin + /customer-display).
+ * @property {boolean} [forceReload] - Reload even when the same URL is already showing.
  */
 
 /**

@@ -12,6 +12,8 @@ import { isRegisterGateExempt } from "@/lib/pos/registerGate";
  * /pos/register before using POS features (except live orders, printers,
  * settings, and lock).
  */
+const CUSTOMER_DISPLAY_PATH = "/customer-display";
+
 export default function RequireOpenRegister({ children }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -19,9 +21,14 @@ export default function RequireOpenRegister({ children }) {
   const { menuConfig, dataLoaded } = useMenuContext();
   const { isOpen, refreshRegisterSession } = usePosRegisterSession();
   const posEnabled = Boolean(menuConfig?.posEnabled);
+  const isCustomerDisplayPath = pathname === CUSTOMER_DISPLAY_PATH;
   const isExempt = isRegisterGateExempt(pathname);
   const shouldGate =
-    status === "authenticated" && dataLoaded && posEnabled && !isExempt;
+    !isCustomerDisplayPath &&
+    status === "authenticated" &&
+    dataLoaded &&
+    posEnabled &&
+    !isExempt;
   const initialFetchStartedRef = useRef(false);
 
   useEffect(() => {
@@ -61,6 +68,9 @@ export default function RequireOpenRegister({ children }) {
       cancelled = true;
     };
   }, [isOpen, refreshRegisterSession, router, shouldGate]);
+
+  // Rear customer WebView must never wait on session/menu — idle UI needs no auth.
+  if (isCustomerDisplayPath) return children;
 
   if (status === "loading" || (status === "authenticated" && !dataLoaded)) {
     return (

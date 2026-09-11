@@ -46,9 +46,17 @@ public class CustomerDisplayPlugin extends Plugin {
             return;
         }
         final String loadUrl = url.trim();
+        final boolean forceReload = Boolean.TRUE.equals(call.getBoolean("forceReload", false));
 
         getActivity().runOnUiThread(() -> {
             try {
+                // Keep CookieManager in sync so the rear WebView can see main-app auth cookies.
+                try {
+                    CookieManager.getInstance().flush();
+                } catch (Exception ignored) {
+                    // Best-effort on older Android builds.
+                }
+
                 Display display = findSecondaryDisplay();
                 if (display == null) {
                     call.resolve();
@@ -57,7 +65,11 @@ public class CustomerDisplayPlugin extends Plugin {
 
                 if (presentation != null && presentation.isShowing()) {
                     if (presentation.getDisplay().getDisplayId() == display.getDisplayId()) {
-                        presentation.loadUrlIfNeeded(loadUrl);
+                        if (forceReload) {
+                            presentation.reloadUrl(loadUrl);
+                        } else {
+                            presentation.loadUrlIfNeeded(loadUrl);
+                        }
                         call.resolve();
                         return;
                     }
@@ -186,6 +198,11 @@ public class CustomerDisplayPlugin extends Plugin {
         void loadUrlIfNeeded(String url) {
             if (webView == null || url == null || url.isEmpty()) return;
             if (url.equals(loadedUrl)) return;
+            reloadUrl(url);
+        }
+
+        void reloadUrl(String url) {
+            if (webView == null || url == null || url.isEmpty()) return;
             pageReady = false;
             loadedUrl = url;
             webView.loadUrl(url);
