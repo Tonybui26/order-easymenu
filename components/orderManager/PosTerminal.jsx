@@ -1877,6 +1877,7 @@ export default function PosTerminal() {
               onTrainingDone={handleTrainingPaymentDone}
               tyroCardEnabled={tyroCardEnabled}
               tyroConfig={tyroPayments}
+              onOpenCashDrawer={handleOpenCashDrawer}
             />
 
             <div

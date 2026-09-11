@@ -68,6 +68,7 @@ export default function PosPaymentDrawer({
   onTrainingDone,
   tyroCardEnabled = false,
   tyroConfig = null,
+  onOpenCashDrawer,
 }) {
   const [digits, setDigits] = useState("");
   const [step, setStep] = useState("tender"); // tender | finalise
@@ -214,6 +215,10 @@ export default function PosPaymentDrawer({
       }
       runTyroCardPurchase(due);
       return;
+    }
+
+    if (methodId === "cash") {
+      void onOpenCashDrawer?.();
     }
 
     setPaymentSummary({
