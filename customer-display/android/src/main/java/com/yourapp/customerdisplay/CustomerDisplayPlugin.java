@@ -249,8 +249,9 @@ public class CustomerDisplayPlugin extends Plugin {
             settings.setLoadWithOverviewMode(true);
             settings.setUseWideViewPort(true);
             settings.setMediaPlaybackRequiresUserGesture(false);
+            // Allow http:// LAN / cleartext loads in the rear Presentation WebView.
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-                settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+                settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
                 CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
             }
             CookieManager.getInstance().setAcceptCookie(true);

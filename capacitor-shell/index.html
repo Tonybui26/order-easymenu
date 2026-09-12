@@ -195,80 +195,56 @@
   </main>
 
   <script>
-    // Flip to false before production Capacitor builds.
+    // Keep in sync with isDev / APP_URL in capacitor.config.ts.
+    // This page is Capacitor server.errorPath — shown only when server.url fails.
     const isDev = true;
     const appUrl = isDev
       ? "http://192.168.1.69:3001"
       : "https://order.goeasy.menu";
-    const probeUrl = `${appUrl}/favicon.ico`;
     const messageEl = document.getElementById("message");
     const statusEl = document.getElementById("status");
     const retryButton = document.getElementById("retryButton");
-    let isCheckingConnection = false;
+    let isRetrying = false;
 
     function showOfflineState() {
       messageEl.textContent =
         "You're offline. Connect to the internet to use EasyMenu.";
-      statusEl.textContent = "No internet connection";
+      statusEl.textContent = isDev
+        ? `Can't reach ${appUrl}`
+        : "No internet connection";
       retryButton.hidden = false;
       retryButton.disabled = false;
     }
 
     function showConnectingState() {
       messageEl.textContent = "Connecting you to your store.";
-      statusEl.textContent = "Opening EasyMenu...";
+      statusEl.textContent = isDev
+        ? `Opening ${appUrl}...`
+        : "Opening EasyMenu...";
       retryButton.hidden = true;
     }
 
-    async function canReachApp() {
-      const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 4000);
-
-      try {
-        await fetch(`${probeUrl}?t=${Date.now()}`, {
-          method: "GET",
-          mode: "no-cors",
-          cache: "no-store",
-          signal: controller.signal,
-        });
-        return true;
-      } catch {
-        return false;
-      } finally {
-        window.clearTimeout(timeoutId);
-      }
-    }
-
-    async function openApp() {
-      if (isCheckingConnection) return;
-
-      isCheckingConnection = true;
-      retryButton.disabled = true;
+    function openApp() {
+      if (isRetrying) return;
+      isRetrying = true;
       showConnectingState();
-
-      const isReachable = await canReachApp();
-      isCheckingConnection = false;
-
-      if (!isReachable) {
-        showOfflineState();
-        return;
-      }
-
+      // Navigate back to Capacitor server.url (bridge + plugins intact there).
       window.location.replace(appUrl);
     }
 
-    retryButton.addEventListener("click", async () => {
+    retryButton.addEventListener("click", () => {
       statusEl.textContent = "Retrying...";
-      await openApp();
+      isRetrying = false;
+      openApp();
     });
 
-    window.addEventListener("online", openApp);
-    window.addEventListener("offline", showOfflineState);
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") openApp();
+    window.addEventListener("online", () => {
+      isRetrying = false;
+      openApp();
     });
 
-    openApp();
+    // errorPath means the remote app already failed — show offline + retry.
+    showOfflineState();
   </script>
 </body>
 
