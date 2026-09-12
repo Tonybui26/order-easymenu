@@ -83,7 +83,6 @@ export default function PrintToastHost() {
       onDismiss={handleDismiss}
       onRetry={handleRetry}
       retryingToastId={retryingToastId}
-      className="right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))]"
     />
   );
 }

@@ -2181,7 +2181,6 @@ export default function LiveOrderTerminal() {
         onDismiss={handleDismissPrintErrorToast}
         onRetry={handlePrintToastRetry}
         retryingToastId={retryingPrintToastId}
-        className="right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))]"
       />
     </>
   );

@@ -2160,7 +2160,6 @@ export default function PosTerminal() {
       <DismissibleToast
         toast={dismissibleToast}
         onDismiss={hideDismissibleToast}
-        className="right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))]"
       />
       <PosCancelSentLineDrawer
         drawerState={cancelSentLineDrawer}

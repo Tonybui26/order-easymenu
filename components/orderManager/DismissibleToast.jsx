@@ -1,7 +1,51 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { AnimatePresence, LayoutGroup, motion } from "motion/react";
+import {
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
+  Printer,
+} from "lucide-react";
 import { cn } from "@/lib/helper";
+import { formatNotificationTimeAgo } from "@/lib/pos/selfOrderAlertDisplay";
+
+const TIME_AGO_TICK_MS = 30_000;
+
+const OFFSCREEN_X = "calc(100% + 1rem)";
+
+const SLIDE_SPRING = {
+  type: "spring",
+  damping: 28,
+  stiffness: 320,
+};
+
+const STACK_LAYOUT_SPRING = {
+  type: "spring",
+  damping: 28,
+  stiffness: 320,
+};
+
+const ALERT_ITEM_VARIANTS = {
+  hidden: { x: OFFSCREEN_X, opacity: 0 },
+  visible: {
+    x: 0,
+    opacity: 1,
+    transition: {
+      x: SLIDE_SPRING,
+      opacity: { duration: 0.2, ease: "easeOut" },
+    },
+  },
+  exit: {
+    x: OFFSCREEN_X,
+    opacity: 0,
+    transition: {
+      x: SLIDE_SPRING,
+      opacity: { duration: 0.15, ease: "easeIn" },
+    },
+  },
+};
 
 const INITIAL_TOAST = {
   show: false,
@@ -9,6 +53,7 @@ const INITIAL_TOAST = {
   message: "",
   id: null,
   retry: null,
+  createdAt: null,
 };
 
 export const PRINT_ERROR_TOAST_QUEUE_MAX = 5;
@@ -20,6 +65,7 @@ function createToastEntry(message, type = "error", retry = null) {
     message,
     id: Date.now() + Math.random(),
     retry,
+    createdAt: Date.now(),
   };
 }
 
@@ -34,6 +80,7 @@ function mergeToastEntry(existing, message, type, retry) {
     message,
     type,
     retry: retry ?? existing.retry,
+    createdAt: existing.createdAt ?? Date.now(),
   };
 }
 
@@ -58,6 +105,26 @@ function enqueueToastEntry(queue, message, type = "error", retry = null) {
   return next;
 }
 
+function getToastTitle(toast, hasRetry) {
+  if (hasRetry) return "Print failed";
+  if (toast.type === "success") return "Success";
+  if (toast.type === "warning") return "Notice";
+  return "Error";
+}
+
+function getToastIconMeta(toast, hasRetry) {
+  if (hasRetry || (toast.type === "error" && /print/i.test(toast.message || ""))) {
+    return { Icon: Printer, iconClass: "bg-rose-600" };
+  }
+  if (toast.type === "success") {
+    return { Icon: CheckCircle2, iconClass: "bg-emerald-600" };
+  }
+  if (toast.type === "warning") {
+    return { Icon: AlertTriangle, iconClass: "bg-amber-600" };
+  }
+  return { Icon: AlertCircle, iconClass: "bg-rose-600" };
+}
+
 export function useDismissibleToast() {
   const [toast, setToast] = useState(INITIAL_TOAST);
 
@@ -68,6 +135,7 @@ export function useDismissibleToast() {
       message,
       id: Date.now() + Math.random(),
       retry,
+      createdAt: Date.now(),
     });
   }, []);
 
@@ -103,62 +171,92 @@ function DismissibleToastCard({
   isRetrying = false,
 }) {
   const hasRetry = Boolean(toast.retry?.order && typeof onRetry === "function");
+  const title = getToastTitle(toast, hasRetry);
+  const { Icon, iconClass } = getToastIconMeta(toast, hasRetry);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const createdAt = toast.createdAt ?? toast.id ?? Date.now();
+
+  useEffect(() => {
+    setNowMs(Date.now());
+    const id = window.setInterval(() => setNowMs(Date.now()), TIME_AGO_TICK_MS);
+    return () => window.clearInterval(id);
+  }, [createdAt]);
+
+  const timeAgo = formatNotificationTimeAgo(createdAt, nowMs);
 
   return (
     <div
+      role="status"
+      aria-live="polite"
+      aria-label={[title, toast.message, timeAgo].filter(Boolean).join(". ")}
       className={cn(
-        "flex w-full max-w-md rounded-lg border p-4 shadow-lg",
-        hasRetry
-          ? "flex-col items-start justify-between gap-3 p-3"
-          : "items-center justify-between",
-        toast.type === "error"
-          ? "border-red-200 bg-red-50 text-red-800"
-          : toast.type === "success"
-            ? "border-green-200 bg-green-50 text-green-800"
-            : "border-yellow-200 bg-yellow-50 text-yellow-800",
+        "w-full min-w-[300px] rounded-2xl border border-white/50 p-2.5",
+        "bg-white/55 text-left backdrop-blur-xl backdrop-saturate-150",
+        "shadow-[0_4px_14px_rgba(0,0,0,0.12),0_12px_36px_rgba(0,0,0,0.22),0_24px_56px_rgba(0,0,0,0.14)]",
       )}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        <span className={hasRetry ? "text-sm" : "text-lg"}>
-          {toast.type === "error"
-            ? "❌"
-            : toast.type === "success"
-              ? "✅"
-              : "⚠️"}
+      <div className="flex items-start gap-2.5">
+        <span
+          className={cn(
+            "flex size-11 shrink-0 items-center justify-center rounded-[0.65rem] text-white shadow-sm",
+            iconClass,
+          )}
+          aria-hidden
+        >
+          <Icon className="size-6" strokeWidth={2.25} />
         </span>
-        <span className="font-medium">{toast.message}</span>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <p className="truncate text-[15px] font-semibold leading-snug text-neutral-900">
+              {title}
+            </p>
+            <span className="shrink-0 text-xs font-medium tabular-nums text-neutral-900">
+              {timeAgo}
+            </span>
+          </div>
+          <p className="mt-0.5 text-[15px] leading-snug text-neutral-900">
+            {toast.message}
+          </p>
+        </div>
       </div>
-      {hasRetry ? (
-        <div className="flex w-full shrink-0 items-center gap-2">
+
+      <div className="mt-2.5 flex items-center justify-end gap-2">
+        {hasRetry ? (
+          <>
+            <button
+              type="button"
+              onClick={onDismiss}
+              disabled={isRetrying}
+              className="rounded-lg px-4 py-2.5 text-sm font-semibold text-neutral-600 transition-colors hover:bg-black/5 hover:text-neutral-900 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Dismiss
+            </button>
+            <button
+              type="button"
+              onClick={onRetry}
+              disabled={isRetrying}
+              className="flex-grow rounded-lg bg-[#984B28] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#7f3f22] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isRetrying ? "Retrying…" : "Print again"}
+            </button>
+          </>
+        ) : (
           <button
             type="button"
             onClick={onDismiss}
-            disabled={isRetrying}
-            className="w-28 rounded bg-[#947474] px-3 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#947474] disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-grow rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-800"
           >
             Dismiss
           </button>
-          <button
-            type="button"
-            onClick={onRetry}
-            disabled={isRetrying}
-            className="w-full rounded bg-[#2d9453] px-3 py-3 text-sm font-semibold text-white transition-colors hover:bg-green-900 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {isRetrying ? "Retrying..." : "Print again"}
-          </button>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="ml-4 shrink-0 rounded bg-red-600 px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-red-700"
-        >
-          Dismiss
-        </button>
-      )}
+        )}
+      </div>
     </div>
   );
 }
+
+const STACK_POSITION_CLASS =
+  "pointer-events-none fixed z-[70] right-[max(0.75rem,env(safe-area-inset-right))] top-[max(0.75rem,env(safe-area-inset-top))] flex w-[min(100vw-1.5rem,22rem)] min-w-[300px] max-h-[min(70vh,calc(100dvh-2rem))] flex-col gap-2 overflow-y-auto";
 
 export function DismissibleToastStack({
   toasts = [],
@@ -167,33 +265,39 @@ export function DismissibleToastStack({
   retryingToastId = null,
   className,
 }) {
-  if (!toasts.length) return null;
-
   return (
-    <div
-      className={cn(
-        "fixed right-4 top-4 z-50 flex max-h-[min(70vh,calc(100dvh-2rem))] w-full max-w-md flex-col gap-2 overflow-y-auto",
-        className,
-      )}
-    >
-      {toasts.map((toast) => (
-        <div
-          key={toast.id}
-          className="animate-in slide-in-from-right-5"
-        >
-          <DismissibleToastCard
-            toast={toast}
-            onDismiss={() => onDismiss(toast.id)}
-            onRetry={
-              typeof onRetry === "function"
-                ? () => onRetry(toast.id)
-                : undefined
-            }
-            isRetrying={retryingToastId === toast.id}
-          />
-        </div>
-      ))}
-    </div>
+    <LayoutGroup id="dismissible-toast-stack">
+      <div
+        className={cn(STACK_POSITION_CLASS, className)}
+        aria-hidden={toasts.length === 0}
+      >
+        <AnimatePresence initial={false} mode="popLayout">
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              layout="position"
+              variants={ALERT_ITEM_VARIANTS}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              transition={{ layout: STACK_LAYOUT_SPRING }}
+              className="pointer-events-auto w-full will-change-transform"
+            >
+              <DismissibleToastCard
+                toast={toast}
+                onDismiss={() => onDismiss(toast.id)}
+                onRetry={
+                  typeof onRetry === "function"
+                    ? () => onRetry(toast.id)
+                    : undefined
+                }
+                isRetrying={retryingToastId === toast.id}
+              />
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+    </LayoutGroup>
   );
 }
 
@@ -204,21 +308,36 @@ export default function DismissibleToast({
   isRetrying = false,
   className,
 }) {
-  if (!toast?.show) return null;
-
   return (
     <div
       className={cn(
-        "fixed right-4 top-4 z-50 animate-in slide-in-from-right-5",
+        "pointer-events-none fixed z-[70]",
+        "right-[max(0.75rem,env(safe-area-inset-right))]",
+        "top-[max(0.75rem,env(safe-area-inset-top))]",
+        "w-[min(100vw-1.5rem,22rem)] min-w-[300px]",
         className,
       )}
+      aria-hidden={!toast?.show}
     >
-      <DismissibleToastCard
-        toast={toast}
-        onDismiss={onDismiss}
-        onRetry={onRetry}
-        isRetrying={isRetrying}
-      />
+      <AnimatePresence initial={false}>
+        {toast?.show ? (
+          <motion.div
+            key={toast.id ?? "dismissible-toast"}
+            variants={ALERT_ITEM_VARIANTS}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="pointer-events-auto w-full will-change-transform"
+          >
+            <DismissibleToastCard
+              toast={toast}
+              onDismiss={onDismiss}
+              onRetry={onRetry}
+              isRetrying={isRetrying}
+            />
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }
