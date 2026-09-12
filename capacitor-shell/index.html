@@ -186,8 +186,8 @@
         </svg>
         <h1>Easy<span class="accent">Menu</span></h1>
       </div>
-      <p id="message">Connecting you to your store.</p>
-      <div id="status" class="status">Checking internet connection...</div>
+      <p id="message">Connecting to your store.</p>
+      <div id="status" class="status">Connecting…</div>
       <button id="retryButton" class="button" type="button" hidden>
         Try again
       </button>
@@ -206,17 +206,17 @@
     const retryButton = document.getElementById("retryButton");
     let isRetrying = false;
 
-    function showOfflineState() {
+    function showConnectionErrorState() {
       messageEl.textContent =
-        "You're offline. Connect to the internet to use EasyMenu.";
-      statusEl.textContent = "No internet connection";
+        "We couldn’t connect to EasyMenu right now. Please try again in a moment.";
+      statusEl.textContent = "Unable to reach EasyMenu";
       retryButton.hidden = false;
       retryButton.disabled = false;
     }
 
     function showConnectingState() {
-      messageEl.textContent = "Connecting you to your store.";
-      statusEl.textContent = "Connecting to your store";
+      messageEl.textContent = "Connecting to your store.";
+      statusEl.textContent = "Connecting…";
       retryButton.hidden = true;
     }
 
@@ -229,7 +229,7 @@
     }
 
     retryButton.addEventListener("click", () => {
-      statusEl.textContent = "Retrying...";
+      statusEl.textContent = "Trying again…";
       isRetrying = false;
       openApp();
     });
@@ -239,8 +239,8 @@
       openApp();
     });
 
-    // errorPath means the remote app already failed — show offline + retry.
-    showOfflineState();
+    // errorPath means the remote app already failed — show retry UI (not necessarily offline).
+    showConnectionErrorState();
   </script>
 </body>
 
