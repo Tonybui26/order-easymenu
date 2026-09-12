@@ -216,9 +216,7 @@
 
     function showConnectingState() {
       messageEl.textContent = "Connecting you to your store.";
-      statusEl.textContent = isDev
-        ? `Opening ${appUrl}...`
-        : "Opening EasyMenu...";
+      statusEl.textContent = "Connecting to your store";
       retryButton.hidden = true;
     }
 
