@@ -28,6 +28,17 @@ const SELF_ORDER_ALERT_POLL_MS = 10000;
 const AUTO_PRINT_ALERT_MIN_VISIBLE_MS = 3500;
 
 export const SELF_ORDER_BATCH_ALERT_ID = "__self_order_batch__";
+export const CONNECTION_LOST_ALERT_ID = "__connection_lost__";
+
+function buildConnectionLostAlert() {
+  return {
+    kind: "connection",
+    id: CONNECTION_LOST_ALERT_ID,
+    title: "Connection lost",
+    description: "Orders may not update. Check the network, then dismiss.",
+    createdAt: Date.now(),
+  };
+}
 
 function normalizeOrderId(orderId) {
   return String(orderId ?? "").trim();
@@ -95,6 +106,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
   const { menuConfig, storeProfile, itemGroups } = useMenuContext();
   const { userData } = useGlobalAppContext();
   const [alerts, setAlerts] = useState([]);
+  const [connectionLostAlert, setConnectionLostAlert] = useState(null);
   const [processingAlertIds, setProcessingAlertIds] = useState(() => new Set());
   const processingAlertIdsRef = useRef(new Set());
   const printedOrderIdsRef = useRef(new Set());
@@ -106,6 +118,8 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
   const isReturnSyncDoneRef = useRef(false);
   const returnSyncCandidateIdsRef = useRef(new Set());
   const consecutiveErrorsRef = useRef(0);
+  /** After staff dismisses during an outage, don't re-show until connection recovers. */
+  const connectionLostDismissedForOutageRef = useRef(false);
   const isPollingInProgressRef = useRef(false);
   const pollSelfOrderAlertsRef = useRef(null);
   /** Order ids kept on screen until min-visible setTimeout fires (UX only). */
@@ -124,6 +138,13 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
   }, []);
 
   const dismissSelfOrderAlert = useCallback((alertId) => {
+    if (alertId === CONNECTION_LOST_ALERT_ID) {
+      setConnectionLostAlert(null);
+      if (consecutiveErrorsRef.current > 0) {
+        connectionLostDismissedForOutageRef.current = true;
+      }
+      return;
+    }
     setAlerts((prev) => prev.filter((alert) => alert.id !== alertId));
   }, []);
 
@@ -179,28 +200,30 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
     ],
   );
 
-  const alertsWithProcessing = useMemo(
-    () =>
-      alerts.map((alert) => {
-        const isManualSending = processingAlertIds.has(alert.id);
-        const isAutoSending =
-          alert.kind === "batch"
-            ? (alert.orderIds || []).some((id) =>
-                autoPrintingOrderIds.has(normalizeOrderId(id)),
-              )
-            : autoPrintingOrderIds.has(normalizeOrderId(alert.id));
+  const alertsWithProcessing = useMemo(() => {
+    const orderAlerts = alerts.map((alert) => {
+      const isManualSending = processingAlertIds.has(alert.id);
+      const isAutoSending =
+        alert.kind === "batch"
+          ? (alert.orderIds || []).some((id) =>
+              autoPrintingOrderIds.has(normalizeOrderId(id)),
+            )
+          : autoPrintingOrderIds.has(normalizeOrderId(alert.id));
 
-        return {
-          ...alert,
-          isSending: isManualSending || isAutoSending,
-          isAutoSending,
-          sendLabel: isAutoSending
-            ? "Auto sending…"
-            : alert.sendLabel || "Send",
-        };
-      }),
-    [alerts, autoPrintingOrderIds, processingAlertIds],
-  );
+      return {
+        ...alert,
+        isSending: isManualSending || isAutoSending,
+        isAutoSending,
+        sendLabel: isAutoSending
+          ? "Auto sending…"
+          : alert.sendLabel || "Send",
+      };
+    });
+
+    return connectionLostAlert
+      ? [connectionLostAlert, ...orderAlerts]
+      : orderAlerts;
+  }, [alerts, autoPrintingOrderIds, connectionLostAlert, processingAlertIds]);
 
   const mergePinnedMinVisibleAlerts = useCallback((built, prev) => {
     const builtIdSet = new Set(built.map((alert) => alert.id));
@@ -402,6 +425,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
       const hadErrors = consecutiveErrorsRef.current > 0;
       consecutiveErrorsRef.current = 0;
       if (hadErrors) {
+        connectionLostDismissedForOutageRef.current = false;
         toast.success("Connection restored!", { duration: 2000 });
       }
 
@@ -428,13 +452,11 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
       console.error("Self-order alert polling error:", error);
       consecutiveErrorsRef.current += 1;
 
-      if (consecutiveErrorsRef.current === 1) {
-        toast.error("Connection lost. Retrying...", { duration: 3000 });
-      } else if (consecutiveErrorsRef.current % 3 === 0) {
-        toast.error(
-          `Still retrying... (attempt ${consecutiveErrorsRef.current})`,
-          { duration: 2000 },
-        );
+      if (
+        consecutiveErrorsRef.current === 1 &&
+        !connectionLostDismissedForOutageRef.current
+      ) {
+        setConnectionLostAlert(buildConnectionLostAlert());
       }
 
       return { success: false, error };

@@ -49,7 +49,7 @@ const ALERT_ITEM_VARIANTS = {
  *
  * @param {Array<{
  *   id: string,
- *   kind?: "order" | "batch",
+ *   kind?: "order" | "batch" | "connection",
  *   title?: string,
  *   description?: string,
  *   table?: string,
@@ -64,6 +64,7 @@ export default function SelfOrderAlertStack({
   alerts = [],
   onDismiss,
   onSend,
+  onReload,
   className,
 }) {
   const { soundEnabled, notificationSoundId, newOrderAlertsMuted } =
@@ -80,6 +81,11 @@ export default function SelfOrderAlertStack({
 
     for (const alert of alerts) {
       if (!alert?.id || playedSoundAlertIdsRef.current.has(alert.id)) continue;
+      // Connection-lost is acknowledge-only; no new-order chime.
+      if (alert.kind === "connection") {
+        playedSoundAlertIdsRef.current.add(alert.id);
+        continue;
+      }
       playedSoundAlertIdsRef.current.add(alert.id);
       void playNotificationSoundOnce(notificationSoundId);
     }
@@ -110,6 +116,7 @@ export default function SelfOrderAlertStack({
               className="pointer-events-auto w-full will-change-transform"
             >
               <SelfOrderAlertNotification
+                kind={alert.kind}
                 title={alert.title}
                 description={alert.description}
                 table={alert.table}
@@ -124,8 +131,13 @@ export default function SelfOrderAlertStack({
                     : undefined
                 }
                 onSend={
-                  typeof onSend === "function"
-                    ? () => onSend(alert.id)
+                  alert.kind === "connection" || typeof onSend !== "function"
+                    ? undefined
+                    : () => onSend(alert.id)
+                }
+                onReload={
+                  alert.kind === "connection" && typeof onReload === "function"
+                    ? () => onReload(alert.id)
                     : undefined
                 }
               />

@@ -11,6 +11,7 @@ import { POS_HELD_ORDERS_TAB_SELF_ORDERING } from "./PosHeldOrders";
 import SelfOrderAlertStack from "./SelfOrderAlertStack";
 import {
   SELF_ORDER_BATCH_ALERT_ID,
+  CONNECTION_LOST_ALERT_ID,
   useSelfOrderAlerts,
 } from "./useSelfOrderAlerts";
 
@@ -31,6 +32,7 @@ function SelfOrderAlertsHostActive() {
 
   const handleSend = useCallback(
     (alertId) => {
+      if (alertId === CONNECTION_LOST_ALERT_ID) return;
       if (alertId === SELF_ORDER_BATCH_ALERT_ID) {
         navigate(`/pos/held?tab=${POS_HELD_ORDERS_TAB_SELF_ORDERING}`);
         return;
@@ -40,11 +42,16 @@ function SelfOrderAlertsHostActive() {
     [navigate, prepareSelfOrderAlert],
   );
 
+  const handleReload = useCallback(() => {
+    window.location.reload();
+  }, []);
+
   return (
     <SelfOrderAlertStack
       alerts={alerts}
       onDismiss={dismissSelfOrderAlert}
       onSend={handleSend}
+      onReload={handleReload}
     />
   );
 }

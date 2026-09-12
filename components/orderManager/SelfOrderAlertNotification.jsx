@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { QrCode } from "lucide-react";
+import { QrCode, WifiOff } from "lucide-react";
 import { cn } from "@/lib/helper";
 import {
   formatNotificationTimeAgo,
@@ -12,6 +12,7 @@ const TIME_AGO_TICK_MS = 30_000;
 
 /**
  * Single macOS-style self-order notification card (presentational; motion lives in stack).
+ * Pass no `onSend` for dismiss-only / connection alerts. Optional `onReload` for connection lost.
  */
 export default function SelfOrderAlertNotification({
   title = "New Order",
@@ -20,8 +21,10 @@ export default function SelfOrderAlertNotification({
   customerName,
   createdAt,
   sendLabel = "Send",
+  kind = "order",
   onSend,
   onDismiss,
+  onReload,
   isSending = false,
   isAutoSending = false,
   className,
@@ -30,6 +33,9 @@ export default function SelfOrderAlertNotification({
     descriptionOverride ??
     formatSelfOrderAlertPrimaryLabel({ table, customerName });
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const isConnection = kind === "connection";
+  const hasSend = typeof onSend === "function";
+  const hasReload = typeof onReload === "function";
 
   useEffect(() => {
     setNowMs(Date.now());
@@ -38,7 +44,7 @@ export default function SelfOrderAlertNotification({
   }, [createdAt]);
 
   const timeAgo = formatNotificationTimeAgo(createdAt ?? nowMs, nowMs);
-  const sendDisabled = isSending || typeof onSend !== "function";
+  const sendDisabled = isSending || !hasSend;
   // Auto-print keeps running after dismiss; only block dismiss during manual Send.
   const dismissDisabled = isSending && !isAutoSending;
 
@@ -56,10 +62,17 @@ export default function SelfOrderAlertNotification({
     >
       <div className="flex items-start gap-2.5">
         <span
-          className="flex size-11 shrink-0 items-center justify-center rounded-[0.65rem] bg-violet-600 text-white shadow-sm"
+          className={cn(
+            "flex size-11 shrink-0 items-center justify-center rounded-[0.65rem] text-white shadow-sm",
+            isConnection ? "bg-amber-600" : "bg-violet-600",
+          )}
           aria-hidden
         >
-          <QrCode className="size-6" strokeWidth={2.25} />
+          {isConnection ? (
+            <WifiOff className="size-6" strokeWidth={2.25} />
+          ) : (
+            <QrCode className="size-6" strokeWidth={2.25} />
+          )}
         </span>
 
         <div className="min-w-0 flex-1">
@@ -71,14 +84,14 @@ export default function SelfOrderAlertNotification({
               {timeAgo}
             </span>
           </div>
-          <p className="mt-0.5 truncate text-[15px] leading-snug text-neutral-900">
+          <p className="mt-0.5 text-[15px] leading-snug text-neutral-900">
             {description}
           </p>
         </div>
       </div>
 
       <div className="mt-2.5 flex items-center justify-end gap-2">
-        {typeof onDismiss === "function" ? (
+        {hasSend && typeof onDismiss === "function" ? (
           <button
             type="button"
             onClick={onDismiss}
@@ -88,18 +101,47 @@ export default function SelfOrderAlertNotification({
             Dismiss
           </button>
         ) : null}
-        <button
-          type="button"
-          onClick={onSend}
-          disabled={sendDisabled}
-          className="flex-grow rounded-lg bg-[#984B28] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#7f3f22] disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isAutoSending
-            ? "Auto sending…"
-            : isSending
-              ? "…"
-              : sendLabel}
-        </button>
+        {hasSend ? (
+          <button
+            type="button"
+            onClick={onSend}
+            disabled={sendDisabled}
+            className="flex-grow rounded-lg bg-[#984B28] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#7f3f22] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isAutoSending
+              ? "Auto sending…"
+              : isSending
+                ? "…"
+                : sendLabel}
+          </button>
+        ) : (
+          <>
+            {typeof onDismiss === "function" ? (
+              <button
+                type="button"
+                onClick={onDismiss}
+                disabled={dismissDisabled}
+                className={cn(
+                  "rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                  hasReload
+                    ? "text-neutral-600 hover:bg-black/5 hover:text-neutral-900"
+                    : "flex-grow bg-neutral-900 text-white hover:bg-neutral-800",
+                )}
+              >
+                Dismiss
+              </button>
+            ) : null}
+            {hasReload ? (
+              <button
+                type="button"
+                onClick={onReload}
+                className="flex-grow rounded-lg bg-[#984B28] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#7f3f22]"
+              >
+                Reload
+              </button>
+            ) : null}
+          </>
+        )}
       </div>
     </div>
   );
