@@ -17,6 +17,7 @@ import {
   formatSelfOrderBatchTitle,
 } from "@/lib/pos/selfOrderAlertDisplay";
 import { getAutoPrintingEnabled } from "@/lib/utils/autoPrinting";
+import { isSelfOrderAlertsEnabled } from "@/lib/pos/selfOrderAlertsConfig";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 
@@ -112,6 +113,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
   const autoPrintDismissTimeoutsRef = useRef(new Map());
   const isNative = isNativeApp();
   const hasMenuConfig = Boolean(menuConfig);
+  const selfOrderAlertsEnabled = isSelfOrderAlertsEnabled(menuConfig);
 
   const setOrderAutoPrinting = useCallback((orderId, isPrinting) => {
     const id = normalizeOrderId(orderId);
@@ -459,7 +461,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
       };
     }
 
-    if (!hasMenuConfig) return undefined;
+    if (!hasMenuConfig || !selfOrderAlertsEnabled) return undefined;
 
     let intervalId = null;
     let cancelled = false;
@@ -537,10 +539,18 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
       isReturnSyncDoneRef.current = false;
       returnSyncCandidateIdsRef.current = new Set();
     };
-  }, [clearAutoPrintDismissTimeouts, externalPolling, hasMenuConfig, isNative]);
+  }, [
+    clearAutoPrintDismissTimeouts,
+    externalPolling,
+    hasMenuConfig,
+    isNative,
+    selfOrderAlertsEnabled,
+  ]);
 
   useEffect(() => {
-    if (externalPolling || !hasMenuConfig) return undefined;
+    if (externalPolling || !hasMenuConfig || !selfOrderAlertsEnabled) {
+      return undefined;
+    }
 
     const handleOnline = () => {
       void pollSelfOrderAlertsRef.current?.();
@@ -550,7 +560,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
     return () => {
       window.removeEventListener("online", handleOnline);
     };
-  }, [externalPolling, hasMenuConfig]);
+  }, [externalPolling, hasMenuConfig, selfOrderAlertsEnabled]);
 
   return {
     alerts: alertsWithProcessing,
