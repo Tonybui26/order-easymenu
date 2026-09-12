@@ -209,9 +209,7 @@
     function showOfflineState() {
       messageEl.textContent =
         "You're offline. Connect to the internet to use EasyMenu.";
-      statusEl.textContent = isDev
-        ? `Can't reach ${appUrl}`
-        : "No internet connection";
+      statusEl.textContent = "No internet connection";
       retryButton.hidden = false;
       retryButton.disabled = false;
     }
