@@ -25,7 +25,7 @@ const ActiveOperatorContext = createContext(null);
 
 export function ActiveOperatorProvider({ children }) {
   const { data: session, status } = useSession();
-  const { menuConfig, dataLoaded } = useMenuContext();
+  const { menuConfig, dataLoaded, syncCatalogFromServer } = useMenuContext();
   const pinLockEnabled = isStaffPinLockEnabled(menuConfig);
   const router = useRouter();
   const pathname = usePathname();
@@ -86,14 +86,28 @@ export function ActiveOperatorProvider({ children }) {
     setActiveOperator(null);
   }, [activeOperator, hydrated, pathname, pinLockEnabled]);
 
-  const unlock = useCallback(async (pinCode) => {
-    const result = await verifyStaffPinAction(pinCode);
-    if (!result.ok) return result;
+  const unlock = useCallback(
+    async (pinCode) => {
+      const result = await verifyStaffPinAction(pinCode);
+      if (!result.ok) return result;
 
-    writeActiveOperator(result.operator);
-    setActiveOperator(result.operator);
-    return result;
-  }, []);
+      writeActiveOperator(result.operator);
+      setActiveOperator(result.operator);
+
+      // Local Mode: after PIN unlock, sync menu + printers from server into
+      // SQLite. Do not block unlock if sync fails (staff can still work).
+      if (typeof syncCatalogFromServer === "function") {
+        try {
+          await syncCatalogFromServer();
+        } catch (error) {
+          console.error("unlock catalog sync:", error);
+        }
+      }
+
+      return result;
+    },
+    [syncCatalogFromServer],
+  );
 
   const storeLogout = useCallback(async () => {
     clearActiveOperator();

@@ -5,6 +5,7 @@ import {
   addPrinter,
   deletePrinter,
   fetchPrinters,
+  refreshPrintersCache,
   updatePrinter,
 } from "@/lib/api/fetchApi";
 import PrinterCard from "./components/PrinterCard";
@@ -42,7 +43,9 @@ export default function PrinterManagementPage() {
   const handleDeletePrinter = async (printerId) => {
     try {
       await deletePrinter(printerId);
-      setPrinters(printers.filter((printer) => printer._id !== printerId));
+      // Force network + rewrite local printers cache so prints see the deletion.
+      const data = await refreshPrintersCache();
+      setPrinters(data.printers || []);
       toast.success("Printer deleted successfully");
     } catch (error) {
       console.error("Error deleting printer:", error);
@@ -52,12 +55,9 @@ export default function PrinterManagementPage() {
 
   const handleUpdatePrinter = async (printerId, updatedData) => {
     try {
-      const data = await updatePrinter(printerId, updatedData);
-      setPrinters(
-        printers.map((printer) =>
-          printer._id === printerId ? data.printer : printer,
-        ),
-      );
+      await updatePrinter(printerId, updatedData);
+      const data = await refreshPrintersCache();
+      setPrinters(data.printers || []);
       toast.success("Printer updated successfully");
     } catch (error) {
       console.error("Error updating printer:", error);
@@ -68,8 +68,9 @@ export default function PrinterManagementPage() {
   const handleAddPrinter = async (printerData) => {
     console.log("printerData", printerData);
     try {
-      const data = await addPrinter(printerData);
-      setPrinters([...printers, data.printer]);
+      await addPrinter(printerData);
+      const data = await refreshPrintersCache();
+      setPrinters(data.printers || []);
       setShowAddPrinterModal(false);
       toast.success("Printer added successfully");
     } catch (error) {

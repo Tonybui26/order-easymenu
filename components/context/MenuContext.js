@@ -5,6 +5,7 @@ import {
   fetchGetMenuByOwnerEmail,
   updateMenuItemSoldOut,
   updateModifierOptionAvailability,
+  refreshPrintersCache,
 } from "@/lib/api/fetchApi";
 import { useSkipInitialEffect } from "@/lib/hooks/useSkipInitialEffect";
 import {
@@ -17,15 +18,37 @@ import {
 } from "react";
 import toast from "react-hot-toast";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
+import { isStoreTesting } from "@/lib/store/isTesting";
+import { isLocalDbSupported } from "@/lib/localDb/sqliteClient";
+import { setLocalCatalogCacheGate } from "@/lib/localDb/localCacheGate";
+import { persistCatalogAfterNetworkMenu } from "@/lib/localDb/syncLocalCatalog";
+
+function buildStoreProfile(data) {
+  return {
+    storeName: (data && data.storeName) || "",
+    storeLogo: (data && data.storeProfileImage) || "",
+    menuLink: (data && data.menuLink) || "",
+    storeAddress: (data && data.storeAddress) || "",
+    storeABN: (data && data.storeABN) || "",
+    timezone: data?.timezone || "Australia/Melbourne",
+    taxPercentage: data?.taxPercentage ?? 10,
+    stripeConfig: (data && data.stripeConfig) || {},
+    paymentMethods: (data && data.paymentMethods) || {
+      stripe: { enabled: false, isDefault: false },
+      cash: { enabled: false, isDefault: false },
+    },
+  };
+}
 
 const MenuContext = createContext();
 export const MenuContextProvider = ({ children, data: menuData }) => {
-  // const { data: session } = useSession();
   const { userData } = useGlobalAppContext();
   const [dataLoaded, setDataLoaded] = useState(!!menuData);
   const [isRefreshing, setIsRefreshing] = useState(false);
   // Ref to track if we're loading initial data to prevent save toast
   const isInitialLoadRef = useRef(false);
+  // Avoid double catalog persist when React Strict Mode remounts in dev
+  const didPersistInitialCatalogRef = useRef(false);
 
   const [menuConfig, setMenuConfig] = useState(
     (menuData && menuData.config) || {},
@@ -52,66 +75,79 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   const [posTableMaps, setPosTableMaps] = useState(
     (menuData && menuData.posTableMaps) || [],
   );
-  const [storeProfile, setStoreProfile] = useState({
-    storeName: (menuData && menuData.storeName) || "",
-    storeLogo: (menuData && menuData.storeProfileImage) || "",
-    menuLink: (menuData && menuData.menuLink) || "",
-    storeAddress: (menuData && menuData.storeAddress) || "",
-    storeABN: (menuData && menuData.storeABN) || "",
-    timezone: menuData?.timezone || "Australia/Melbourne",
-    taxPercentage: menuData?.taxPercentage ?? 10,
-    stripeConfig: (menuData && menuData.stripeConfig) || {},
-    paymentMethods: (menuData && menuData.paymentMethods) || {
-      stripe: { enabled: false, isDefault: false },
-      cash: { enabled: false, isDefault: false },
-    },
-  });
+  const [storeProfile, setStoreProfile] = useState(buildStoreProfile(menuData));
 
   // Get menu ID from menuData
   const menuId = menuData?._id || null;
   // Ignore a stale availability refetch if the user saved sold-out while it was in flight.
   const availabilityRefreshIdRef = useRef(0);
 
+  /**
+   * Apply a network menu document into React state and open/close the local
+   * catalog cache gate from menu.config.isTesting.
+   */
+  const applyMenuDocument = useCallback(
+    (data) => {
+      if (!data) return;
+      const nextConfig = data.config || {};
+      setMenuConfig(nextConfig);
+      setMenuContent(data.menuContent || []);
+      setGlobalModifiers(data.globalModifiers || {});
+      setGlobalVariants(data.globalVariants || {});
+      setItemGroups(data.itemGroups || []);
+      setPosLayouts(data.posLayouts || []);
+      setPosTableMaps(data.posTableMaps || []);
+      setStoreProfile(buildStoreProfile(data));
+
+      // Gate: fetchApi printers cache only when testing + native.
+      setLocalCatalogCacheGate({
+        enabled: isStoreTesting(nextConfig) && isLocalDbSupported(),
+        ownerEmail: data.ownerEmail || userData?.ownerEmail || null,
+      });
+    },
+    [userData?.ownerEmail],
+  );
+
+  /**
+   * After network menu is applied: write menu_snapshot + force-refresh printers.
+   * Sync moments: first auth load / Reload (SSR), soft refresh, PIN unlock.
+   */
+  const persistCatalogFromNetworkMenu = useCallback(async (data) => {
+    if (!isStoreTesting(data?.config) || !isLocalDbSupported()) return;
+    await persistCatalogAfterNetworkMenu(data, { refreshPrintersCache });
+  }, []);
+
+  // First authenticated load / Reload: SSR already fetched menu — persist once.
+  useEffect(() => {
+    if (!menuData || didPersistInitialCatalogRef.current) return;
+    didPersistInitialCatalogRef.current = true;
+
+    setLocalCatalogCacheGate({
+      enabled: isStoreTesting(menuData.config) && isLocalDbSupported(),
+      ownerEmail: menuData.ownerEmail || userData?.ownerEmail || null,
+    });
+
+    void persistCatalogFromNetworkMenu(menuData);
+  }, [menuData, persistCatalogFromNetworkMenu, userData?.ownerEmail]);
+
   // Fetch menu data client-side if not loaded from server
   useEffect(() => {
     console.log("effect run");
     const fetchMenuData = async () => {
-      // Only fetch if we don't have data AND we have a session
-
       try {
-        isInitialLoadRef.current = true; // Set flag before fetching to prevent save toast
+        isInitialLoadRef.current = true;
         console.log("Fetching menu data client-side...");
         const data = await fetchGetMenuByOwnerEmail(userData.ownerEmail);
 
         if (data) {
-          setMenuConfig(data.config || {});
-          setMenuContent(data.menuContent || []);
-          setGlobalModifiers(data.globalModifiers || {});
-          setGlobalVariants(data.globalVariants || {});
-          setItemGroups(data.itemGroups || []);
-          setPosLayouts(data.posLayouts || []);
-          setPosTableMaps(data.posTableMaps || []);
-          setStoreProfile({
-            storeName: data.storeName || "",
-            storeLogo: data.storeProfileImage || "",
-            menuLink: data.menuLink || "",
-            storeAddress: data.storeAddress || "",
-            storeABN: data.storeABN || "",
-            timezone: data.timezone || "Australia/Melbourne",
-            taxPercentage: data.taxPercentage ?? 10,
-            stripeConfig: data.stripeConfig || {},
-            paymentMethods: data.paymentMethods || {
-              stripe: { enabled: false, isDefault: false },
-              cash: { enabled: false, isDefault: false },
-            },
-          });
+          applyMenuDocument(data);
           setDataLoaded(true);
+          void persistCatalogFromNetworkMenu(data);
         }
       } catch (error) {
         console.error("Error fetching menu data:", error);
-        setDataLoaded(true); // Mark as loaded even on error to prevent infinite retries
+        setDataLoaded(true);
       } finally {
-        // Reset flag after a short delay to allow state updates to complete
         setTimeout(() => {
           isInitialLoadRef.current = false;
         }, 100);
@@ -120,20 +156,22 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
     if (!dataLoaded && userData?.ownerEmail) {
       fetchMenuData();
     }
-  }, [userData?.ownerEmail, dataLoaded]);
+  }, [
+    applyMenuDocument,
+    dataLoaded,
+    persistCatalogFromNetworkMenu,
+    userData?.ownerEmail,
+  ]);
 
   // Reusable function to update config fields with fresh server data
   const updateMenuConfigField = async (fieldPath, newValue) => {
     try {
-      // Step 1: Fetch latest menu config from server
       console.log("🔄 Fetching latest menu config...");
       const latestData = await fetchGetMenuByOwnerEmail(userData.ownerEmail);
 
       if (latestData) {
-        // Step 2: Update local state with fresh server data + user's change
         const freshConfig = latestData.config || {};
 
-        // Step 3: Apply user's change using deep spread
         const updatedConfig = {
           ...freshConfig,
           [fieldPath]:
@@ -142,10 +180,14 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
                   ...freshConfig[fieldPath],
                   ...newValue,
                 }
-              : newValue, // For primitive values (numbers, strings, booleans)
+              : newValue,
         };
 
         setMenuConfig(updatedConfig);
+        setLocalCatalogCacheGate({
+          enabled: isStoreTesting(updatedConfig) && isLocalDbSupported(),
+          ownerEmail: latestData.ownerEmail || userData?.ownerEmail || null,
+        });
         console.log("✅ Config updated with fresh data + user change");
         return { success: true };
       }
@@ -155,36 +197,15 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
     }
   };
 
-  // Function to refresh all menu data from server
+  // Function to refresh all menu data from server (+ persist catalog when testing)
   const refreshMenuData = async () => {
     try {
       console.log("🔄 Refreshing menu data from server...");
       const data = await fetchGetMenuByOwnerEmail(userData.ownerEmail);
 
       if (data) {
-        // Update all menu-related state with fresh data
-        setMenuConfig(data.config || {});
-        setMenuContent(data.menuContent || []);
-        setGlobalModifiers(data.globalModifiers || {});
-        setGlobalVariants(data.globalVariants || {});
-        setItemGroups(data.itemGroups || []);
-        setPosLayouts(data.posLayouts || []);
-        setPosTableMaps(data.posTableMaps || []);
-        setStoreProfile({
-          storeName: data.storeName || "",
-          storeLogo: data.storeProfileImage || "",
-          menuLink: data.menuLink || "",
-          storeAddress: data.storeAddress || "",
-          storeABN: data.storeABN || "",
-          timezone: data.timezone || "Australia/Melbourne",
-          taxPercentage: data.taxPercentage ?? 10,
-          stripeConfig: data.stripeConfig || {},
-          paymentMethods: data.paymentMethods || {
-            stripe: { enabled: false, isDefault: false },
-            cash: { enabled: false, isDefault: false },
-          },
-        });
-
+        applyMenuDocument(data);
+        await persistCatalogFromNetworkMenu(data);
         console.log("✅ Menu data refreshed successfully 11");
         return { success: true };
       }
@@ -194,26 +215,59 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
     }
   };
 
+  /**
+   * PIN unlock sync: pull latest menu + printers from server and overwrite SQLite.
+   * Unlock still succeeds if this fails (caller should not block on errors).
+   */
+  const syncCatalogFromServer = useCallback(async () => {
+    if (!userData?.ownerEmail) {
+      return { success: false, error: "Missing owner email" };
+    }
+    if (!isStoreTesting(menuConfig) || !isLocalDbSupported()) {
+      return { success: true, skipped: true };
+    }
+
+    try {
+      const data = await fetchGetMenuByOwnerEmail(userData.ownerEmail);
+      if (!data) return { success: false, error: "Menu not found" };
+
+      isInitialLoadRef.current = true;
+      applyMenuDocument(data);
+      await persistCatalogFromNetworkMenu(data);
+      setTimeout(() => {
+        isInitialLoadRef.current = false;
+      }, 100);
+      return { success: true };
+    } catch (error) {
+      console.error("syncCatalogFromServer:", error);
+      return { success: false, error };
+    }
+  }, [
+    applyMenuDocument,
+    menuConfig,
+    persistCatalogFromNetworkMenu,
+    userData?.ownerEmail,
+  ]);
+
   // Wrapper function for refresh with toast
   const refreshMenuDataWithToast = async () => {
     try {
       console.log("Set is refreshing true");
-      setIsRefreshing(true); // Set flag to prevent useSkipInitialEffect
+      setIsRefreshing(true);
       const result = await refreshMenuData();
       if (result.success) {
         toast.success("Menu data refreshed!");
       } else {
         toast.error("Failed to refresh menu data");
       }
-      // timeout 1 second
       setTimeout(() => {
         console.log("Set is refreshing false");
-        setIsRefreshing(false); // Reset flag
+        setIsRefreshing(false);
       }, 1000);
       return result;
     } catch (error) {
       toast.error("Failed to refresh menu data");
-      setIsRefreshing(false); // Reset flag
+      setIsRefreshing(false);
       return { success: false, error };
     }
   };
@@ -233,6 +287,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         return { success: false, error: "Menu not found" };
       }
 
+      // Availability UI must stay live — do not rewrite full SQLite catalog here.
       setMenuContent(data.menuContent || []);
       setGlobalModifiers(data.globalModifiers || {});
       setGlobalVariants(data.globalVariants || {});
@@ -331,10 +386,8 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
     [],
   );
 
-  // Create the saveMenuUpdate function
   const saveMenuConfig = async () => {
     try {
-      // update menu config
       await updateMenuConfig(menuConfig);
     } catch (error) {
       console.error(error);
@@ -347,6 +400,10 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
     try {
       await updateMenuConfig(configToSave);
       setMenuConfig(configToSave);
+      setLocalCatalogCacheGate({
+        enabled: isStoreTesting(configToSave) && isLocalDbSupported(),
+        ownerEmail: userData?.ownerEmail || null,
+      });
       return { success: true };
     } catch (error) {
       console.error("saveMenuConfigExplicit error:", error);
@@ -356,18 +413,15 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         isInitialLoadRef.current = false;
       }, 100);
     }
-  }, []);
+  }, [userData?.ownerEmail]);
 
-  // Use the effect for database update when menu config changes
   useSkipInitialEffect(() => {
-    // Skip if we're currently refreshing or loading initial data to prevent double toast
     if (isRefreshing || isInitialLoadRef.current) {
       console.log("⏸️ Skipping save - currently refreshing/loading menu data");
       return;
     }
 
     console.log("useSkipInitialEffect run");
-    // Show toast message when saving the menu
     console.log("menuConfig changed run here");
     toast.promise(saveMenuConfig(), {
       loading: "Saving...",
@@ -381,9 +435,10 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
       value={{
         menuConfig,
         setMenuConfig,
-        updateMenuConfigField, // Add reusable config update function
+        updateMenuConfigField,
         saveMenuConfigExplicit,
-        refreshMenuDataWithToast, // Add refresh function with toast
+        refreshMenuDataWithToast,
+        syncCatalogFromServer,
         menuContent,
         setMenuContent,
         globalModifiers,
@@ -391,15 +446,13 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         patchItemSoldOut,
         patchModifierOptionAvailable,
         refreshMenuAvailability,
-        // Item groups (Food / Drink / Misc) — read-only in this app, used for
-        // per-printer routing in handlePrintingOrder.
         itemGroups,
         posLayouts,
         posTableMaps,
         menuId,
         storeProfile,
         setStoreProfile,
-        dataLoaded, // Add this so components can check if data is ready
+        dataLoaded,
       }}
     >
       {children}

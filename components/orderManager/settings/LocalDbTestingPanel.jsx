@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { isNativeApp, getPlatform } from "@/lib/helper/platformDetection";
 import { probeLocalDb } from "@/lib/localDb/sqliteClient";
+import { readMenuSnapshot } from "@/lib/localDb/menuSnapshot";
+import { readPrintersSnapshot } from "@/lib/localDb/printersSnapshot";
 
 /**
  * Dev-only surface shown when menu.config.isTesting is on.
- * Confirms the native SQLite plugin is reachable without rebuilding for JS changes.
+ * Confirms SQLite + catalog snapshots after sync moments (sign-in / Reload / PIN unlock).
  */
 export default function LocalDbTestingPanel() {
   const [status, setStatus] = useState(null);
@@ -16,8 +18,31 @@ export default function LocalDbTestingPanel() {
     if (isProbing) return;
     setIsProbing(true);
     try {
-      const result = await probeLocalDb();
-      setStatus(result);
+      const db = await probeLocalDb();
+      const menu = await readMenuSnapshot();
+      const printers = await readPrintersSnapshot();
+
+      setStatus({
+        database: db,
+        menuSnapshot: menu
+          ? {
+              updatedAt: menu.updatedAt,
+              updatedAtIso: new Date(menu.updatedAt).toISOString(),
+              approxChars: JSON.stringify(menu.payload).length,
+              hasConfig: Boolean(menu.payload?.config),
+              sectionCount: Array.isArray(menu.payload?.menuContent)
+                ? menu.payload.menuContent.length
+                : 0,
+            }
+          : null,
+        printersSnapshot: printers
+          ? {
+              updatedAt: printers.updatedAt,
+              updatedAtIso: new Date(printers.updatedAt).toISOString(),
+              printerCount: printers.payload?.printers?.length ?? 0,
+            }
+          : null,
+      });
     } finally {
       setIsProbing(false);
     }
@@ -30,10 +55,11 @@ export default function LocalDbTestingPanel() {
           Local Mode foundation (testing)
         </h2>
         <p className="mt-0.5 text-xs text-neutral-600">
-          This store has <code className="text-[11px]">config.isTesting</code>{" "}
-          enabled. Use this panel to verify on-device SQLite after the native
-          rebuild that includes the plugin. Later Local Mode work can ship as
-          remote JS without rebuilding again.
+          Catalog cache is on for this store (
+          <code className="text-[11px]">config.isTesting</code>). Sync moments
+          write menu + printers to SQLite: first authenticated load / Reload
+          (SSR), and PIN unlock. During a long unlock, printers prefer local
+          cache. Live Orders polling stays always live.
         </p>
       </div>
       <div className="space-y-3 px-6 py-4">
@@ -47,7 +73,7 @@ export default function LocalDbTestingPanel() {
           disabled={isProbing}
           className="rounded-md bg-sky-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
         >
-          {isProbing ? "Probing…" : "Probe local SQLite"}
+          {isProbing ? "Probing…" : "Probe local SQLite + snapshots"}
         </button>
         {status ? (
           <pre className="overflow-x-auto rounded-md bg-white/80 p-3 text-xs text-neutral-800">
