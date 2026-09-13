@@ -11,11 +11,13 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.712.0",
     "@aws-sdk/s3-request-presigner": "^3.712.0",
+    "@capacitor-community/sqlite": "^8.1.1",
     "@capacitor/android": "^8.0.0",
     "@capacitor/app": "^8.0.0",
     "@capacitor/core": "^8.0.0",
     "@capacitor/ios": "^8.0.0",
     "@capacitor/network": "^8.0.0",
+    "@capacitor/preferences": "^8.0.1",
     "@capacitor/splash-screen": "^8.0.0",
     "@radix-ui/react-toast": "^1.2.2",
     "@stripe/react-stripe-js": "^3.6.0",

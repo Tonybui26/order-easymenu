@@ -22,6 +22,13 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    // Required by @capacitor-community/sqlite (SQLCipher) to avoid duplicate
+    // build-data.properties packaging errors.
+    packaging {
+        resources {
+            excludes += ["/META-INF/versions/9/previous-compilation-data.bin", "build-data.properties"]
+        }
+    }
 }
 
 repositories {

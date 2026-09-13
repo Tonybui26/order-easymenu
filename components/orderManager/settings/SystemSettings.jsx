@@ -5,8 +5,10 @@ import { ChevronRight } from "lucide-react";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import { resolvePosPaymentsConfig } from "@/lib/pos/posPaymentsConfig";
+import { isStoreTesting } from "@/lib/store/isTesting";
 import SettingsToggleRow from "./SettingsToggleRow";
 import SettingsOnOffBadge from "./SettingsOnOffBadge";
+import LocalDbTestingPanel from "./LocalDbTestingPanel";
 
 /**
  * Order Manager system settings (printing, POS, and future sections).
@@ -31,6 +33,7 @@ export default function SystemSettings({
     setMasterDeviceEnabled,
   } = useGlobalAppContext();
   const posEnabled = Boolean(menuConfig?.posEnabled);
+  const storeIsTesting = isStoreTesting(menuConfig);
   const tyroEnabled = Boolean(
     resolvePosPaymentsConfig(menuConfig).tyro.enabled,
   );
@@ -42,6 +45,8 @@ export default function SystemSettings({
 
   return (
     <div className="space-y-6">
+      {storeIsTesting ? <LocalDbTestingPanel /> : null}
+
       <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 px-6 py-3">
           <h2 className="text-sm font-semibold text-neutral-900">

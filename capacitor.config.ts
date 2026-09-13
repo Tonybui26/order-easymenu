@@ -37,6 +37,15 @@ const config: CapacitorConfig = {
       splashFullScreen: true,
       splashImmersive: true,
     },
+    /**
+     * Local Mode foundation — unencrypted DB for pilots.
+     * Plugin is in the native shell; JS can evolve via server.url without rebuild.
+     */
+    CapacitorSQLite: {
+      androidIsEncryption: false,
+      iosIsEncryption: false,
+      iosDatabaseLocation: "Library/CapacitorDatabase",
+    },
   },
 };
 
