@@ -16,6 +16,7 @@ import {
   cancelPosOrderItem,
   applyPosCheckDiscount,
 } from "@/lib/api/fetchApi";
+import { hydrateResumeOrders } from "@/lib/localDb/posLiveSnapshot";
 import {
   buildDefaultModifierSelections,
   buildDefaultVariantSelections,
@@ -29,10 +30,8 @@ import {
   selectionMapsFromLine,
 } from "@/lib/pos/itemCustomization";
 import {
-  buildCartLinesFromResumeOrders,
-  buildMixedTableResumeCartLines,
-  buildPosResumeState,
   isExternalContextCartLine,
+  planPosResumeApply,
   posCartLineReactKey,
 } from "@/lib/pos/posResumeOrder";
 import {
@@ -392,144 +391,103 @@ export default function PosTerminal() {
     openPayAfterResumeRef.current = shouldOpenPay;
 
     let cancelled = false;
+    let painted = false;
+    let paintedPlan = null;
     resumeLoadedRef.current = resumeParam;
     setIsResumingOrder(true);
 
+    const applyPlan = (plan) => {
+      setCustomizingItem(null);
+      setCustomizingLineId(null);
+      setSelectedVariants({});
+      setSelectedModifiers({});
+      setCartLines(plan.lines);
+      setCheckOrderIds(plan.checkOrderIds);
+      setActiveOrderId(plan.activeOrderId);
+      setPosCheckId(plan.posCheckId);
+      setTaxInvoiceNo(plan.taxInvoiceNo);
+      setTableNumber(plan.tableNumber);
+      setCustomerName(plan.customerName);
+      setCustomerPhone(plan.customerPhone);
+      setCustomerEmail(plan.customerEmail);
+      setOrderType(plan.orderType);
+      setIsCheckPaid(false);
+      setIsResumedCheck(true);
+      setCheckDiscount(plan.checkDiscount);
+      setIsOrderTypeMissing(false);
+      setIsTablePrefilled(plan.isTablePrefilled);
+      painted = true;
+      paintedPlan = plan;
+      setIsResumingOrder(false);
+    };
+
+    const abandonResume = (message) => {
+      showDismissibleToast(message || "Could not load held order");
+      resumeLoadedRef.current = null;
+      openPayAfterResumeRef.current = false;
+      router.replace("/pos");
+    };
+
     (async () => {
       try {
-        const result = await fetchPosResumeOrders(orderIds);
+        const result = await hydrateResumeOrders(
+          orderIds,
+          () => fetchPosResumeOrders(orderIds),
+          {
+            onOrders: (orders) => {
+              if (cancelled) return;
+              const plan = planPosResumeApply(orders, { restaurantMode });
+              // Stale local rejects stay hidden until the live fetch decides.
+              if (!plan.ok) return;
+              applyPlan(plan);
+            },
+          },
+        );
         if (cancelled) return;
 
-        if (!result?.success || !result.orders?.length) {
-          showDismissibleToast(result?.error || "Could not load held order");
-          resumeLoadedRef.current = null;
-          openPayAfterResumeRef.current = false;
-          router.replace("/pos");
-          return;
-        }
-
-        const posOrders = result.orders.filter(
-          (order) => String(order?.source || "").trim() === "pos",
-        );
-        const nonPosOrders = result.orders.filter(
-          (order) => String(order?.source || "").trim() !== "pos",
-        );
-        const unpaidNonPos = nonPosOrders.filter(
-          (order) => String(order?.paymentStatus || "").trim() !== "paid",
-        );
-
-        if (unpaidNonPos.length > 0) {
-          showDismissibleToast(
-            "Unpaid QR orders cannot be opened on the POS terminal yet",
-          );
-          resumeLoadedRef.current = null;
-          openPayAfterResumeRef.current = false;
-          router.replace("/pos");
-          return;
-        }
-
-        // Paid QR only — context load (new Send/Pay create POS tickets).
-        if (posOrders.length === 0) {
-          const resumeState = buildPosResumeState(nonPosOrders);
-          const lines = buildCartLinesFromResumeOrders(nonPosOrders, {
-            asExternalContext: true,
-          });
-
-          setCustomizingItem(null);
-          setCustomizingLineId(null);
-          setSelectedVariants({});
-          setSelectedModifiers({});
-          setCartLines(lines);
-          setCheckOrderIds([]);
-          setActiveOrderId(null);
-          setPosCheckId(null);
-          setTaxInvoiceNo("");
-          setTableNumber(resumeState.tableNumber);
-          setCustomerName(resumeState.customerName || "");
-          setCustomerPhone(resumeState.customerPhone || "");
-          setCustomerEmail(resumeState.customerEmail || "");
-          const nextOrderType =
-            restaurantMode && resumeState.tableNumber
-              ? "dine-in"
-              : resumeState.orderType;
-          setOrderType(nextOrderType);
-          setIsCheckPaid(false);
-          setIsResumedCheck(true);
-          setCheckDiscount(null);
-          setIsOrderTypeMissing(false);
-          if (restaurantMode && resumeState.tableNumber) {
-            setIsTablePrefilled(true);
+        const networkFailed =
+          !result?.success || !result.orders?.length;
+        if (networkFailed) {
+          if (painted) {
+            if (
+              openPayAfterResumeRef.current &&
+              paintedPlan?.hasActiveUnpaidPos &&
+              paintedPlan.checkOrderIds?.length > 0
+            ) {
+              setIsPaymentDrawerOpen(true);
+            }
+            openPayAfterResumeRef.current = false;
+            router.replace("/pos");
+            return;
           }
-          openPayAfterResumeRef.current = false;
-          router.replace("/pos");
+          abandonResume(result?.error);
           return;
         }
 
-        // POS check, optionally mixed with paid QR / prior paid POS on the same table.
-        const unpaidPosOrders = posOrders.filter(
-          (order) => String(order?.paymentStatus || "").trim() !== "paid",
-        );
-        const hasActiveUnpaidPos = unpaidPosOrders.length > 0;
-        const resumeState = buildPosResumeState(
-          hasActiveUnpaidPos ? unpaidPosOrders : posOrders,
-        );
-
-        // Paid-only POS (pay-first, not yet Complete): prior tickets are context;
-        // new Send starts a fresh unpaid check (API rejects paid posCheckId).
-        // Mixed paid+unpaid on the same table: only unpaid tickets bind Send/Pay.
-        const lines = hasActiveUnpaidPos
-          ? buildMixedTableResumeCartLines(result.orders)
-          : buildCartLinesFromResumeOrders(result.orders, {
-              asExternalContext: true,
-            });
-
-        setCustomizingItem(null);
-        setCustomizingLineId(null);
-        setSelectedVariants({});
-        setSelectedModifiers({});
-        setCartLines(lines);
-        setCheckOrderIds(hasActiveUnpaidPos ? resumeState.orderIds : []);
-        setActiveOrderId(hasActiveUnpaidPos ? resumeState.activeOrderId : null);
-        setPosCheckId(hasActiveUnpaidPos ? resumeState.posCheckId : null);
-        setTaxInvoiceNo(
-          hasActiveUnpaidPos ? resumeState.taxInvoiceNo || "" : "",
-        );
-        setTableNumber(resumeState.tableNumber);
-        setCustomerName(resumeState.customerName || "");
-        setCustomerPhone(resumeState.customerPhone || "");
-        setCustomerEmail(resumeState.customerEmail || "");
-        // Restaurant mode table checks open as dine-in; staff can switch to takeaway per fire.
-        const nextOrderType =
-          restaurantMode && resumeState.tableNumber
-            ? "dine-in"
-            : resumeState.orderType;
-        setOrderType(nextOrderType);
-        setIsCheckPaid(false);
-        setIsResumedCheck(true);
-        setCheckDiscount(
-          hasActiveUnpaidPos ? resumeState.checkDiscount || null : null,
-        );
-        setIsOrderTypeMissing(false);
-        if (restaurantMode && resumeState.tableNumber) {
-          setIsTablePrefilled(true);
+        const plan = planPosResumeApply(result.orders, { restaurantMode });
+        if (!plan.ok) {
+          abandonResume(plan.error);
+          return;
         }
-        router.replace("/pos");
+        if (!painted) applyPlan(plan);
 
         if (
           openPayAfterResumeRef.current &&
-          hasActiveUnpaidPos &&
-          resumeState.orderIds?.length > 0
+          plan.hasActiveUnpaidPos &&
+          plan.checkOrderIds?.length > 0
         ) {
           setIsPaymentDrawerOpen(true);
         }
         openPayAfterResumeRef.current = false;
+        router.replace("/pos");
       } catch (error) {
-        if (!cancelled) {
-          showDismissibleToast(error?.message || "Could not load held order");
-          resumeLoadedRef.current = null;
+        if (cancelled) return;
+        if (painted) {
           openPayAfterResumeRef.current = false;
           router.replace("/pos");
+          return;
         }
+        abandonResume(error?.message);
       } finally {
         if (!cancelled) setIsResumingOrder(false);
       }

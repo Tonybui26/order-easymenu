@@ -65,6 +65,7 @@ import DismissibleToast, {
   useDismissibleToast,
 } from "@/components/orderManager/DismissibleToast";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
+import { hydrateHeldOrders, hydrateResumeOrders } from "@/lib/localDb/posLiveSnapshot";
 
 const TABLE_MAP_POLL_MS = 10000;
 const TABLE_MAP_MERGE_FLOOR_COLOR = "#1e293b";
@@ -168,11 +169,12 @@ export default function PosTableMap() {
     }
   }, [tableMaps, selectedMapId]);
 
-  const loadHeldOrders = useCallback(async () => {
+  const loadHeldOrders = useCallback(async ({ paintLocalFirst = false } = {}) => {
     try {
-      const result = await fetchPosHeldOrders();
-      if (!result?.success) return;
-      setHeldOrders(result.heldOrders || []);
+      await hydrateHeldOrders(() => fetchPosHeldOrders(), {
+        paintLocalFirst,
+        onHeld: (next) => setHeldOrders(next),
+      });
     } catch {
       // Silent refresh; table map still works for new orders.
     }
@@ -199,7 +201,7 @@ export default function PosTableMap() {
 
     const resumePolling = () => {
       if (cancelled) return;
-      void loadHeldOrders();
+      void loadHeldOrders({ paintLocalFirst: true });
       startPollInterval();
     };
 
@@ -302,29 +304,42 @@ export default function PosTableMap() {
 
     const orderIds = drawerOrderIdsKey.split(",");
     const cached = resumeOrdersCacheRef.current.get(drawerOrderIdsKey);
-    if (cached) {
-      setPreviewSections(buildHeldDrawerPreviewSections(cached));
+    const applyPreview = (orders) => {
+      resumeOrdersCacheRef.current.set(drawerOrderIdsKey, orders);
+      setPreviewSections(buildHeldDrawerPreviewSections(orders));
       setPreviewError(null);
       setIsPreviewLoading(false);
-      return;
-    }
+    };
+
+    if (cached) applyPreview(cached);
 
     let cancelled = false;
-    setIsPreviewLoading(true);
-    setPreviewError(null);
+    if (!cached) {
+      setIsPreviewLoading(true);
+      setPreviewError(null);
+    }
 
     (async () => {
-      const result = await fetchPosResumeOrders(orderIds);
-      if (cancelled) return;
-      if (!result?.success || !result.orders?.length) {
+      try {
+        const result = await hydrateResumeOrders(
+          orderIds,
+          () => fetchPosResumeOrders(orderIds),
+          { onOrders: (orders) => {
+            if (!cancelled) applyPreview(orders);
+          } },
+        );
+        if (cancelled) return;
+        if (!cached && (!result?.success || !result.orders?.length) && !result?.fromCache) {
+          setPreviewSections([]);
+          setPreviewError(result?.error || "Could not load items");
+          setIsPreviewLoading(false);
+        }
+      } catch (error) {
+        if (cancelled || cached) return;
         setPreviewSections([]);
-        setPreviewError(result?.error || "Could not load items");
+        setPreviewError(error?.message || "Could not load items");
         setIsPreviewLoading(false);
-        return;
       }
-      resumeOrdersCacheRef.current.set(drawerOrderIdsKey, result.orders);
-      setPreviewSections(buildHeldDrawerPreviewSections(result.orders));
-      setIsPreviewLoading(false);
     })();
 
     return () => {
@@ -575,15 +590,22 @@ export default function PosTableMap() {
 
     const cacheKey = orderIdsCacheKey(drawerHeldOrder.orderIds);
     let orders = resumeOrdersCacheRef.current.get(cacheKey);
-    if (orders?.length) return orders;
-
-    const result = await fetchPosResumeOrders(drawerHeldOrder.orderIds);
-    if (!result?.success || !result.orders?.length) {
-      showDismissibleToast(result?.error || "Could not load check");
-      return null;
+    if (!orders?.length) {
+      const result = await hydrateResumeOrders(
+        drawerHeldOrder.orderIds,
+        () => fetchPosResumeOrders(drawerHeldOrder.orderIds),
+        {
+          onOrders: (next) => {
+            orders = next;
+            resumeOrdersCacheRef.current.set(cacheKey, next);
+          },
+        },
+      );
+      if (!orders?.length) {
+        showDismissibleToast(result?.error || "Could not load check");
+        return null;
+      }
     }
-    orders = result.orders;
-    resumeOrdersCacheRef.current.set(cacheKey, orders);
     setPreviewSections(buildHeldDrawerPreviewSections(orders));
     setPreviewError(null);
     return orders;

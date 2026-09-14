@@ -38,6 +38,10 @@ import { buildHeldCheckCancelTarget } from "@/lib/helper/buildCancelOrderTarget"
 import DismissibleToast, {
   useDismissibleToast,
 } from "@/components/orderManager/DismissibleToast";
+import {
+  hydrateHeldOrders,
+  hydrateResumeOrders,
+} from "@/lib/localDb/posLiveSnapshot";
 
 const HELD_ORDERS_POLL_MS = 10000;
 
@@ -101,18 +105,20 @@ export default function PosHeldOrders() {
   const [previewError, setPreviewError] = useState(null);
   const resumeOrdersCacheRef = useRef(new Map());
 
-  const loadHeldOrders = useCallback(async ({ silent = false } = {}) => {
-    if (!silent) setIsLoading(true);
+  const loadHeldOrders = useCallback(async ({ silent = false, paintLocalFirst = false } = {}) => {
+    if (!silent && !paintLocalFirst) setIsLoading(true);
 
     try {
-      const result = await fetchPosHeldOrders();
-      if (!result?.success) {
-        if (!silent) {
-          showDismissibleToast(result?.error || "Failed to load held orders");
-        }
-        return;
+      const result = await hydrateHeldOrders(() => fetchPosHeldOrders(), {
+        paintLocalFirst,
+        onHeld: (next) => {
+          setHeldOrders(next);
+          if (!silent) setIsLoading(false);
+        },
+      });
+      if (!result?.success && !result?.fromCache && !silent) {
+        showDismissibleToast(result?.error || "Failed to load held orders");
       }
-      setHeldOrders(result.heldOrders || []);
     } catch (error) {
       if (!silent) {
         showDismissibleToast(error?.message || "Failed to load held orders");
@@ -120,7 +126,7 @@ export default function PosHeldOrders() {
     } finally {
       if (!silent) setIsLoading(false);
     }
-  }, []);
+  }, [showDismissibleToast]);
 
   useEffect(() => {
     if (tabParam === POS_HELD_ORDERS_TAB_SELF_ORDERING) {
@@ -131,7 +137,7 @@ export default function PosHeldOrders() {
   }, [tabParam]);
 
   useEffect(() => {
-    loadHeldOrders();
+    loadHeldOrders({ paintLocalFirst: true });
     const id = setInterval(
       () => loadHeldOrders({ silent: true }),
       HELD_ORDERS_POLL_MS,
@@ -209,32 +215,49 @@ export default function PosHeldOrders() {
         setPreviewLines(previewLinesFromResumeOrders(orders));
         setPreviewSections([]);
       }
-    };
-
-    if (cached) {
-      applyPreview(cached);
       setPreviewError(null);
       setIsPreviewLoading(false);
-      return;
-    }
+    };
+
+    if (cached) applyPreview(cached);
 
     let cancelled = false;
-    setIsPreviewLoading(true);
-    setPreviewError(null);
+    if (!cached) {
+      setIsPreviewLoading(true);
+      setPreviewError(null);
+    }
 
     (async () => {
-      const result = await fetchPosResumeOrders(orderIds);
-      if (cancelled) return;
-      if (!result?.success || !result.orders?.length) {
+      try {
+        const result = await hydrateResumeOrders(
+          orderIds,
+          () => fetchPosResumeOrders(orderIds),
+          {
+            onOrders: (orders) => {
+              if (cancelled) return;
+              resumeOrdersCacheRef.current.set(drawerOrderIdsKey, orders);
+              applyPreview(orders);
+            },
+          },
+        );
+        if (cancelled) return;
+        if (
+          !cached &&
+          (!result?.success || !result.orders?.length) &&
+          !result?.fromCache
+        ) {
+          setPreviewLines([]);
+          setPreviewSections([]);
+          setPreviewError(result?.error || "Could not load items");
+          setIsPreviewLoading(false);
+        }
+      } catch (error) {
+        if (cancelled || cached) return;
         setPreviewLines([]);
         setPreviewSections([]);
-        setPreviewError(result?.error || "Could not load items");
+        setPreviewError(error?.message || "Could not load items");
         setIsPreviewLoading(false);
-        return;
       }
-      resumeOrdersCacheRef.current.set(drawerOrderIdsKey, result.orders);
-      applyPreview(result.orders);
-      setIsPreviewLoading(false);
     })();
 
     return () => {

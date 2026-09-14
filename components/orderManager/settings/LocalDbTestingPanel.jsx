@@ -5,6 +5,7 @@ import { isNativeApp, getPlatform } from "@/lib/helper/platformDetection";
 import { probeLocalDb } from "@/lib/localDb/sqliteClient";
 import { readMenuSnapshot } from "@/lib/localDb/menuSnapshot";
 import { readPrintersSnapshot } from "@/lib/localDb/printersSnapshot";
+import { readPosLiveSnapshotMeta } from "@/lib/localDb/posLiveSnapshot";
 
 /**
  * Dev-only surface when menu.config.isTesting is on.
@@ -21,6 +22,7 @@ export default function LocalDbTestingPanel() {
       const db = await probeLocalDb();
       const menu = await readMenuSnapshot();
       const printers = await readPrintersSnapshot();
+      const posLive = await readPosLiveSnapshotMeta();
 
       setStatus({
         database: db,
@@ -42,6 +44,7 @@ export default function LocalDbTestingPanel() {
               printerCount: printers.payload?.printers?.length ?? 0,
             }
           : null,
+        posLive,
       });
     } finally {
       setIsProbing(false);
@@ -55,10 +58,10 @@ export default function LocalDbTestingPanel() {
           Local Mode foundation (testing)
         </h2>
         <p className="mt-0.5 text-xs text-neutral-600">
-          Cache-first catalog: hydrate from SQLite when present. Network sync
-          only on <strong>primary sign-in</strong> or header{" "}
-          <strong>Sync</strong> (not on PIN unlock). Live Orders stay always
-          live.
+          Cache-first catalog and last held/resume snapshots. Catalog network
+          sync only on <strong>primary sign-in</strong> or header{" "}
+          <strong>Sync</strong> (not on PIN unlock). Held occupancy refreshes
+          in the background. Live Orders stay always live.
         </p>
       </div>
       <div className="space-y-3 px-6 py-4">

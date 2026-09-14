@@ -1,7 +1,8 @@
 # Local Mode foundation (testing)
 
-Pilot scaffolding for on-device catalog cache (menu + printers). This is **not**
-full offline POS — Live Orders polling stays always live.
+Pilot scaffolding for on-device cache. Catalog (menu + printers) plus the
+last held-orders list and resume payloads. This is **not** full offline POS —
+Live Orders polling stays always live, and Send / pay / register stay network.
 
 ## Store gate
 
@@ -22,6 +23,9 @@ When `true` (and native Order Manager), Settings shows **Local Mode foundation
 | **PIN unlock** | Does **not** sync catalog — only unlocks the operator. |
 | **Empty SQLite / first install** | Must network, then write snapshots. |
 | **Printer CRUD** | `refreshPrintersCache()` after add/update/delete. |
+| **Table map / Held Orders** | If a held snapshot exists, paint it, then refresh from the API and overwrite. Missing snapshot fetches first, then saves. Refresh failure keeps the last copy. |
+| **Open table / resume a check** | Same for the resume payload keyed by order ids. Cart paints from local, then re-applies the live fetch. Live fetch failure after a local paint keeps the cart. |
+| **Held drawer preview** | Memory first, then SQLite, then network. A memory hit still revalidates in the background. |
 | **Live Orders** | Untouched — always polls the API. |
 
 SSR in `app/layout.jsx` may still fetch the menu on full loads; when cache-first applies, `MenuContext` **ignores** that SSR payload and applies SQLite instead (unless force-sync).
@@ -40,7 +44,7 @@ SSR in `app/layout.jsx` may still fetch the menu on full loads; when cache-first
 |------|------|
 | Force-sync flag + reload helper | `lib/localDb/catalogForceSync.js` |
 | Gate | `lib/localDb/localCacheGate.js` |
-| Snapshots | `lib/localDb/menuSnapshot.js`, `printersSnapshot.js` |
+| Snapshots | `lib/localDb/menuSnapshot.js`, `printersSnapshot.js`, `posLiveSnapshot.js` |
 | Persist after network menu | `lib/localDb/syncLocalCatalog.js` |
 | Bootstrap (cache-first vs network) | `components/context/MenuContext.js` |
 | Printers cache-first API | `lib/api/fetchApi.js` |
@@ -54,10 +58,12 @@ SSR in `app/layout.jsx` may still fetch the menu on full loads; when cache-first
 3. Kill/reopen app (session still valid) → probe ages unchanged; console may log cache-first hydrate; printers print without new GET.
 4. Change menu in admin → POS stays stale until **Sync** → timestamps move.
 5. Lock → unlock → catalog timestamps do **not** need to move.
-6. `isTesting` off → no SQLite catalog path.
+6. `isTesting` off → no SQLite catalog or held/resume path.
+7. Open table map or Held Orders twice (kill app between) → occupancy paints before the network round trip; probe shows `posLive.heldOrders`.
 
 ## Out of scope (next)
 
 - Skipping SSR menu fetch entirely when SQLite exists
 - Offline Send / sync outbox
+- Optimistic status / discount writes
 - Staff product toggle beyond `isTesting`
