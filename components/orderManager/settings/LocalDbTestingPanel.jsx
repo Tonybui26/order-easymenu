@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useMenuContext } from "@/components/context/MenuContext";
 import { isNativeApp, getPlatform } from "@/lib/helper/platformDetection";
+import { isStoreOffline } from "@/lib/store/isOffline";
 import { probeLocalDb } from "@/lib/localDb/sqliteClient";
 import { readMenuSnapshot } from "@/lib/localDb/menuSnapshot";
 import { readPrintersSnapshot } from "@/lib/localDb/printersSnapshot";
@@ -12,6 +14,8 @@ import { readPosLiveSnapshotMeta } from "@/lib/localDb/posLiveSnapshot";
  * Probe SQLite + catalog snapshot ages (cache-first vs sync moments).
  */
 export default function LocalDbTestingPanel() {
+  const { menuConfig } = useMenuContext();
+  const offlineModeOn = isStoreOffline(menuConfig);
   const [status, setStatus] = useState(null);
   const [isProbing, setIsProbing] = useState(false);
 
@@ -68,6 +72,14 @@ export default function LocalDbTestingPanel() {
         <p className="text-sm text-neutral-700">
           Platform: <span className="font-medium">{getPlatform()}</span>
           {isNativeApp() ? " (native)" : " (web — SQLite probe needs the app)"}
+        </p>
+        <p className="text-sm text-neutral-700">
+          Offline mode flag:{" "}
+          <span className="font-medium">{offlineModeOn ? "on" : "off"}</span>
+          <span className="text-neutral-500">
+            {" "}
+            — saved only, no behavior yet. Sync after changing it in power admin.
+          </span>
         </p>
         <button
           type="button"

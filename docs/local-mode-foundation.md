@@ -9,6 +9,9 @@ Live Orders polling stays always live, and Send / pay / register stay network.
 | Field | Where | Who sets it |
 |-------|--------|-------------|
 | `menu.config.isTesting` | easymenu Menu document | Power admin → Stores drawer → **Testing store** |
+| `menu.config.isOffline` | easymenu Menu document | Power admin → Stores drawer → **Offline mode** |
+
+`isOffline` is a manual flag only. It does not change POS behavior yet. Order Manager shows it on the testing panel after header **Sync**.
 
 When `true` (and native Order Manager), Settings shows **Local Mode foundation
 (testing)** with a probe for SQLite + snapshot ages.
