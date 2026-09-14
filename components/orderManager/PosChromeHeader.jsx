@@ -15,6 +15,7 @@ import { getPosHomePath } from "@/lib/pos/posConfig";
 import PosHeaderNavMenu from "./PosHeaderNavMenu";
 import PosHeaderUserPanel from "./PosHeaderUserPanel";
 import Logo from "../../public/images/logo.svg";
+import { reloadAppWithCatalogSync } from "@/lib/localDb/catalogForceSync";
 
 const POS_HEADER_ACTIONS = [
   {
@@ -24,7 +25,7 @@ const POS_HEADER_ACTIONS = [
   },
   {
     id: "sync",
-    label: "Reload app",
+    label: "Sync",
     Icon: RefreshCw,
   },
   {
@@ -113,7 +114,7 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
                   return;
                 }
                 if (id === "sync") {
-                  window.location.reload();
+                  void reloadAppWithCatalogSync();
                   return;
                 }
                 if (href) navigate(href);

@@ -7,8 +7,8 @@ import { readMenuSnapshot } from "@/lib/localDb/menuSnapshot";
 import { readPrintersSnapshot } from "@/lib/localDb/printersSnapshot";
 
 /**
- * Dev-only surface shown when menu.config.isTesting is on.
- * Confirms SQLite + catalog snapshots after sync moments (sign-in / Reload / PIN unlock).
+ * Dev-only surface when menu.config.isTesting is on.
+ * Probe SQLite + catalog snapshot ages (cache-first vs sync moments).
  */
 export default function LocalDbTestingPanel() {
   const [status, setStatus] = useState(null);
@@ -55,11 +55,10 @@ export default function LocalDbTestingPanel() {
           Local Mode foundation (testing)
         </h2>
         <p className="mt-0.5 text-xs text-neutral-600">
-          Catalog cache is on for this store (
-          <code className="text-[11px]">config.isTesting</code>). Sync moments
-          write menu + printers to SQLite: first authenticated load / Reload
-          (SSR), and PIN unlock. During a long unlock, printers prefer local
-          cache. Live Orders polling stays always live.
+          Cache-first catalog: hydrate from SQLite when present. Network sync
+          only on <strong>primary sign-in</strong> or header{" "}
+          <strong>Sync</strong> (not on PIN unlock). Live Orders stay always
+          live.
         </p>
       </div>
       <div className="space-y-3 px-6 py-4">

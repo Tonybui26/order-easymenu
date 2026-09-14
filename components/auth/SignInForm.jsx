@@ -12,6 +12,7 @@ import {
 import { fetchGetMenuByOwnerEmail } from "@/lib/api/fetchApi";
 import { resolvePosConfig } from "@/lib/pos/posConfig";
 import { isStaffPinLockEnabled } from "@/lib/staff/staffRoles";
+import { requestCatalogForceSync } from "@/lib/localDb/catalogForceSync";
 
 function SignInFormInner() {
   const [username, setUsername] = useState("");
@@ -44,6 +45,13 @@ function SignInFormInner() {
       }
       if (result?.ok) {
         const session = await getSession();
+
+        // Next catalog bootstrap must network (not hydrate stale SQLite).
+        try {
+          await requestCatalogForceSync();
+        } catch (flagError) {
+          console.error("sign-in catalog force sync flag:", flagError);
+        }
 
         let posEnabled = false;
         let restaurantModeEnabled = false;

@@ -3,31 +3,54 @@ PODS:
     - CapacitorCordova
   - CapacitorApp (8.1.1):
     - Capacitor
+  - CapacitorCommunitySqlite (8.1.1):
+    - Capacitor
+    - SQLCipher
+    - ZIPFoundation
   - CapacitorCordova (8.5.1)
   - CapacitorNetwork (8.0.1):
+    - Capacitor
+  - CapacitorPreferences (8.0.1):
     - Capacitor
   - CapacitorSplashScreen (8.0.2):
     - Capacitor
   - PrinterTcpSocket (0.0.1):
     - Capacitor
+  - SQLCipher (4.10.0):
+    - SQLCipher/standard (= 4.10.0)
+  - SQLCipher/common (4.10.0)
+  - SQLCipher/standard (4.10.0):
+    - SQLCipher/common
+  - ZIPFoundation (0.9.20)
 
 DEPENDENCIES:
   - "Capacitor (from `../../node_modules/@capacitor/ios`)"
   - "CapacitorApp (from `../../node_modules/@capacitor/app`)"
+  - "CapacitorCommunitySqlite (from `../../node_modules/@capacitor-community/sqlite`)"
   - "CapacitorCordova (from `../../node_modules/@capacitor/ios`)"
   - "CapacitorNetwork (from `../../node_modules/@capacitor/network`)"
+  - "CapacitorPreferences (from `../../node_modules/@capacitor/preferences`)"
   - "CapacitorSplashScreen (from `../../node_modules/@capacitor/splash-screen`)"
   - PrinterTcpSocket (from `../../printer-tcp-socket`)
+
+SPEC REPOS:
+  trunk:
+    - SQLCipher
+    - ZIPFoundation
 
 EXTERNAL SOURCES:
   Capacitor:
     :path: "../../node_modules/@capacitor/ios"
   CapacitorApp:
     :path: "../../node_modules/@capacitor/app"
+  CapacitorCommunitySqlite:
+    :path: "../../node_modules/@capacitor-community/sqlite"
   CapacitorCordova:
     :path: "../../node_modules/@capacitor/ios"
   CapacitorNetwork:
     :path: "../../node_modules/@capacitor/network"
+  CapacitorPreferences:
+    :path: "../../node_modules/@capacitor/preferences"
   CapacitorSplashScreen:
     :path: "../../node_modules/@capacitor/splash-screen"
   PrinterTcpSocket:
@@ -36,11 +59,15 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   Capacitor: 8ca6676b3b1147b00f7f3a547ccf68defd658d55
   CapacitorApp: 305bd13c44f6f9d164e2ee66a4faa956ed8c0e06
+  CapacitorCommunitySqlite: 785553c54e52da62d058238d4571db5692c022c4
   CapacitorCordova: eb79411a3a0ed517eeb4c6dcf5933ce4bcbb5c9e
   CapacitorNetwork: 8812ce60d11fb63d8f2e4ba51a49b2e59892ebe2
+  CapacitorPreferences: cca2021f386efb75947c850334447d9ff22b14f1
   CapacitorSplashScreen: 7bf61c2001557ff9e195e601c6b87344480d3c65
   PrinterTcpSocket: 7e98c3a4ea4c6bb335ab753e563d18505bb16f03
+  SQLCipher: eb79c64049cb002b4e9fcb30edb7979bf4706dfc
+  ZIPFoundation: dfd3d681c4053ff7e2f7350bc4e53b5dba3f5351
 
-PODFILE CHECKSUM: 6a84b61cf3908434af65661c3a6b8cc5835102fe
+PODFILE CHECKSUM: 799695a03ae4a7e4dc236392a4119168897a4b2c
 
 COCOAPODS: 1.16.2

@@ -12,64 +12,52 @@ full offline POS — Live Orders polling stays always live.
 When `true` (and native Order Manager), Settings shows **Local Mode foundation
 (testing)** with a probe for SQLite + snapshot ages.
 
-Use `isStoreTesting(menuConfig)` / `isLocalCatalogCacheEnabled()` before
-experimental catalog-cache behaviour.
-
-## Sync model (v1)
+## Sync model (cache-first)
 
 | Moment | Behaviour |
 |--------|-----------|
-| First authenticated load / Header Reload | SSR still fetches menu (`app/layout.jsx`). `MenuContext` writes `menu_snapshot` and **force-refreshes** printers into SQLite. |
-| PIN unlock | `syncCatalogFromServer()` pulls menu + printers from the server and overwrites snapshots. Unlock still succeeds if sync fails. |
-| Long unlock (no re-lock) | Menu stays in React state. Printers: memory → SQLite → network. Stale menu vs admin edits is OK until unlock/Reload. |
-| Empty SQLite | Must network (no cache to read). |
-| Printer CRUD | `refreshPrintersCache()` after add/update/delete so the local list matches the server. |
-| Live Orders | Untouched — always polls the API for orders. |
+| **App open (already signed in)** | If SQLite has a menu snapshot for this store → hydrate React + printers memory from disk. **No** catalog network required. |
+| **Primary account sign-in / sign-up** | Sets force-sync flag → next bootstrap networks menu (SSR) + printers → overwrite SQLite. |
+| **Manual Sync** (POS header **Sync**) | Sets force-sync flag + `location.reload()` → same as sign-in network path. **This is the staff rule to avoid stale catalog.** Live Order Terminal menus stay unchanged. |
+| **PIN unlock** | Does **not** sync catalog — only unlocks the operator. |
+| **Empty SQLite / first install** | Must network, then write snapshots. |
+| **Printer CRUD** | `refreshPrintersCache()` after add/update/delete. |
+| **Live Orders** | Untouched — always polls the API. |
 
-Lock screen still gets `menuConfig` from SSR (needed to know if PIN lock is on)
-before unlock — no SQLite hydrate on `/lock` in v1.
+SSR in `app/layout.jsx` may still fetch the menu on full loads; when cache-first applies, `MenuContext` **ignores** that SSR payload and applies SQLite instead (unless force-sync).
 
-## Native plugins (one rebuild)
+## Native plugins
 
 | Plugin | Purpose |
 |--------|---------|
 | `@capacitor-community/sqlite` | On-device SQLite (`easymenu_local`) |
-| `@capacitor/preferences` | Device-local prefs (future) |
+| `@capacitor/preferences` | Force-sync flag + future prefs |
 | `@capacitor/network` | Already present |
-
-```bash
-cd order-easymenu
-npm install
-npx cap sync android   # and/or ios
-# Rebuild the native app once
-```
 
 ## Code map
 
 | Area | Path |
 |------|------|
-| Gate (fetchApi-friendly) | `lib/localDb/localCacheGate.js` |
-| Open / probe DB | `lib/localDb/sqliteClient.js` |
-| Schema (v2: `printers_snapshot`) | `lib/localDb/schema.js` |
-| Menu / printers snapshots | `lib/localDb/menuSnapshot.js`, `printersSnapshot.js` |
+| Force-sync flag + reload helper | `lib/localDb/catalogForceSync.js` |
+| Gate | `lib/localDb/localCacheGate.js` |
+| Snapshots | `lib/localDb/menuSnapshot.js`, `printersSnapshot.js` |
 | Persist after network menu | `lib/localDb/syncLocalCatalog.js` |
-| Printers cache-first API | `lib/api/fetchApi.js` (`fetchPrinters`, `checkPrinterAvailability`, `refreshPrintersCache`) |
-| Apply menu + unlock sync | `components/context/MenuContext.js`, `ActiveOperatorContext.js` |
-| Settings probe UI | `components/orderManager/settings/LocalDbTestingPanel.jsx` |
+| Bootstrap (cache-first vs network) | `components/context/MenuContext.js` |
+| Printers cache-first API | `lib/api/fetchApi.js` |
+| Sign-in force sync | `components/auth/SignInForm.jsx` |
+| Settings probe | `components/orderManager/settings/LocalDbTestingPanel.jsx` |
 
 ## How to test
 
-1. Power admin → enable **Testing store** on a pilot menu.
-2. Native Order Manager (SQLite plugins rebuilt in).
-3. Sign-in / cold load → Settings → **Probe local SQLite + snapshots** → menu + printers `updatedAt` set.
-4. Print twice while unlocked → second call should not need a new printers GET (memory/SQLite).
-5. Lock → unlock → snapshot timestamps move (fresh sync).
-6. Add/edit/delete a printer → list and cache update without full app Reload.
-7. Turn `isTesting` off → no cache writes; printers always network.
+1. `isTesting` store + native app with SQLite plugins.
+2. Sign in → probe shows fresh menu + printers `updatedAt`.
+3. Kill/reopen app (session still valid) → probe ages unchanged; console may log cache-first hydrate; printers print without new GET.
+4. Change menu in admin → POS stays stale until **Sync** → timestamps move.
+5. Lock → unlock → catalog timestamps do **not** need to move.
+6. `isTesting` off → no SQLite catalog path.
 
 ## Out of scope (next)
 
-- Skipping SSR menu fetch / true offline cold start from SQLite only
-- Bundled POS shell with no `server.url`
-- Local sales / sync outbox
-- Staff-facing Local Mode product toggle (beyond `isTesting`)
+- Skipping SSR menu fetch entirely when SQLite exists
+- Offline Send / sync outbox
+- Staff product toggle beyond `isTesting`

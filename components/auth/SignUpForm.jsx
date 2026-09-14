@@ -7,6 +7,7 @@ import { createUser } from "@/lib/api/fetchApi";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { AUTH_CONFIG } from "@/lib/constants/auth";
+import { requestCatalogForceSync } from "@/lib/localDb/catalogForceSync";
 
 export default function SignUpForm() {
   const [name, setName] = useState("");
@@ -70,6 +71,11 @@ export default function SignUpForm() {
         }
 
         if (signInResult?.ok) {
+          try {
+            await requestCatalogForceSync();
+          } catch (flagError) {
+            console.error("sign-up catalog force sync flag:", flagError);
+          }
           // Successfully signed in, redirect to configured URL
           router.push(AUTH_CONFIG.DEFAULT_REDIRECT_URL);
           router.refresh();

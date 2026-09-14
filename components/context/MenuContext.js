@@ -22,6 +22,12 @@ import { isStoreTesting } from "@/lib/store/isTesting";
 import { isLocalDbSupported } from "@/lib/localDb/sqliteClient";
 import { setLocalCatalogCacheGate } from "@/lib/localDb/localCacheGate";
 import { persistCatalogAfterNetworkMenu } from "@/lib/localDb/syncLocalCatalog";
+import { consumeCatalogForceSync } from "@/lib/localDb/catalogForceSync";
+import { readMenuSnapshot } from "@/lib/localDb/menuSnapshot";
+import {
+  readPrintersSnapshot,
+  setMemoryPrinters,
+} from "@/lib/localDb/printersSnapshot";
 
 function buildStoreProfile(data) {
   return {
@@ -40,20 +46,26 @@ function buildStoreProfile(data) {
   };
 }
 
+function emailsMatch(a, b) {
+  if (!a || !b) return true;
+  return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+}
+
 const MenuContext = createContext();
 export const MenuContextProvider = ({ children, data: menuData }) => {
   const { userData } = useGlobalAppContext();
-  const [dataLoaded, setDataLoaded] = useState(!!menuData);
+  // Native: wait for catalog bootstrap (SQLite vs network). Web: SSR is enough.
+  const [dataLoaded, setDataLoaded] = useState(() => {
+    if (typeof window !== "undefined" && isLocalDbSupported()) return false;
+    return !!menuData;
+  });
   const [isRefreshing, setIsRefreshing] = useState(false);
-  // Ref to track if we're loading initial data to prevent save toast
   const isInitialLoadRef = useRef(false);
-  // Avoid double catalog persist when React Strict Mode remounts in dev
-  const didPersistInitialCatalogRef = useRef(false);
+  const didBootstrapRef = useRef(false);
 
   const [menuConfig, setMenuConfig] = useState(
     (menuData && menuData.config) || {},
   );
-
   const [menuContent, setMenuContent] = useState(
     (menuData && menuData.menuContent) || [],
   );
@@ -63,12 +75,9 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   const [globalVariants, setGlobalVariants] = useState(
     (menuData && menuData.globalVariants) || {},
   );
-  // Read-only here — the order-manager app only consumes itemGroups for
-  // per-printer routing. Edits happen in the admin app (/admin/menu/groups).
   const [itemGroups, setItemGroups] = useState(
     (menuData && menuData.itemGroups) || [],
   );
-  // POS menu layouts — read-only here; edited in easymenu admin Menu layout.
   const [posLayouts, setPosLayouts] = useState(
     (menuData && menuData.posLayouts) || [],
   );
@@ -76,16 +85,10 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
     (menuData && menuData.posTableMaps) || [],
   );
   const [storeProfile, setStoreProfile] = useState(buildStoreProfile(menuData));
+  const [menuId, setMenuId] = useState(menuData?._id || null);
 
-  // Get menu ID from menuData
-  const menuId = menuData?._id || null;
-  // Ignore a stale availability refetch if the user saved sold-out while it was in flight.
   const availabilityRefreshIdRef = useRef(0);
 
-  /**
-   * Apply a network menu document into React state and open/close the local
-   * catalog cache gate from menu.config.isTesting.
-   */
   const applyMenuDocument = useCallback(
     (data) => {
       if (!data) return;
@@ -98,8 +101,8 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
       setPosLayouts(data.posLayouts || []);
       setPosTableMaps(data.posTableMaps || []);
       setStoreProfile(buildStoreProfile(data));
+      setMenuId(data._id || null);
 
-      // Gate: fetchApi printers cache only when testing + native.
       setLocalCatalogCacheGate({
         enabled: isStoreTesting(nextConfig) && isLocalDbSupported(),
         ownerEmail: data.ownerEmail || userData?.ownerEmail || null,
@@ -108,62 +111,104 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
     [userData?.ownerEmail],
   );
 
-  /**
-   * After network menu is applied: write menu_snapshot + force-refresh printers.
-   * Sync moments: first auth load / Reload (SSR), soft refresh, PIN unlock.
-   */
+  /** Network menu applied → write menu_snapshot + force-refresh printers. */
   const persistCatalogFromNetworkMenu = useCallback(async (data) => {
     if (!isStoreTesting(data?.config) || !isLocalDbSupported()) return;
     await persistCatalogAfterNetworkMenu(data, { refreshPrintersCache });
   }, []);
 
-  // First authenticated load / Reload: SSR already fetched menu — persist once.
+  /**
+   * Catalog bootstrap (isTesting + native):
+   * - Cache-first when SQLite has a snapshot and force-sync is NOT set
+   * - Network (SSR / fetch) + overwrite SQLite on primary login / manual Sync
+   *   (force-sync flag) or when snapshot is missing
+   * PIN unlock does not force sync.
+   */
   useEffect(() => {
-    if (!menuData || didPersistInitialCatalogRef.current) return;
-    didPersistInitialCatalogRef.current = true;
+    if (didBootstrapRef.current) return;
+    didBootstrapRef.current = true;
 
-    setLocalCatalogCacheGate({
-      enabled: isStoreTesting(menuData.config) && isLocalDbSupported(),
-      ownerEmail: menuData.ownerEmail || userData?.ownerEmail || null,
-    });
+    let cancelled = false;
 
-    void persistCatalogFromNetworkMenu(menuData);
-  }, [menuData, persistCatalogFromNetworkMenu, userData?.ownerEmail]);
+    async function bootstrapCatalog() {
+      isInitialLoadRef.current = true;
 
-  // Fetch menu data client-side if not loaded from server
-  useEffect(() => {
-    console.log("effect run");
-    const fetchMenuData = async () => {
       try {
-        isInitialLoadRef.current = true;
-        console.log("Fetching menu data client-side...");
-        const data = await fetchGetMenuByOwnerEmail(userData.ownerEmail);
+        // Web / no SQLite: keep SSR (or client fetch) behaviour; no durable cache.
+        if (!isLocalDbSupported()) {
+          if (menuData) {
+            applyMenuDocument(menuData);
+            setDataLoaded(true);
+          } else if (userData?.ownerEmail) {
+            const data = await fetchGetMenuByOwnerEmail(userData.ownerEmail);
+            if (cancelled) return;
+            if (data) applyMenuDocument(data);
+            setDataLoaded(true);
+          } else {
+            setDataLoaded(true);
+          }
+          return;
+        }
+
+        const forceSync = await consumeCatalogForceSync();
+        const snapshot = await readMenuSnapshot();
+        const snapshotMenu = snapshot?.payload;
+        const snapshotOk =
+          snapshotMenu &&
+          isStoreTesting(snapshotMenu.config) &&
+          emailsMatch(snapshotMenu.ownerEmail, userData?.ownerEmail);
+
+        // Cache-first: local snapshot wins over SSR for this session.
+        if (!forceSync && snapshotOk) {
+          if (cancelled) return;
+          applyMenuDocument(snapshotMenu);
+          const printersSnap = await readPrintersSnapshot();
+          if (printersSnap?.payload) {
+            setMemoryPrinters(printersSnap.payload);
+          }
+          setDataLoaded(true);
+          console.log("📦 Catalog hydrated from SQLite (cache-first)");
+          return;
+        }
+
+        // Network path: prefer SSR menu, else client fetch.
+        let data = menuData;
+        if (!data && userData?.ownerEmail) {
+          data = await fetchGetMenuByOwnerEmail(userData.ownerEmail);
+        }
+        if (cancelled) return;
 
         if (data) {
           applyMenuDocument(data);
           setDataLoaded(true);
-          void persistCatalogFromNetworkMenu(data);
+          if (isStoreTesting(data.config)) {
+            await persistCatalogFromNetworkMenu(data);
+            console.log("🌐 Catalog synced from server → SQLite");
+          }
+        } else {
+          setDataLoaded(true);
         }
       } catch (error) {
-        console.error("Error fetching menu data:", error);
-        setDataLoaded(true);
+        console.error("bootstrapCatalog:", error);
+        if (!cancelled) {
+          if (menuData) applyMenuDocument(menuData);
+          setDataLoaded(true);
+        }
       } finally {
         setTimeout(() => {
           isInitialLoadRef.current = false;
         }, 100);
       }
-    };
-    if (!dataLoaded && userData?.ownerEmail) {
-      fetchMenuData();
     }
-  }, [
-    applyMenuDocument,
-    dataLoaded,
-    persistCatalogFromNetworkMenu,
-    userData?.ownerEmail,
-  ]);
 
-  // Reusable function to update config fields with fresh server data
+    void bootstrapCatalog();
+    return () => {
+      cancelled = true;
+    };
+    // Run once on mount for this authenticated shell.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const updateMenuConfigField = async (fieldPath, newValue) => {
     try {
       console.log("🔄 Fetching latest menu config...");
@@ -197,7 +242,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
     }
   };
 
-  // Function to refresh all menu data from server (+ persist catalog when testing)
+  /** Explicit soft sync (also used by refresh with toast) — overwrites SQLite. */
   const refreshMenuData = async () => {
     try {
       console.log("🔄 Refreshing menu data from server...");
@@ -216,8 +261,8 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   };
 
   /**
-   * PIN unlock sync: pull latest menu + printers from server and overwrite SQLite.
-   * Unlock still succeeds if this fails (caller should not block on errors).
+   * Explicit catalog sync from server (soft, no full reload).
+   * Used for manual refresh paths — not PIN unlock.
    */
   const syncCatalogFromServer = useCallback(async () => {
     if (!userData?.ownerEmail) {
@@ -249,7 +294,6 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
     userData?.ownerEmail,
   ]);
 
-  // Wrapper function for refresh with toast
   const refreshMenuDataWithToast = async () => {
     try {
       console.log("Set is refreshing true");
@@ -287,7 +331,6 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         return { success: false, error: "Menu not found" };
       }
 
-      // Availability UI must stay live — do not rewrite full SQLite catalog here.
       setMenuContent(data.menuContent || []);
       setGlobalModifiers(data.globalModifiers || {});
       setGlobalVariants(data.globalVariants || {});
@@ -394,26 +437,28 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
     }
   };
 
-  /** Persist config to server without triggering the auto-save effect (Settings page). */
-  const saveMenuConfigExplicit = useCallback(async (configToSave) => {
-    isInitialLoadRef.current = true;
-    try {
-      await updateMenuConfig(configToSave);
-      setMenuConfig(configToSave);
-      setLocalCatalogCacheGate({
-        enabled: isStoreTesting(configToSave) && isLocalDbSupported(),
-        ownerEmail: userData?.ownerEmail || null,
-      });
-      return { success: true };
-    } catch (error) {
-      console.error("saveMenuConfigExplicit error:", error);
-      return { success: false, error };
-    } finally {
-      setTimeout(() => {
-        isInitialLoadRef.current = false;
-      }, 100);
-    }
-  }, [userData?.ownerEmail]);
+  const saveMenuConfigExplicit = useCallback(
+    async (configToSave) => {
+      isInitialLoadRef.current = true;
+      try {
+        await updateMenuConfig(configToSave);
+        setMenuConfig(configToSave);
+        setLocalCatalogCacheGate({
+          enabled: isStoreTesting(configToSave) && isLocalDbSupported(),
+          ownerEmail: userData?.ownerEmail || null,
+        });
+        return { success: true };
+      } catch (error) {
+        console.error("saveMenuConfigExplicit error:", error);
+        return { success: false, error };
+      } finally {
+        setTimeout(() => {
+          isInitialLoadRef.current = false;
+        }, 100);
+      }
+    },
+    [userData?.ownerEmail],
+  );
 
   useSkipInitialEffect(() => {
     if (isRefreshing || isInitialLoadRef.current) {
