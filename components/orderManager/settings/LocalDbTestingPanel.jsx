@@ -62,10 +62,9 @@ export default function LocalDbTestingPanel() {
           Local Mode foundation (testing)
         </h2>
         <p className="mt-0.5 text-xs text-neutral-600">
-          Cache-first catalog and last held/resume snapshots. Catalog network
-          sync only on <strong>primary sign-in</strong> or header{" "}
-          <strong>Sync</strong> (not on PIN unlock). Held occupancy refreshes
-          in the background. Live Orders stay always live.
+          Menu stays live unless Offline mode is on. Held occupancy and opened
+          checks still paint from the last snapshot, then refresh. Live Orders
+          stay always live.
         </p>
       </div>
       <div className="space-y-3 px-6 py-4">
@@ -78,7 +77,7 @@ export default function LocalDbTestingPanel() {
           <span className="font-medium">{offlineModeOn ? "on" : "off"}</span>
           <span className="text-neutral-500">
             {" "}
-            — saved only, no behavior yet. Sync after changing it in power admin.
+            — on uses the saved menu instead of a live fetch. Sync after changing it in power admin.
           </span>
         </p>
         <button

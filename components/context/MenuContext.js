@@ -19,6 +19,7 @@ import {
 import toast from "react-hot-toast";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import { isStoreTesting } from "@/lib/store/isTesting";
+import { isStoreOffline } from "@/lib/store/isOffline";
 import { isLocalDbSupported } from "@/lib/localDb/sqliteClient";
 import { setLocalCatalogCacheGate } from "@/lib/localDb/localCacheGate";
 import { persistCatalogAfterNetworkMenu } from "@/lib/localDb/syncLocalCatalog";
@@ -106,6 +107,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
 
       setLocalCatalogCacheGate({
         enabled: isStoreTesting(nextConfig) && isLocalDbSupported(),
+        cacheFirst: isStoreOffline(nextConfig),
         ownerEmail: data.ownerEmail || userData?.ownerEmail || null,
       });
     },
@@ -141,7 +143,8 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         if (isStoreTesting(data.config) && isLocalDbSupported()) {
           await persistCatalogFromNetworkMenu(data);
         }
-        // Sign-in sets this flag; consume it so the next cold start stays cache-first.
+        // Sign-in sets this flag; consume it so a later cold start is not forced
+        // onto the network. Cache-first still requires isOffline.
         await consumeCatalogForceSync();
         bootstrappedOwnerRef.current = ownerEmail;
         setTimeout(() => {
@@ -160,8 +163,10 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
    * Catalog bootstrap:
    * - Skip until we have an owner (login screen). Do not consume the force-sync flag then.
    * - Re-run when ownerEmail appears after client-side sign-in.
-   * - Cache-first when SQLite snapshot matches and force-sync is not set.
-   * - Network + SQLite overwrite on primary login / Sync (force flag) or empty cache.
+   * - Normal mode (isOffline off): always apply the live menu, then write SQLite
+   *   when this is a testing store.
+   * - Offline backup (isOffline on): hydrate from SQLite when a matching snapshot
+   *   exists, unless sign-in/Sync set the force-sync flag.
    */
   useEffect(() => {
     const ownerEmail = userData?.ownerEmail || null;
@@ -199,7 +204,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
           isStoreTesting(snapshotMenu.config) &&
           emailsMatch(snapshotMenu.ownerEmail, ownerEmail);
 
-        if (!forceSync && snapshotOk) {
+        if (!forceSync && snapshotOk && isStoreOffline(snapshotMenu.config)) {
           if (cancelled) return;
           applyMenuDocument(snapshotMenu);
           const printersSnap = await readPrintersSnapshot();
@@ -273,6 +278,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         setMenuConfig(updatedConfig);
         setLocalCatalogCacheGate({
           enabled: isStoreTesting(updatedConfig) && isLocalDbSupported(),
+          cacheFirst: isStoreOffline(updatedConfig),
           ownerEmail: latestData.ownerEmail || userData?.ownerEmail || null,
         });
         console.log("✅ Config updated with fresh data + user change");
@@ -453,6 +459,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         setMenuConfig(configToSave);
         setLocalCatalogCacheGate({
           enabled: isStoreTesting(configToSave) && isLocalDbSupported(),
+          cacheFirst: isStoreOffline(configToSave),
           ownerEmail: userData?.ownerEmail || null,
         });
         return { success: true };

@@ -11,7 +11,7 @@ Live Orders polling stays always live, and Send / pay / register stay network.
 | `menu.config.isTesting` | easymenu Menu document | Power admin → Stores drawer → **Testing store** |
 | `menu.config.isOffline` | easymenu Menu document | Power admin → Stores drawer → **Offline mode** |
 
-`isOffline` is a manual flag only. It does not change POS behavior yet. Order Manager shows it on the testing panel after header **Sync**.
+`isOffline` is the backup mode. When it is off, menu and settings still come from the live fetch. When it is on, a matching SQLite catalog can hydrate without that fetch. Held occupancy and resume payloads still paint first, then refresh, whenever `isTesting` is on.
 
 When `true` (and native Order Manager), Settings shows **Local Mode foundation
 (testing)** with a probe for SQLite + snapshot ages.
@@ -20,7 +20,8 @@ When `true` (and native Order Manager), Settings shows **Local Mode foundation
 
 | Moment | Behaviour |
 |--------|-----------|
-| **App open (already signed in)** | If SQLite has a menu snapshot for this store → hydrate React + printers memory from disk. **No** catalog network required. |
+| **App open, isOffline off** | Fetch the live menu and apply it. Testing stores also overwrite SQLite. Held and resume may still paint from the last snapshot, then refresh. |
+| **App open, isOffline on** | If SQLite has a menu snapshot for this store → hydrate React + printers from disk. **No** catalog network required. |
 | **Primary account sign-in** | Fetches live menu, applies it to `MenuContext` immediately (POS / PIN), and overwrites SQLite when `isTesting`. Does not wait for a later reload. |
 | **Manual Sync** (POS header **Sync**) | Sets force-sync flag + `location.reload()` → same as sign-in network path. **This is the staff rule to avoid stale catalog.** Live Order Terminal menus stay unchanged. |
 | **PIN unlock** | Does **not** sync catalog — only unlocks the operator. |
@@ -58,8 +59,8 @@ SSR in `app/layout.jsx` may still fetch the menu on full loads; when cache-first
 
 1. `isTesting` store + native app with SQLite plugins.
 2. Sign in → probe shows fresh menu + printers `updatedAt`.
-3. Kill/reopen app (session still valid) → probe ages unchanged; console may log cache-first hydrate; printers print without new GET.
-4. Change menu in admin → POS stays stale until **Sync** → timestamps move.
+3. Kill/reopen with **Offline mode off** → menu fetches live; probe timestamps move. Held list can still paint before the network round trip.
+4. Turn **Offline mode** on, Sync, change menu in admin, kill/reopen → POS stays on the snapshot until the next **Sync**.
 5. Lock → unlock → catalog timestamps do **not** need to move.
 6. `isTesting` off → no SQLite catalog or held/resume path.
 7. Open table map or Held Orders twice (kill app between) → occupancy paints before the network round trip; probe shows `posLive.heldOrders`.
