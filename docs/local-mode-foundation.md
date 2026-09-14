@@ -17,7 +17,7 @@ When `true` (and native Order Manager), Settings shows **Local Mode foundation
 | Moment | Behaviour |
 |--------|-----------|
 | **App open (already signed in)** | If SQLite has a menu snapshot for this store → hydrate React + printers memory from disk. **No** catalog network required. |
-| **Primary account sign-in / sign-up** | Sets force-sync flag → next bootstrap networks menu (SSR) + printers → overwrite SQLite. |
+| **Primary account sign-in** | Fetches live menu, applies it to `MenuContext` immediately (POS / PIN), and overwrites SQLite when `isTesting`. Does not wait for a later reload. |
 | **Manual Sync** (POS header **Sync**) | Sets force-sync flag + `location.reload()` → same as sign-in network path. **This is the staff rule to avoid stale catalog.** Live Order Terminal menus stay unchanged. |
 | **PIN unlock** | Does **not** sync catalog — only unlocks the operator. |
 | **Empty SQLite / first install** | Must network, then write snapshots. |

@@ -47,7 +47,7 @@ function buildStoreProfile(data) {
 }
 
 function emailsMatch(a, b) {
-  if (!a || !b) return true;
+  if (!a || !b) return false;
   return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
 }
 
@@ -61,7 +61,8 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const isInitialLoadRef = useRef(false);
-  const didBootstrapRef = useRef(false);
+  /** ownerEmail we already bootstrapped. Login screen has none — do not lock that in. */
+  const bootstrappedOwnerRef = useRef(null);
 
   const [menuConfig, setMenuConfig] = useState(
     (menuData && menuData.config) || {},
@@ -118,15 +119,55 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   }, []);
 
   /**
-   * Catalog bootstrap (isTesting + native):
-   * - Cache-first when SQLite has a snapshot and force-sync is NOT set
-   * - Network (SSR / fetch) + overwrite SQLite on primary login / manual Sync
-   *   (force-sync flag) or when snapshot is missing
-   * PIN unlock does not force sync.
+   * Pull live menu from the server, apply to context, and (testing + native)
+   * overwrite SQLite. Does not depend on the current (possibly empty) config —
+   * sign-in can call this before MenuContext has a store.
+   * @param {{ ownerEmail?: string }} [opts]
+   */
+  const syncCatalogFromServer = useCallback(
+    async (opts = {}) => {
+      const ownerEmail = opts.ownerEmail || userData?.ownerEmail;
+      if (!ownerEmail) {
+        return { success: false, error: "Missing owner email" };
+      }
+
+      try {
+        const data = await fetchGetMenuByOwnerEmail(ownerEmail);
+        if (!data) return { success: false, error: "Menu not found" };
+
+        isInitialLoadRef.current = true;
+        applyMenuDocument(data);
+        setDataLoaded(true);
+        if (isStoreTesting(data.config) && isLocalDbSupported()) {
+          await persistCatalogFromNetworkMenu(data);
+        }
+        // Sign-in sets this flag; consume it so the next cold start stays cache-first.
+        await consumeCatalogForceSync();
+        bootstrappedOwnerRef.current = ownerEmail;
+        setTimeout(() => {
+          isInitialLoadRef.current = false;
+        }, 100);
+        return { success: true, menu: data };
+      } catch (error) {
+        console.error("syncCatalogFromServer:", error);
+        return { success: false, error };
+      }
+    },
+    [applyMenuDocument, persistCatalogFromNetworkMenu, userData?.ownerEmail],
+  );
+
+  /**
+   * Catalog bootstrap:
+   * - Skip until we have an owner (login screen). Do not consume the force-sync flag then.
+   * - Re-run when ownerEmail appears after client-side sign-in.
+   * - Cache-first when SQLite snapshot matches and force-sync is not set.
+   * - Network + SQLite overwrite on primary login / Sync (force flag) or empty cache.
    */
   useEffect(() => {
-    if (didBootstrapRef.current) return;
-    didBootstrapRef.current = true;
+    const ownerEmail = userData?.ownerEmail || null;
+    if (!ownerEmail) return;
+    if (bootstrappedOwnerRef.current === ownerEmail) return;
+    bootstrappedOwnerRef.current = ownerEmail;
 
     let cancelled = false;
 
@@ -134,17 +175,17 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
       isInitialLoadRef.current = true;
 
       try {
-        // Web / no SQLite: keep SSR (or client fetch) behaviour; no durable cache.
         if (!isLocalDbSupported()) {
-          if (menuData) {
+          if (
+            menuData &&
+            emailsMatch(menuData.ownerEmail, ownerEmail)
+          ) {
             applyMenuDocument(menuData);
             setDataLoaded(true);
-          } else if (userData?.ownerEmail) {
-            const data = await fetchGetMenuByOwnerEmail(userData.ownerEmail);
+          } else {
+            const data = await fetchGetMenuByOwnerEmail(ownerEmail);
             if (cancelled) return;
             if (data) applyMenuDocument(data);
-            setDataLoaded(true);
-          } else {
             setDataLoaded(true);
           }
           return;
@@ -156,9 +197,8 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         const snapshotOk =
           snapshotMenu &&
           isStoreTesting(snapshotMenu.config) &&
-          emailsMatch(snapshotMenu.ownerEmail, userData?.ownerEmail);
+          emailsMatch(snapshotMenu.ownerEmail, ownerEmail);
 
-        // Cache-first: local snapshot wins over SSR for this session.
         if (!forceSync && snapshotOk) {
           if (cancelled) return;
           applyMenuDocument(snapshotMenu);
@@ -171,10 +211,12 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
           return;
         }
 
-        // Network path: prefer SSR menu, else client fetch.
-        let data = menuData;
-        if (!data && userData?.ownerEmail) {
-          data = await fetchGetMenuByOwnerEmail(userData.ownerEmail);
+        let data =
+          menuData && emailsMatch(menuData.ownerEmail, ownerEmail)
+            ? menuData
+            : null;
+        if (!data) {
+          data = await fetchGetMenuByOwnerEmail(ownerEmail);
         }
         if (cancelled) return;
 
@@ -190,10 +232,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         }
       } catch (error) {
         console.error("bootstrapCatalog:", error);
-        if (!cancelled) {
-          if (menuData) applyMenuDocument(menuData);
-          setDataLoaded(true);
-        }
+        if (!cancelled) setDataLoaded(true);
       } finally {
         setTimeout(() => {
           isInitialLoadRef.current = false;
@@ -205,9 +244,12 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
     return () => {
       cancelled = true;
     };
-    // Run once on mount for this authenticated shell.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [
+    applyMenuDocument,
+    menuData,
+    persistCatalogFromNetworkMenu,
+    userData?.ownerEmail,
+  ]);
 
   const updateMenuConfigField = async (fieldPath, newValue) => {
     try {
@@ -259,40 +301,6 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
       return { success: false, error };
     }
   };
-
-  /**
-   * Explicit catalog sync from server (soft, no full reload).
-   * Used for manual refresh paths — not PIN unlock.
-   */
-  const syncCatalogFromServer = useCallback(async () => {
-    if (!userData?.ownerEmail) {
-      return { success: false, error: "Missing owner email" };
-    }
-    if (!isStoreTesting(menuConfig) || !isLocalDbSupported()) {
-      return { success: true, skipped: true };
-    }
-
-    try {
-      const data = await fetchGetMenuByOwnerEmail(userData.ownerEmail);
-      if (!data) return { success: false, error: "Menu not found" };
-
-      isInitialLoadRef.current = true;
-      applyMenuDocument(data);
-      await persistCatalogFromNetworkMenu(data);
-      setTimeout(() => {
-        isInitialLoadRef.current = false;
-      }, 100);
-      return { success: true };
-    } catch (error) {
-      console.error("syncCatalogFromServer:", error);
-      return { success: false, error };
-    }
-  }, [
-    applyMenuDocument,
-    menuConfig,
-    persistCatalogFromNetworkMenu,
-    userData?.ownerEmail,
-  ]);
 
   const refreshMenuDataWithToast = async () => {
     try {

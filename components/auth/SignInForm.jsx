@@ -9,7 +9,7 @@ import {
   operatorFromSessionUser,
   writeActiveOperator,
 } from "@/lib/staff/activeOperatorStorage";
-import { fetchGetMenuByOwnerEmail } from "@/lib/api/fetchApi";
+import { useMenuContext } from "@/components/context/MenuContext";
 import { resolvePosConfig } from "@/lib/pos/posConfig";
 import { isStaffPinLockEnabled } from "@/lib/staff/staffRoles";
 import { requestCatalogForceSync } from "@/lib/localDb/catalogForceSync";
@@ -24,6 +24,7 @@ function SignInFormInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl");
+  const { syncCatalogFromServer } = useMenuContext();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -46,29 +47,31 @@ function SignInFormInner() {
       if (result?.ok) {
         const session = await getSession();
 
-        // Next catalog bootstrap must network (not hydrate stale SQLite).
+        // Force the next catalog read to come from the server, then write
+        // SQLite + MenuContext before choosing PIN / POS home.
         try {
           await requestCatalogForceSync();
         } catch (flagError) {
           console.error("sign-in catalog force sync flag:", flagError);
         }
 
-        let posEnabled = false;
-        let restaurantModeEnabled = false;
-        let menuConfig = {};
-        if (session?.user?.ownerEmail) {
-          try {
-            const menu = await fetchGetMenuByOwnerEmail(session.user.ownerEmail);
-            menuConfig = menu?.config || {};
-            posEnabled = Boolean(menuConfig.posEnabled);
-            restaurantModeEnabled = Boolean(
-              resolvePosConfig(menuConfig).restaurantModeEnabled,
-            );
-          } catch {
-            posEnabled = false;
-            restaurantModeEnabled = false;
-          }
+        const ownerEmail = session?.user?.ownerEmail;
+        const synced = ownerEmail
+          ? await syncCatalogFromServer({ ownerEmail })
+          : { success: false, error: "Missing store account" };
+        if (!synced.success || !synced.menu) {
+          setError(
+            "Signed in, but the store menu could not be loaded. Try again.",
+          );
+          setIsLoading(false);
+          return;
         }
+
+        const menuConfig = synced.menu.config || {};
+        const posEnabled = Boolean(menuConfig.posEnabled);
+        const restaurantModeEnabled = Boolean(
+          resolvePosConfig(menuConfig).restaurantModeEnabled,
+        );
 
         const pinLockEnabled = isStaffPinLockEnabled(menuConfig);
         if (pinLockEnabled) {
