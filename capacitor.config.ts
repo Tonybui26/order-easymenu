@@ -6,7 +6,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
  */
 const isDev = true;
 const APP_URL = isDev
-  ? "http://192.168.1.69:3001"
+  ? "http://192.168.0.98:3001"
   : "https://order.goeasy.menu";
 
 const config: CapacitorConfig = {
@@ -21,11 +21,7 @@ const config: CapacitorConfig = {
     // Local offline UI when server.url fails to load (no network / host down).
     errorPath: "index.html",
     cleartext: true, // LAN HTTP in Capacitor dev
-    allowNavigation: [
-      "order.goeasy.menu",
-      "*.goeasy.menu",
-      "192.168.1.69",
-    ],
+    allowNavigation: ["order.goeasy.menu", "*.goeasy.menu", "192.168.0.89"],
   },
   plugins: {
     SplashScreen: {
