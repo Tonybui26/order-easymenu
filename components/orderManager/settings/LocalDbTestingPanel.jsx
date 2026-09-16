@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { isNativeApp, getPlatform } from "@/lib/helper/platformDetection";
 import { isStoreOffline } from "@/lib/store/isOffline";
-import { isStoreLocalBackup } from "@/lib/store/isLocalBackup";
+import { isStoreAutoOfflineBackup } from "@/lib/store/isAutoOfflineBackup";
 import { isStoreLocalDatabase } from "@/lib/store/isLocalDatabase";
 import { probeLocalDb } from "@/lib/localDb/sqliteClient";
 import { readMenuSnapshot } from "@/lib/localDb/menuSnapshot";
@@ -16,14 +16,14 @@ import {
 } from "@/lib/localDb/offlineSendStore";
 
 /**
- * Dev-only surface when menu.config.isTesting is on.
+ * Dev-only surface when testing or Auto Offline backup is on.
  * Probe SQLite + catalog snapshot ages (cache-first vs sync moments).
  */
 export default function LocalDbTestingPanel() {
   const { menuConfig } = useMenuContext();
   const offlineModeOn = isStoreOffline(menuConfig);
   const localDatabaseOn = isStoreLocalDatabase(menuConfig);
-  const localBackupOn = isStoreLocalBackup(menuConfig);
+  const autoOfflineBackupOn = isStoreAutoOfflineBackup(menuConfig);
   const [status, setStatus] = useState(null);
   const [isProbing, setIsProbing] = useState(false);
 
@@ -41,7 +41,7 @@ export default function LocalDbTestingPanel() {
       setStatus({
         database: db,
         localDatabaseOnly: localDatabaseOn,
-        localBackup: localBackupOn,
+        autoOfflineBackup: autoOfflineBackupOn,
         offlineMode: offlineModeOn,
         pendingLocalOrders: localOrders.filter((row) => row.status !== "synced")
           .length,
@@ -84,7 +84,7 @@ export default function LocalDbTestingPanel() {
           Local Mode foundation (testing)
         </h2>
         <p className="mt-0.5 text-xs text-neutral-600">
-          With Enable local backup on, live fetches still run first and successful
+          With Auto Offline backup on, live fetches still run first and successful
           results are mirrored to SQLite. Offline mode can open from that copy.
           Local database forces Send/Pay onto the outbox without auto-sync.
         </p>
@@ -95,8 +95,10 @@ export default function LocalDbTestingPanel() {
           {isNativeApp() ? " (native)" : " (web — SQLite probe needs the app)"}
         </p>
         <p className="text-sm text-neutral-700">
-          Local backup:{" "}
-          <span className="font-medium">{localBackupOn ? "on" : "off"}</span>
+          Auto Offline backup:{" "}
+          <span className="font-medium">
+            {autoOfflineBackupOn ? "on" : "off"}
+          </span>
           <span className="text-neutral-500">
             {" "}
             — on mirrors live menu / printers / held / resume into SQLite.

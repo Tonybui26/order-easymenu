@@ -20,7 +20,7 @@ import toast from "react-hot-toast";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import { isStoreOffline } from "@/lib/store/isOffline";
 import { isStoreLocalDatabase } from "@/lib/store/isLocalDatabase";
-import { isLocalSnapshotMirrorEnabled } from "@/lib/store/isLocalBackup";
+import { isLocalSnapshotMirrorEnabled } from "@/lib/store/isAutoOfflineBackup";
 import { setLocalDatabaseOnly } from "@/lib/localDb/offlineSendStore";
 import { isLocalDbSupported } from "@/lib/localDb/sqliteClient";
 import { setLocalCatalogCacheGate } from "@/lib/localDb/localCacheGate";
@@ -127,9 +127,9 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   }, []);
 
   /**
-   * Pull live menu from the server, apply to context, and (local backup / testing
-   * + native) overwrite SQLite. Does not depend on the current (possibly empty)
-   * config — sign-in can call this before MenuContext has a store.
+   * Pull live menu from the server, apply to context, and (Auto Offline backup /
+   * testing + native) overwrite SQLite. Does not depend on the current (possibly
+   * empty) config — sign-in can call this before MenuContext has a store.
    * @param {{ ownerEmail?: string }} [opts]
    */
   const syncCatalogFromServer = useCallback(
