@@ -37,6 +37,7 @@ import {
   formatOrderHistoryDate,
   formatOrderHistoryOrderDetails,
   formatOrderHistoryDrawerSubtitle,
+  formatOrderHistoryPaymentMethod,
 } from "@/lib/helper/orderHistoryDisplay";
 import { cn } from "@/lib/helper";
 import {
@@ -99,10 +100,15 @@ function localSendTotal(payload) {
   );
 }
 
-function pendingHistoryOrder(record) {
+function pendingHistoryOrder(record, paymentMethod) {
   const payload = record.payload || {};
   const createdAt =
     payload.clientCreatedAt || new Date(record.createdAt).toISOString();
+  const method =
+    String(paymentMethod || payload.paymentMethod || "").trim() || null;
+  const isPaid =
+    Boolean(method) ||
+    String(payload.paymentStatus || "").trim() === "paid";
   return {
     _id: record.localId,
     clientLocalId: record.localId,
@@ -116,8 +122,9 @@ function pendingHistoryOrder(record) {
     tables: payload.tables,
     items: payload.items || [],
     total: localSendTotal(payload),
-    paymentStatus: "pending",
-    status: "preparing",
+    paymentStatus: isPaid ? "paid" : "pending",
+    ...(method ? { paymentMethod: method } : {}),
+    status: payload.kitchenStatus || "preparing",
     source: "pos",
     pendingSync: true,
   };
@@ -233,6 +240,16 @@ export default function OrderHistory() {
         record.createdAt >= startMs &&
         record.createdAt <= endMs,
     );
+    const methodByLocalId = new Map();
+    for (const payment of pendingPayments) {
+      const method = String(payment.method || "").trim();
+      if (!method) continue;
+      for (const id of payment.localIds || []) {
+        const key = String(id);
+        if (!methodByLocalId.has(key)) methodByLocalId.set(key, method);
+      }
+    }
+
     const byCheck = new Map();
     for (const record of pending) {
       const key = record.posCheckId || record.localId;
@@ -241,7 +258,16 @@ export default function OrderHistory() {
     }
     const pendingRows = [...byCheck.values()].map((records) => {
       const ordered = [...records].sort((a, b) => a.createdAt - b.createdAt);
-      const group = ordered.map(pendingHistoryOrder);
+      const method =
+        ordered
+          .map(
+            (record) =>
+              String(record.payload?.paymentMethod || "").trim() ||
+              methodByLocalId.get(String(record.localId)) ||
+              "",
+          )
+          .find(Boolean) || null;
+      const group = ordered.map((record) => pendingHistoryOrder(record, method));
       const primary = group[group.length - 1];
       const ticketCount = group.length;
       return {
@@ -254,7 +280,7 @@ export default function OrderHistory() {
         customer: formatOrderHistoryCustomer(primary),
         details: formatOrderHistoryOrderDetails(primary, ticketCount),
         drawerSubtitle: formatOrderHistoryDrawerSubtitle(primary, ticketCount),
-        payment: "—",
+        payment: formatOrderHistoryPaymentMethod(method) || "—",
         refundBadge: null,
         grossTotal: localSendTotal(ordered[0].payload),
         refundSummary: null,
@@ -274,6 +300,7 @@ export default function OrderHistory() {
         pending.some((record) => record.localId === id),
       );
       if (stillSending) return [];
+      const method = String(payment.method || "").trim() || null;
       const records = (payment.localIds || [])
         .map((id) => localSends.find((record) => record.localId === id))
         .filter(Boolean);
@@ -285,22 +312,27 @@ export default function OrderHistory() {
         0,
       );
       const amount = total > 0 ? total : Number(payment.amountTendered || 0);
+      const historyOrders = records.map((record) =>
+        pendingHistoryOrder(record, method),
+      );
       return [
         {
           id: `pay:${payment.localPaymentId}`,
           orderIds: records.map((record) => record.serverOrderId || record.localId),
-          orders: records.map(pendingHistoryOrder),
+          orders: historyOrders,
           invoice: "Pending",
           isCancelled: false,
           date: formatOrderHistoryDate(createdAt, storeTimezone),
-          customer: records[0] ? formatOrderHistoryCustomer(pendingHistoryOrder(records[0])) : "—",
-          details: records[0]
-            ? formatOrderHistoryOrderDetails(pendingHistoryOrder(records[0]), records.length || 1)
+          customer: historyOrders[0]
+            ? formatOrderHistoryCustomer(historyOrders[0])
+            : "—",
+          details: historyOrders[0]
+            ? formatOrderHistoryOrderDetails(historyOrders[0], records.length || 1)
             : "Payment",
-          drawerSubtitle: records[0]
-            ? formatOrderHistoryDrawerSubtitle(pendingHistoryOrder(records[0]), records.length || 1)
+          drawerSubtitle: historyOrders[0]
+            ? formatOrderHistoryDrawerSubtitle(historyOrders[0], records.length || 1)
             : "Payment",
-          payment: payment.method === "credit-card" ? "Card" : payment.method === "cash" ? "Cash" : "—",
+          payment: formatOrderHistoryPaymentMethod(method) || "—",
           refundBadge: null,
           grossTotal: amount,
           refundSummary: null,
