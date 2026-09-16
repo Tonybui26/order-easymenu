@@ -18,6 +18,14 @@ import {
 } from "@/lib/api/fetchApi";
 import { hydrateResumeOrders } from "@/lib/localDb/posLiveSnapshot";
 import {
+  flushOfflineSendOutbox,
+  isOfflineAutoSyncEnabled,
+  isOfflineSendEnabled,
+  onOfflineSendSynced,
+  queueOfflinePosPayment,
+  queueOfflinePosSend,
+} from "@/lib/localDb/offlineSendStore";
+import {
   buildDefaultModifierSelections,
   buildDefaultVariantSelections,
   buildSelectedModifiersPayload,
@@ -376,6 +384,41 @@ export default function PosTerminal() {
     };
   }, [optionsLineId]);
 
+  const checkDiscountRef = useRef(checkDiscount);
+  checkDiscountRef.current = checkDiscount;
+
+  useEffect(() => {
+    if (!isOfflineSendEnabled(menuConfig)) return;
+    if (isOfflineAutoSyncEnabled(menuConfig)) {
+      void flushOfflineSendOutbox();
+    }
+    return onOfflineSendSynced((detail) => {
+      const serverOrderId = String(detail?.serverOrderId || "").trim();
+      if (!serverOrderId) return;
+      setCheckOrderIds((prev) => appendCheckOrderId(prev, serverOrderId));
+      setActiveOrderId((prev) => prev || serverOrderId);
+      if (detail.taxInvoiceNo) {
+        setTaxInvoiceNo((prev) => prev || detail.taxInvoiceNo);
+      }
+      setCartLines((prev) =>
+        prev.map((line) =>
+          line.sourceOrderId === detail.localId
+            ? { ...line, sourceOrderId: serverOrderId }
+            : line,
+        ),
+      );
+      const discount = checkDiscountRef.current;
+      if (discount?.discountAmount > 0 && discount?.discountType) {
+        void applyPosCheckDiscount({
+          orderIds: [serverOrderId],
+          discountAmount: discount.discountAmount ?? 0,
+          discountPercent: discount.discountPercent ?? null,
+          discountType: discount.discountType ?? null,
+        });
+      }
+    });
+  }, [menuConfig]);
+
   useEffect(() => {
     if (!resumeParam || !menuContent || isTrainingMode) return;
     if (resumeLoadedRef.current === resumeParam) return;
@@ -432,7 +475,7 @@ export default function PosTerminal() {
       try {
         const result = await hydrateResumeOrders(
           orderIds,
-          () => fetchPosResumeOrders(orderIds),
+          (ids) => fetchPosResumeOrders(ids),
           {
             onOrders: (orders) => {
               if (cancelled) return;
@@ -1279,6 +1322,54 @@ export default function PosTerminal() {
       if (customerPhone.trim()) payload.customerPhone = customerPhone.trim();
       if (customerEmail.trim()) payload.customerEmail = customerEmail.trim();
 
+      if (isOfflineSendEnabled(menuConfig)) {
+        const result = await queueOfflinePosSend(payload);
+        if (!result?.success) {
+          const error = result?.error || "Failed to save order on this device";
+          showDismissibleToast(error);
+          return { success: false, error };
+        }
+
+        if (result.posCheckId) setPosCheckId(result.posCheckId);
+        setCartLines((prev) =>
+          prev.map((line) =>
+            sentLineIds.has(line.lineId)
+              ? {
+                  ...line,
+                  kitchenStatus: "sent",
+                  sourceOrderId: result.localId,
+                }
+              : line,
+          ),
+        );
+        if (customizingLineId && sentLineIds.has(customizingLineId)) {
+          closeCustomization();
+        }
+        if (showSuccessToast) {
+          toast.success("Order sent to kitchen");
+        }
+
+        void printKitchenOrder(result.order, {
+          storeProfile,
+          itemGroups,
+          menuConfig,
+          source: "pos_send",
+          notify: true,
+          notifySuccess: false,
+        }).catch((printError) => {
+          console.error("POS offline send print error:", printError);
+        });
+
+        return {
+          success: true,
+          pendingSync: true,
+          localId: result.localId,
+          posCheckId: result.posCheckId,
+          orderIds: [],
+          order: result.order,
+        };
+      }
+
       const result = await sendPosOrder(payload);
       if (!result?.success || !result.order?._id) {
         const error = result?.error || "Failed to send order";
@@ -1399,6 +1490,69 @@ export default function PosTerminal() {
     }
   }
 
+  async function persistOfflineSale(paymentSummary, { orderIdsToComplete, hasUnsentToSend }) {
+    const mongoId = (id) => /^[a-f0-9]{24}$/i.test(String(id || "").trim());
+    const localIds = new Set();
+    const serverIds = new Set(orderIdsToComplete.filter(mongoId));
+
+    for (const line of cartLines) {
+      if (isCancelledCartLine(line)) continue;
+      const sourceId = String(line.sourceOrderId || "").trim();
+      if (!sourceId) continue;
+      if (mongoId(sourceId)) serverIds.add(sourceId);
+      else localIds.add(sourceId);
+    }
+    if (activeOrderId) {
+      if (mongoId(activeOrderId)) serverIds.add(activeOrderId);
+      else localIds.add(activeOrderId);
+    }
+
+    if (hasUnsentToSend) {
+      const sendResult = await sendUnsentLinesToKitchen({
+        showSuccessToast: false,
+      });
+      if (!sendResult?.success) {
+        return {
+          success: false,
+          error: sendResult?.error || "Failed to save order before payment",
+        };
+      }
+      if (sendResult.training) {
+        return {
+          success: false,
+          error: "Training mode does not save payments",
+        };
+      }
+      if (sendResult.localId) localIds.add(sendResult.localId);
+      for (const id of sendResult.orderIds || []) {
+        if (mongoId(id)) serverIds.add(id);
+      }
+    }
+
+    const queued = await queueOfflinePosPayment({
+      localIds: [...localIds],
+      orderIds: [...serverIds],
+      method: paymentSummary.method,
+      amountTendered: Number(paymentSummary.amountTendered || 0),
+      changeDue: Number(paymentSummary.change || 0),
+      processingFee: Number(paymentSummary.processingFee || 0),
+      ...(checkDiscount?.discountAmount > 0 && checkDiscount?.discountType
+        ? {
+            discountAmount: checkDiscount.discountAmount,
+            discountPercent: checkDiscount.discountPercent ?? null,
+            discountType: checkDiscount.discountType,
+          }
+        : {}),
+    });
+    if (!queued?.success) {
+      return {
+        success: false,
+        error: queued?.error || "Failed to save payment on this device",
+      };
+    }
+    return { success: true, pendingSync: true };
+  }
+
   async function persistPosSale(paymentSummary) {
     if (!paymentSummary?.method) {
       return { success: false, error: "Payment method is required" };
@@ -1412,6 +1566,13 @@ export default function PosTerminal() {
           : [];
 
     const hasUnsentToSend = cartLines.some(isOpenCartLine);
+    if (isOfflineSendEnabled(menuConfig)) {
+      return persistOfflineSale(paymentSummary, {
+        orderIdsToComplete,
+        hasUnsentToSend,
+      });
+    }
+
     if (hasUnsentToSend || orderIdsToComplete.length === 0) {
       const sendResult = await sendUnsentLinesToKitchen({
         showSuccessToast: false,

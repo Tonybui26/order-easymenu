@@ -9,11 +9,13 @@ import { useMenuContext } from "@/components/context/MenuContext";
 import {
   fetchPosHeldOrders,
   fetchPosResumeOrders,
-  markPosBillPrinted,
   mergePosTables,
   unmergePosTables,
-  updatePosHeldCheckStatus,
 } from "@/lib/api/fetchApi";
+import {
+  markPosBillPrintedMixed,
+  updateHeldCheckStatusMixed,
+} from "@/lib/localDb/localHeldActions";
 import { isNativeApp } from "@/lib/helper/platformDetection";
 import {
   drawerEntryHasPosCheck,
@@ -323,10 +325,12 @@ export default function PosTableMap() {
       try {
         const result = await hydrateResumeOrders(
           orderIds,
-          () => fetchPosResumeOrders(orderIds),
-          { onOrders: (orders) => {
-            if (!cancelled) applyPreview(orders);
-          } },
+          (ids) => fetchPosResumeOrders(ids),
+          {
+            onOrders: (orders) => {
+              if (!cancelled) applyPreview(orders);
+            },
+          },
         );
         if (cancelled) return;
         if (!cached && (!result?.success || !result.orders?.length) && !result?.fromCache) {
@@ -593,7 +597,7 @@ export default function PosTableMap() {
     if (!orders?.length) {
       const result = await hydrateResumeOrders(
         drawerHeldOrder.orderIds,
-        () => fetchPosResumeOrders(drawerHeldOrder.orderIds),
+        (ids) => fetchPosResumeOrders(ids),
         {
           onOrders: (next) => {
             orders = next;
@@ -640,7 +644,7 @@ export default function PosTableMap() {
 
       if (printResult.success) {
         toast.success(printResult.message || "Bill printed");
-        const markResult = await markPosBillPrinted(posOrderIds);
+        const markResult = await markPosBillPrintedMixed(posOrderIds);
         if (!markResult?.success) {
           showDismissibleToast(
             markResult?.error || "Bill printed, but status was not updated",
@@ -744,7 +748,7 @@ export default function PosTableMap() {
     setIsDeleting(true);
     setIsProcessing(true);
     try {
-      const result = await updatePosHeldCheckStatus({
+      const result = await updateHeldCheckStatusMixed({
         orderIds: deleteTarget.orderIds,
         status: "cancelled",
         cancelReason,
@@ -783,7 +787,7 @@ export default function PosTableMap() {
 
     setIsProcessing(true);
     try {
-      const result = await updatePosHeldCheckStatus({
+      const result = await updateHeldCheckStatusMixed({
         orderIds: ticketIds,
         status: "delivered",
       });

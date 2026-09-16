@@ -7,9 +7,11 @@ import toast from "react-hot-toast";
 import {
   fetchPosHeldOrders,
   fetchPosResumeOrders,
-  updatePosHeldCheckStatus,
-  markPosBillPrinted,
 } from "@/lib/api/fetchApi";
+import {
+  markPosBillPrintedMixed,
+  updateHeldCheckStatusMixed,
+} from "@/lib/localDb/localHeldActions";
 import { useMenuContext } from "@/components/context/MenuContext";
 import {
   printBillForHeldCheck,
@@ -231,7 +233,7 @@ export default function PosHeldOrders() {
       try {
         const result = await hydrateResumeOrders(
           orderIds,
-          () => fetchPosResumeOrders(orderIds),
+          (ids) => fetchPosResumeOrders(ids),
           {
             onOrders: (orders) => {
               if (cancelled) return;
@@ -345,7 +347,7 @@ export default function PosHeldOrders() {
 
     setProcessingCheckId(order.id);
     try {
-      const result = await updatePosHeldCheckStatus({
+      const result = await updateHeldCheckStatusMixed({
         orderIds,
         status: "delivered",
       });
@@ -373,7 +375,7 @@ export default function PosHeldOrders() {
 
     setProcessingCheckId(order.id);
     try {
-      const result = await updatePosHeldCheckStatus({
+      const result = await updateHeldCheckStatusMixed({
         orderIds,
         status: "preparing",
       });
@@ -387,14 +389,27 @@ export default function PosHeldOrders() {
 
       void (async () => {
         try {
-          const resume = await fetchPosResumeOrders(orderIds);
-          if (!resume?.success || !resume.orders?.length) return;
+          let orders = null;
+          const resume = await hydrateResumeOrders(
+            orderIds,
+            (ids) => fetchPosResumeOrders(ids),
+            {
+              onOrders: (next) => {
+                orders = next;
+              },
+            },
+          );
+          if (!orders?.length && !resume?.orders?.length) return;
 
-          await printHeldCheckKitchenOnPrepare(resume.orders, orderIds, {
-            storeProfile,
-            itemGroups,
-            menuConfig,
-          });
+          await printHeldCheckKitchenOnPrepare(
+            orders || resume.orders,
+            orderIds,
+            {
+              storeProfile,
+              itemGroups,
+              menuConfig,
+            },
+          );
         } catch (error) {
           console.error("[prepare] Kitchen print failed:", error);
         }
@@ -415,7 +430,7 @@ export default function PosHeldOrders() {
 
     setProcessingCheckId(order.id);
     try {
-      const result = await updatePosHeldCheckStatus({
+      const result = await updateHeldCheckStatusMixed({
         orderIds: preparingIds,
         status: "ready",
       });
@@ -466,13 +481,22 @@ export default function PosHeldOrders() {
       return null;
     }
 
-    const result = await fetchPosResumeOrders(orderIds);
-    if (!result?.success || !result.orders?.length) {
+    let orders = null;
+    const result = await hydrateResumeOrders(
+      orderIds,
+      (ids) => fetchPosResumeOrders(ids),
+      {
+        onOrders: (next) => {
+          orders = next;
+        },
+      },
+    );
+    if (!orders?.length) {
       showDismissibleToast(result?.error || "Could not load check");
       return null;
     }
 
-    return result.orders;
+    return orders;
   }
 
   async function handlePrintBillHeldOrder(heldEntry) {
@@ -490,7 +514,7 @@ export default function PosHeldOrders() {
 
       if (result.success) {
         toast.success(result.message || "Bill printed");
-        const markResult = await markPosBillPrinted(heldEntry.orderIds || []);
+        const markResult = await markPosBillPrintedMixed(heldEntry.orderIds || []);
         if (!markResult?.success) {
           showDismissibleToast(
             markResult?.error || "Bill printed, but status was not updated",
@@ -596,7 +620,7 @@ export default function PosHeldOrders() {
     setIsCancelling(true);
     setProcessingCheckId(cancelTarget.id);
     try {
-      const result = await updatePosHeldCheckStatus({
+      const result = await updateHeldCheckStatusMixed({
         orderIds: cancelTarget.orderIds,
         status: "cancelled",
         cancelReason,
@@ -630,7 +654,7 @@ export default function PosHeldOrders() {
     setIsDeleting(true);
     setProcessingCheckId(deleteTarget.id);
     try {
-      const result = await updatePosHeldCheckStatus({
+      const result = await updateHeldCheckStatusMixed({
         orderIds: deleteTarget.orderIds,
         status: "cancelled",
         cancelReason,

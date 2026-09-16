@@ -4,10 +4,15 @@ import { useState } from "react";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { isNativeApp, getPlatform } from "@/lib/helper/platformDetection";
 import { isStoreOffline } from "@/lib/store/isOffline";
+import { isStoreLocalDatabase } from "@/lib/store/isLocalDatabase";
 import { probeLocalDb } from "@/lib/localDb/sqliteClient";
 import { readMenuSnapshot } from "@/lib/localDb/menuSnapshot";
 import { readPrintersSnapshot } from "@/lib/localDb/printersSnapshot";
 import { readPosLiveSnapshotMeta } from "@/lib/localDb/posLiveSnapshot";
+import {
+  listLocalSendRecords,
+  listPendingOfflinePayments,
+} from "@/lib/localDb/offlineSendStore";
 
 /**
  * Dev-only surface when menu.config.isTesting is on.
@@ -16,6 +21,7 @@ import { readPosLiveSnapshotMeta } from "@/lib/localDb/posLiveSnapshot";
 export default function LocalDbTestingPanel() {
   const { menuConfig } = useMenuContext();
   const offlineModeOn = isStoreOffline(menuConfig);
+  const localDatabaseOn = isStoreLocalDatabase(menuConfig);
   const [status, setStatus] = useState(null);
   const [isProbing, setIsProbing] = useState(false);
 
@@ -27,9 +33,22 @@ export default function LocalDbTestingPanel() {
       const menu = await readMenuSnapshot();
       const printers = await readPrintersSnapshot();
       const posLive = await readPosLiveSnapshotMeta();
+      const localOrders = await listLocalSendRecords();
+      const pendingPayments = await listPendingOfflinePayments();
 
       setStatus({
         database: db,
+        localDatabaseOnly: localDatabaseOn,
+        offlineMode: offlineModeOn,
+        pendingLocalOrders: localOrders.filter((row) => row.status !== "synced")
+          .length,
+        pendingPayments: pendingPayments.length,
+        localOrdersSample: localOrders.slice(0, 5).map((row) => ({
+          localId: row.localId,
+          serverOrderId: row.serverOrderId || null,
+          status: row.status,
+          posCheckId: row.posCheckId,
+        })),
         menuSnapshot: menu
           ? {
               updatedAt: menu.updatedAt,
@@ -62,9 +81,9 @@ export default function LocalDbTestingPanel() {
           Local Mode foundation (testing)
         </h2>
         <p className="mt-0.5 text-xs text-neutral-600">
-          Menu stays live unless Offline mode is on. Held occupancy and opened
-          checks still paint from the last snapshot, then refresh. Live Orders
-          stay always live.
+          Menu stays live unless Offline mode is on. Local database keeps
+          Send/Pay on device with no auto-sync. Held occupancy still paints
+          first on testing stores. Live Orders stay always live.
         </p>
       </div>
       <div className="space-y-3 px-6 py-4">
@@ -73,11 +92,20 @@ export default function LocalDbTestingPanel() {
           {isNativeApp() ? " (native)" : " (web — SQLite probe needs the app)"}
         </p>
         <p className="text-sm text-neutral-700">
-          Offline mode flag:{" "}
+          Offline mode:{" "}
           <span className="font-medium">{offlineModeOn ? "on" : "off"}</span>
           <span className="text-neutral-500">
             {" "}
-            — on uses the saved menu instead of a live fetch. Sync after changing it in power admin.
+            — on uses the saved menu instead of a live fetch.
+          </span>
+        </p>
+        <p className="text-sm text-neutral-700">
+          Local database:{" "}
+          <span className="font-medium">{localDatabaseOn ? "on" : "off"}</span>
+          <span className="text-neutral-500">
+            {" "}
+            — on saves Send/Pay locally and skips auto-sync. Sync after changing
+            it in power admin.
           </span>
         </p>
         <button

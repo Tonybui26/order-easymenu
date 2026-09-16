@@ -10,8 +10,11 @@ Live Orders polling stays always live, and Send / pay / register stay network.
 |-------|--------|-------------|
 | `menu.config.isTesting` | easymenu Menu document | Power admin → Stores drawer → **Testing store** |
 | `menu.config.isOffline` | easymenu Menu document | Power admin → Stores drawer → **Offline mode** |
+| `menu.config.localDatabase` | easymenu Menu document | Power admin → Stores drawer → **Local database** |
 
 `isOffline` is the backup mode. When it is off, menu and settings still come from the live fetch. When it is on, a matching SQLite catalog can hydrate without that fetch. Held occupancy and resume payloads still paint first, then refresh, whenever `isTesting` is on.
+
+`localDatabase` is testing-only. When on (with Testing store + native), Send and Pay write to the on-device outbox and **do not** auto-sync. Turn it off (then Sync / open POS) to let queued rows upload. Offline mode can still auto-sync when `localDatabase` is off.
 
 When `true` (and native Order Manager), Settings shows **Local Mode foundation
 (testing)** with a probe for SQLite + snapshot ages.
@@ -27,9 +30,12 @@ When `true` (and native Order Manager), Settings shows **Local Mode foundation
 | **PIN unlock** | Does **not** sync catalog — only unlocks the operator. |
 | **Empty SQLite / first install** | Must network, then write snapshots. |
 | **Printer CRUD** | `refreshPrintersCache()` after add/update/delete. |
-| **Table map / Held Orders** | If a held snapshot exists, paint it, then refresh from the API and overwrite. Missing snapshot fetches first, then saves. Refresh failure keeps the last copy. |
+| **Table map / Held Orders** | If a held snapshot exists, paint it, then refresh from the API and overwrite. Missing snapshot fetches first, then saves. Refresh failure keeps the last copy. Unsynced local Send/Pay rows (`localDatabase` or offline outbox) are merged into the painted list so this device still shows occupied tables. |
 | **Open table / resume a check** | Same for the resume payload keyed by order ids. Cart paints from local, then re-applies the live fetch. Live fetch failure after a local paint keeps the cart. |
 | **Held drawer preview** | Memory first, then SQLite, then network. A memory hit still revalidates in the background. |
+| **Send, isOffline off** | Always the live create-order API (unless `localDatabase` is on). |
+| **Send, isOffline on** | Save on this device first (`localId`, empty server id), print from that row, then sync in the background to `POST /api/pos/orders/send-offline`. A retry with the same `localId` returns the existing Mongo order. Pay first or pay later also saves the tender locally (`localPaymentId`) and syncs it to `POST /api/pos/orders/complete-offline` after those tickets have server ids. |
+| **Send / Pay, localDatabase on** | Same local save as offline Send, but the outbox does not flush or retry until `localDatabase` is turned off. |
 | **Live Orders** | Untouched — always polls the API. |
 
 SSR in `app/layout.jsx` may still fetch the menu on full loads; when cache-first applies, `MenuContext` **ignores** that SSR payload and applies SQLite instead (unless force-sync).
@@ -68,6 +74,7 @@ SSR in `app/layout.jsx` may still fetch the menu on full loads; when cache-first
 ## Out of scope (next)
 
 - Skipping SSR menu fetch entirely when SQLite exists
-- Offline Send / sync outbox
-- Optimistic status / discount writes
+- Unsynced Send does not show on **other** tablets until background sync finishes; on **this** device the table map and Held Orders merge local pending rows so occupancy still shows while `localDatabase` is on
+- Drawer preview / Open / Pay for unsynced local ids load from SQLite (never send those ids to Mongo). Cancel / All Served / Complete soft-update local rows and keep the outbox; after Send sync, cancelled/delivered is applied on the server. Turning `localDatabase` off flushes the outbox so queued Send/Pay upload normally
+- Optimistic status writes
 - Staff product toggle beyond `isTesting`

@@ -7,6 +7,7 @@ import {
   Banknote,
   CreditCard,
   Calendar,
+  RefreshCw,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import InputText from "@/components/InputText";
@@ -32,6 +33,10 @@ import {
   ORDER_HISTORY_PAYMENT_FILTER_ALL,
   ORDER_HISTORY_PAYMENT_FILTER_OPTIONS,
   formatOrderHistoryRefundBadgeLabel,
+  formatOrderHistoryCustomer,
+  formatOrderHistoryDate,
+  formatOrderHistoryOrderDetails,
+  formatOrderHistoryDrawerSubtitle,
 } from "@/lib/helper/orderHistoryDisplay";
 import { cn } from "@/lib/helper";
 import {
@@ -40,6 +45,12 @@ import {
   printReceiptForHistoryCheck,
 } from "@/lib/pos/posHistoryOrderPrint";
 import SendRefundConfirmationModal from "./SendRefundConfirmationModal";
+import {
+  listLocalSendRecords,
+  listPendingOfflinePayments,
+  onOfflinePaymentSynced,
+  onOfflineSendSynced,
+} from "@/lib/localDb/offlineSendStore";
 
 const TABLE_COLUMNS = [
   { key: "invoice", label: "Invoice Number", className: "min-w-[9rem]" },
@@ -49,6 +60,7 @@ const TABLE_COLUMNS = [
   { key: "payment", label: "Payment Method", className: "min-w-[8rem]" },
   { key: "total", label: "Total", className: "min-w-[5rem]" },
   { key: "actions", label: "", className: "w-12" },
+  { key: "sync", label: "", className: "w-12" },
 ];
 
 const PAYMENT_FILTER_ICONS = {
@@ -63,6 +75,53 @@ const PAYMENT_FILTER_OPTIONS = ORDER_HISTORY_PAYMENT_FILTER_OPTIONS.map(
     Icon: PAYMENT_FILTER_ICONS[option.id],
   }),
 );
+
+function OrderHistorySyncIcon({ pending }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center justify-center",
+        pending ? "text-amber-500" : "text-emerald-600",
+      )}
+      title={pending ? "Saved on this device, not synced yet" : "Synced"}
+      aria-label={pending ? "Waiting to sync" : "Synced"}
+    >
+      <RefreshCw className="size-3.5" strokeWidth={2.25} />
+    </span>
+  );
+}
+
+function localSendTotal(payload) {
+  return (payload?.items || []).reduce(
+    (sum, item) =>
+      sum + Number(item?.price || 0) * Number(item?.quantity || 0),
+    0,
+  );
+}
+
+function pendingHistoryOrder(record) {
+  const payload = record.payload || {};
+  const createdAt =
+    payload.clientCreatedAt || new Date(record.createdAt).toISOString();
+  return {
+    _id: record.localId,
+    clientLocalId: record.localId,
+    posCheckId: record.posCheckId,
+    createdAt,
+    customerName: payload.customerName || "",
+    customerPhone: payload.customerPhone || "",
+    customerEmail: payload.customerEmail || "",
+    orderType: payload.orderType,
+    table: payload.table,
+    tables: payload.tables,
+    items: payload.items || [],
+    total: localSendTotal(payload),
+    paymentStatus: "pending",
+    status: "preparing",
+    source: "pos",
+    pendingSync: true,
+  };
+}
 
 function OrderHistoryRefundBadge({ badge }) {
   const label = formatOrderHistoryRefundBadgeLabel(badge);
@@ -93,6 +152,8 @@ export default function OrderHistory() {
   const storeTimezone = storeProfile?.timezone || "Australia/Melbourne";
 
   const [orders, setOrders] = useState([]);
+  const [localSends, setLocalSends] = useState([]);
+  const [pendingPayments, setPendingPayments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState(ORDER_HISTORY_DATE_FILTER_TODAY);
@@ -134,10 +195,127 @@ export default function OrderHistory() {
     loadOrders();
   }, [loadOrders]);
 
-  const rows = useMemo(
-    () => buildOrderHistoryRows(orders, storeTimezone),
-    [orders, storeTimezone],
-  );
+  const loadLocalSends = useCallback(async () => {
+    const [records, payments] = await Promise.all([
+      listLocalSendRecords(),
+      listPendingOfflinePayments(),
+    ]);
+    setLocalSends(records);
+    setPendingPayments(payments);
+  }, []);
+
+  useEffect(() => {
+    void loadLocalSends();
+    const stopSend = onOfflineSendSynced(() => {
+      void loadLocalSends();
+    });
+    const stopPay = onOfflinePaymentSynced(() => {
+      void loadLocalSends();
+    });
+    return () => {
+      stopSend();
+      stopPay();
+    };
+  }, [loadLocalSends]);
+
+  const rows = useMemo(() => {
+    const serverRows = buildOrderHistoryRows(orders, storeTimezone).map(
+      (row) => ({ ...row, syncPending: false }),
+    );
+    const { startDate, endDate } = getOrderHistoryDateRangeUTC(dateFilter);
+    const startMs = Date.parse(startDate);
+    const endMs = Date.parse(endDate);
+    const pending = localSends.filter(
+      (record) =>
+        record.status !== "synced" &&
+        !record.serverOrderId &&
+        String(record.payload?.kitchenStatus || "").trim() !== "cancelled" &&
+        record.createdAt >= startMs &&
+        record.createdAt <= endMs,
+    );
+    const byCheck = new Map();
+    for (const record of pending) {
+      const key = record.posCheckId || record.localId;
+      if (!byCheck.has(key)) byCheck.set(key, []);
+      byCheck.get(key).push(record);
+    }
+    const pendingRows = [...byCheck.values()].map((records) => {
+      const ordered = [...records].sort((a, b) => a.createdAt - b.createdAt);
+      const group = ordered.map(pendingHistoryOrder);
+      const primary = group[group.length - 1];
+      const ticketCount = group.length;
+      return {
+        id: `local:${ordered[0].posCheckId || ordered[0].localId}`,
+        orderIds: group.map((order) => order._id),
+        orders: group,
+        invoice: "Pending",
+        isCancelled: false,
+        date: formatOrderHistoryDate(primary.createdAt, storeTimezone),
+        customer: formatOrderHistoryCustomer(primary),
+        details: formatOrderHistoryOrderDetails(primary, ticketCount),
+        drawerSubtitle: formatOrderHistoryDrawerSubtitle(primary, ticketCount),
+        payment: "—",
+        refundBadge: null,
+        grossTotal: localSendTotal(ordered[0].payload),
+        refundSummary: null,
+        primaryAction: null,
+        total: `$${group
+          .reduce((sum, order) => sum + Number(order.total || 0), 0)
+          .toFixed(2)}`,
+        timezone: storeTimezone,
+        syncPending: true,
+        createdAtMs: ordered[ordered.length - 1].createdAt,
+      };
+    });
+    pendingRows.sort((a, b) => b.createdAtMs - a.createdAtMs);
+
+    const paymentRows = pendingPayments.flatMap((payment) => {
+      const stillSending = (payment.localIds || []).some((id) =>
+        pending.some((record) => record.localId === id),
+      );
+      if (stillSending) return [];
+      const records = (payment.localIds || [])
+        .map((id) => localSends.find((record) => record.localId === id))
+        .filter(Boolean);
+      const createdAt =
+        records[0]?.createdAt || payment.createdAt || Date.now();
+      if (createdAt < startMs || createdAt > endMs) return [];
+      const total = records.reduce(
+        (sum, record) => sum + localSendTotal(record.payload),
+        0,
+      );
+      const amount = total > 0 ? total : Number(payment.amountTendered || 0);
+      return [
+        {
+          id: `pay:${payment.localPaymentId}`,
+          orderIds: records.map((record) => record.serverOrderId || record.localId),
+          orders: records.map(pendingHistoryOrder),
+          invoice: "Pending",
+          isCancelled: false,
+          date: formatOrderHistoryDate(createdAt, storeTimezone),
+          customer: records[0] ? formatOrderHistoryCustomer(pendingHistoryOrder(records[0])) : "—",
+          details: records[0]
+            ? formatOrderHistoryOrderDetails(pendingHistoryOrder(records[0]), records.length || 1)
+            : "Payment",
+          drawerSubtitle: records[0]
+            ? formatOrderHistoryDrawerSubtitle(pendingHistoryOrder(records[0]), records.length || 1)
+            : "Payment",
+          payment: payment.method === "credit-card" ? "Card" : payment.method === "cash" ? "Cash" : "—",
+          refundBadge: null,
+          grossTotal: amount,
+          refundSummary: null,
+          primaryAction: null,
+          total: `$${amount.toFixed(2)}`,
+          timezone: storeTimezone,
+          syncPending: true,
+          createdAtMs: createdAt,
+        },
+      ];
+    });
+    paymentRows.sort((a, b) => b.createdAtMs - a.createdAtMs);
+
+    return [...pendingRows, ...paymentRows, ...serverRows];
+  }, [dateFilter, localSends, orders, pendingPayments, storeTimezone]);
 
   const filteredRows = useMemo(
     () => filterOrderHistoryRows(rows, searchQuery, paymentFilter),
@@ -435,6 +613,9 @@ export default function OrderHistory() {
                           >
                             <MoreVertical className="size-4" strokeWidth={2} />
                           </button>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <OrderHistorySyncIcon pending={row.syncPending} />
                         </td>
                       </tr>
                     ))
