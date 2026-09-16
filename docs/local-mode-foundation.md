@@ -9,23 +9,26 @@ Live Orders polling stays always live, and Send / pay / register stay network.
 | Field | Where | Who sets it |
 |-------|--------|-------------|
 | `menu.config.isTesting` | easymenu Menu document | Power admin → Stores drawer → **Testing store** |
+| `menu.config.enableLocalBackup` | easymenu Menu document | Power admin → Stores drawer → **Enable local backup** |
 | `menu.config.isOffline` | easymenu Menu document | Power admin → Stores drawer → **Offline mode** |
 | `menu.config.localDatabase` | easymenu Menu document | Power admin → Stores drawer → **Local database** |
 
-`isOffline` is the backup mode. When it is off, menu and settings still come from the live fetch. When it is on, a matching SQLite catalog can hydrate without that fetch. Held occupancy and resume payloads still paint first, then refresh, whenever `isTesting` is on.
+`enableLocalBackup` turns on **live-first snapshots** for selected stores: after a successful live menu / printers / held / resume fetch, Order Manager writes SQLite. Send and Pay stay live. Default off — current stores unchanged.
+
+`isOffline` is the backup mode. When it is off, menu and settings still come from the live fetch. When it is on, a matching SQLite catalog can hydrate without that fetch. Held occupancy and resume payloads still paint first, then refresh, whenever local backup or testing is on.
 
 `localDatabase` is testing-only. When on (with Testing store + native), Send and Pay write to the on-device outbox and **do not** auto-sync. Turn it off (then Sync / open POS) to let queued rows upload. Offline mode can still auto-sync when `localDatabase` is off.
 
-When `true` (and native Order Manager), Settings shows **Local Mode foundation
+When testing or local backup is on (and native Order Manager), Settings shows **Local Mode foundation
 (testing)** with a probe for SQLite + snapshot ages.
 
 ## Sync model (cache-first)
 
 | Moment | Behaviour |
 |--------|-----------|
-| **App open, isOffline off** | Fetch the live menu and apply it. Testing stores also overwrite SQLite. Held and resume may still paint from the last snapshot, then refresh. |
+| **App open, isOffline off** | Fetch the live menu and apply it. Stores with `enableLocalBackup` or `isTesting` also overwrite SQLite. Held and resume may still paint from the last snapshot, then refresh. |
 | **App open, isOffline on** | If SQLite has a menu snapshot for this store → hydrate React + printers from disk. **No** catalog network required. |
-| **Primary account sign-in** | Fetches live menu, applies it to `MenuContext` immediately (POS / PIN), and overwrites SQLite when `isTesting`. Does not wait for a later reload. |
+| **Primary account sign-in** | Fetches live menu, applies it to `MenuContext` immediately (POS / PIN), and overwrites SQLite when local backup or testing is on. Does not wait for a later reload. |
 | **Manual Sync** (POS header **Sync**) | Sets force-sync flag + `location.reload()` → same as sign-in network path. **This is the staff rule to avoid stale catalog.** Live Order Terminal menus stay unchanged. |
 | **PIN unlock** | Does **not** sync catalog — only unlocks the operator. |
 | **Empty SQLite / first install** | Must network, then write snapshots. |

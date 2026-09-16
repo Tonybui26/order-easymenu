@@ -18,9 +18,9 @@ import {
 } from "react";
 import toast from "react-hot-toast";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
-import { isStoreTesting } from "@/lib/store/isTesting";
 import { isStoreOffline } from "@/lib/store/isOffline";
 import { isStoreLocalDatabase } from "@/lib/store/isLocalDatabase";
+import { isLocalSnapshotMirrorEnabled } from "@/lib/store/isLocalBackup";
 import { setLocalDatabaseOnly } from "@/lib/localDb/offlineSendStore";
 import { isLocalDbSupported } from "@/lib/localDb/sqliteClient";
 import { setLocalCatalogCacheGate } from "@/lib/localDb/localCacheGate";
@@ -108,7 +108,8 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
       setMenuId(data._id || null);
 
       setLocalCatalogCacheGate({
-        enabled: isStoreTesting(nextConfig) && isLocalDbSupported(),
+        enabled:
+          isLocalSnapshotMirrorEnabled(nextConfig) && isLocalDbSupported(),
         cacheFirst: isStoreOffline(nextConfig),
         ownerEmail: data.ownerEmail || userData?.ownerEmail || null,
       });
@@ -119,14 +120,16 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
 
   /** Network menu applied → write menu_snapshot + force-refresh printers. */
   const persistCatalogFromNetworkMenu = useCallback(async (data) => {
-    if (!isStoreTesting(data?.config) || !isLocalDbSupported()) return;
+    if (!isLocalSnapshotMirrorEnabled(data?.config) || !isLocalDbSupported()) {
+      return;
+    }
     await persistCatalogAfterNetworkMenu(data, { refreshPrintersCache });
   }, []);
 
   /**
-   * Pull live menu from the server, apply to context, and (testing + native)
-   * overwrite SQLite. Does not depend on the current (possibly empty) config —
-   * sign-in can call this before MenuContext has a store.
+   * Pull live menu from the server, apply to context, and (local backup / testing
+   * + native) overwrite SQLite. Does not depend on the current (possibly empty)
+   * config — sign-in can call this before MenuContext has a store.
    * @param {{ ownerEmail?: string }} [opts]
    */
   const syncCatalogFromServer = useCallback(
@@ -143,9 +146,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         isInitialLoadRef.current = true;
         applyMenuDocument(data);
         setDataLoaded(true);
-        if (isStoreTesting(data.config) && isLocalDbSupported()) {
-          await persistCatalogFromNetworkMenu(data);
-        }
+        await persistCatalogFromNetworkMenu(data);
         // Sign-in sets this flag; consume it so a later cold start is not forced
         // onto the network. Cache-first still requires isOffline.
         await consumeCatalogForceSync();
@@ -204,7 +205,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         const snapshotMenu = snapshot?.payload;
         const snapshotOk =
           snapshotMenu &&
-          isStoreTesting(snapshotMenu.config) &&
+          isLocalSnapshotMirrorEnabled(snapshotMenu.config) &&
           emailsMatch(snapshotMenu.ownerEmail, ownerEmail);
 
         if (!forceSync && snapshotOk && isStoreOffline(snapshotMenu.config)) {
@@ -231,8 +232,8 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         if (data) {
           applyMenuDocument(data);
           setDataLoaded(true);
-          if (isStoreTesting(data.config)) {
-            await persistCatalogFromNetworkMenu(data);
+          await persistCatalogFromNetworkMenu(data);
+          if (isLocalSnapshotMirrorEnabled(data.config)) {
             console.log("🌐 Catalog synced from server → SQLite");
           }
         } else {
@@ -280,7 +281,8 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
 
         setMenuConfig(updatedConfig);
         setLocalCatalogCacheGate({
-          enabled: isStoreTesting(updatedConfig) && isLocalDbSupported(),
+          enabled:
+            isLocalSnapshotMirrorEnabled(updatedConfig) && isLocalDbSupported(),
           cacheFirst: isStoreOffline(updatedConfig),
           ownerEmail: latestData.ownerEmail || userData?.ownerEmail || null,
         });
@@ -462,7 +464,8 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         await updateMenuConfig(configToSave);
         setMenuConfig(configToSave);
         setLocalCatalogCacheGate({
-          enabled: isStoreTesting(configToSave) && isLocalDbSupported(),
+          enabled:
+            isLocalSnapshotMirrorEnabled(configToSave) && isLocalDbSupported(),
           cacheFirst: isStoreOffline(configToSave),
           ownerEmail: userData?.ownerEmail || null,
         });

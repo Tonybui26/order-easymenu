@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { isNativeApp, getPlatform } from "@/lib/helper/platformDetection";
 import { isStoreOffline } from "@/lib/store/isOffline";
+import { isStoreLocalBackup } from "@/lib/store/isLocalBackup";
 import { isStoreLocalDatabase } from "@/lib/store/isLocalDatabase";
 import { probeLocalDb } from "@/lib/localDb/sqliteClient";
 import { readMenuSnapshot } from "@/lib/localDb/menuSnapshot";
@@ -22,6 +23,7 @@ export default function LocalDbTestingPanel() {
   const { menuConfig } = useMenuContext();
   const offlineModeOn = isStoreOffline(menuConfig);
   const localDatabaseOn = isStoreLocalDatabase(menuConfig);
+  const localBackupOn = isStoreLocalBackup(menuConfig);
   const [status, setStatus] = useState(null);
   const [isProbing, setIsProbing] = useState(false);
 
@@ -39,6 +41,7 @@ export default function LocalDbTestingPanel() {
       setStatus({
         database: db,
         localDatabaseOnly: localDatabaseOn,
+        localBackup: localBackupOn,
         offlineMode: offlineModeOn,
         pendingLocalOrders: localOrders.filter((row) => row.status !== "synced")
           .length,
@@ -81,15 +84,23 @@ export default function LocalDbTestingPanel() {
           Local Mode foundation (testing)
         </h2>
         <p className="mt-0.5 text-xs text-neutral-600">
-          Menu stays live unless Offline mode is on. Local database keeps
-          Send/Pay on device with no auto-sync. Held occupancy still paints
-          first on testing stores. Live Orders stay always live.
+          With Enable local backup on, live fetches still run first and successful
+          results are mirrored to SQLite. Offline mode can open from that copy.
+          Local database forces Send/Pay onto the outbox without auto-sync.
         </p>
       </div>
       <div className="space-y-3 px-6 py-4">
         <p className="text-sm text-neutral-700">
           Platform: <span className="font-medium">{getPlatform()}</span>
           {isNativeApp() ? " (native)" : " (web — SQLite probe needs the app)"}
+        </p>
+        <p className="text-sm text-neutral-700">
+          Local backup:{" "}
+          <span className="font-medium">{localBackupOn ? "on" : "off"}</span>
+          <span className="text-neutral-500">
+            {" "}
+            — on mirrors live menu / printers / held / resume into SQLite.
+          </span>
         </p>
         <p className="text-sm text-neutral-700">
           Offline mode:{" "}
