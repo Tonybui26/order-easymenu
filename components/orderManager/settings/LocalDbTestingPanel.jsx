@@ -6,6 +6,7 @@ import { isNativeApp, getPlatform } from "@/lib/helper/platformDetection";
 import { isStoreOffline } from "@/lib/store/isOffline";
 import { isStoreAutoOfflineBackup } from "@/lib/store/isAutoOfflineBackup";
 import { isStoreLocalDatabase } from "@/lib/store/isLocalDatabase";
+import { isStoreSecondTest } from "@/lib/store/isSecondTest";
 import { probeLocalDb } from "@/lib/localDb/sqliteClient";
 import { readMenuSnapshot } from "@/lib/localDb/menuSnapshot";
 import { readPrintersSnapshot } from "@/lib/localDb/printersSnapshot";
@@ -23,6 +24,7 @@ export default function LocalDbTestingPanel() {
   const { menuConfig } = useMenuContext();
   const offlineModeOn = isStoreOffline(menuConfig);
   const localDatabaseOn = isStoreLocalDatabase(menuConfig);
+  const secondTestOn = isStoreSecondTest(menuConfig);
   const autoOfflineBackupOn = isStoreAutoOfflineBackup(menuConfig);
   const [status, setStatus] = useState(null);
   const [isProbing, setIsProbing] = useState(false);
@@ -41,6 +43,7 @@ export default function LocalDbTestingPanel() {
       setStatus({
         database: db,
         localDatabaseOnly: localDatabaseOn,
+        secondTest: secondTestOn,
         autoOfflineBackup: autoOfflineBackupOn,
         offlineMode: offlineModeOn,
         pendingLocalOrders: localOrders.filter((row) => row.status !== "synced")
@@ -87,6 +90,7 @@ export default function LocalDbTestingPanel() {
           With Auto Offline backup on, live fetches still run first and successful
           results are mirrored to SQLite. Offline mode can open from that copy.
           Local database forces Send/Pay onto the outbox without auto-sync.
+          Second test does the same without requiring Testing store.
         </p>
       </div>
       <div className="space-y-3 px-6 py-4">
@@ -117,8 +121,16 @@ export default function LocalDbTestingPanel() {
           <span className="font-medium">{localDatabaseOn ? "on" : "off"}</span>
           <span className="text-neutral-500">
             {" "}
-            — on saves Send/Pay locally and skips auto-sync. Sync after changing
-            it in power admin.
+            — on saves Send/Pay locally and skips auto-sync. Requires Testing
+            store.
+          </span>
+        </p>
+        <p className="text-sm text-neutral-700">
+          Second test:{" "}
+          <span className="font-medium">{secondTestOn ? "on" : "off"}</span>
+          <span className="text-neutral-500">
+            {" "}
+            — same local Send/Pay with no auto-sync, without Testing store.
           </span>
         </p>
         <button

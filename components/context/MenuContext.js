@@ -19,9 +19,11 @@ import {
 import toast from "react-hot-toast";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import { isStoreOffline } from "@/lib/store/isOffline";
-import { isStoreLocalDatabase } from "@/lib/store/isLocalDatabase";
 import { isLocalSnapshotMirrorEnabled } from "@/lib/store/isAutoOfflineBackup";
-import { setLocalDatabaseOnly } from "@/lib/localDb/offlineSendStore";
+import {
+  isLocalOnlySendMode,
+  setLocalDatabaseOnly,
+} from "@/lib/localDb/offlineSendStore";
 import { isLocalDbSupported } from "@/lib/localDb/sqliteClient";
 import { setLocalCatalogCacheGate } from "@/lib/localDb/localCacheGate";
 import { persistCatalogAfterNetworkMenu } from "@/lib/localDb/syncLocalCatalog";
@@ -113,7 +115,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         cacheFirst: isStoreOffline(nextConfig),
         ownerEmail: data.ownerEmail || userData?.ownerEmail || null,
       });
-      setLocalDatabaseOnly(isStoreLocalDatabase(nextConfig));
+      setLocalDatabaseOnly(isLocalOnlySendMode(nextConfig));
     },
     [userData?.ownerEmail],
   );
@@ -286,7 +288,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
           cacheFirst: isStoreOffline(updatedConfig),
           ownerEmail: latestData.ownerEmail || userData?.ownerEmail || null,
         });
-        setLocalDatabaseOnly(isStoreLocalDatabase(updatedConfig));
+        setLocalDatabaseOnly(isLocalOnlySendMode(updatedConfig));
         console.log("✅ Config updated with fresh data + user change");
         return { success: true };
       }
@@ -469,7 +471,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
           cacheFirst: isStoreOffline(configToSave),
           ownerEmail: userData?.ownerEmail || null,
         });
-        setLocalDatabaseOnly(isStoreLocalDatabase(configToSave));
+        setLocalDatabaseOnly(isLocalOnlySendMode(configToSave));
         return { success: true };
       } catch (error) {
         console.error("saveMenuConfigExplicit error:", error);

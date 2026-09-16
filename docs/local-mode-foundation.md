@@ -12,6 +12,7 @@ Live Orders polling stays always live, and Send / pay / register stay network.
 | `menu.config.enableAutoOfflineBackup` | easymenu Menu document | Power admin → Stores drawer → **Auto Offline backup** |
 | `menu.config.isOffline` | easymenu Menu document | Power admin → Stores drawer → **Offline mode** |
 | `menu.config.localDatabase` | easymenu Menu document | Power admin → Stores drawer → **Local database** |
+| `menu.config.secondTest` | easymenu Menu document | Power admin → Stores drawer → **Second test** |
 
 `enableAutoOfflineBackup` is for selected stores only (default off). Today it turns on **live-first snapshots**: after a successful live menu / printers / held / resume fetch, Order Manager writes SQLite. Send and Pay stay live. Later the same flag will also enable automatic offline capability. Stores with it off stay unchanged.
 
@@ -19,7 +20,9 @@ Live Orders polling stays always live, and Send / pay / register stay network.
 
 `localDatabase` is testing-only. When on (with Testing store + native), Send and Pay write to the on-device outbox and **do not** auto-sync. Turn it off (then Sync / open POS) to let queued rows upload. Offline mode can still auto-sync when `localDatabase` is off.
 
-When testing or Auto Offline backup is on (and native Order Manager), Settings shows **Local Mode foundation
+`secondTest` is a debug lane with the same local Send/Pay + no auto-sync behaviour as `localDatabase`, but **does not** require Testing store. Default off.
+
+When testing, Auto Offline backup, or Second test is on (and native Order Manager), Settings shows **Local Mode foundation
 (testing)** with a probe for SQLite + snapshot ages.
 
 ## Sync model (cache-first)
@@ -39,6 +42,7 @@ When testing or Auto Offline backup is on (and native Order Manager), Settings s
 | **Send, isOffline off** | Always the live create-order API (unless `localDatabase` is on). |
 | **Send, isOffline on** | Save on this device first (`localId`, empty server id), print from that row, then sync in the background to `POST /api/pos/orders/send-offline`. A retry with the same `localId` returns the existing Mongo order. Pay first or pay later also saves the tender locally (`localPaymentId`) and syncs it to `POST /api/pos/orders/complete-offline` after those tickets have server ids. |
 | **Send / Pay, localDatabase on** | Same local save as offline Send, but the outbox does not flush or retry until `localDatabase` is turned off. |
+| **Send / Pay, secondTest on** | Same as `localDatabase` (local save, no auto-sync) without requiring Testing store. |
 | **Live Orders** | Untouched — always polls the API. |
 
 SSR in `app/layout.jsx` may still fetch the menu on full loads; when cache-first applies, `MenuContext` **ignores** that SSR payload and applies SQLite instead (unless force-sync).

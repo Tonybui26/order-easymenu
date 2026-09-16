@@ -7,6 +7,7 @@ import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import { resolvePosPaymentsConfig } from "@/lib/pos/posPaymentsConfig";
 import { isStoreTesting } from "@/lib/store/isTesting";
 import { isStoreAutoOfflineBackup } from "@/lib/store/isAutoOfflineBackup";
+import { isStoreSecondTest } from "@/lib/store/isSecondTest";
 import SettingsToggleRow from "./SettingsToggleRow";
 import SettingsOnOffBadge from "./SettingsOnOffBadge";
 import LocalDbTestingPanel from "./LocalDbTestingPanel";
@@ -36,6 +37,7 @@ export default function SystemSettings({
   const posEnabled = Boolean(menuConfig?.posEnabled);
   const storeIsTesting = isStoreTesting(menuConfig);
   const storeAutoOfflineBackup = isStoreAutoOfflineBackup(menuConfig);
+  const storeSecondTest = isStoreSecondTest(menuConfig);
   const tyroEnabled = Boolean(
     resolvePosPaymentsConfig(menuConfig).tyro.enabled,
   );
@@ -47,7 +49,9 @@ export default function SystemSettings({
 
   return (
     <div className="space-y-6">
-      {storeIsTesting || storeAutoOfflineBackup ? <LocalDbTestingPanel /> : null}
+      {storeIsTesting || storeAutoOfflineBackup || storeSecondTest ? (
+        <LocalDbTestingPanel />
+      ) : null}
 
       <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 px-6 py-3">
