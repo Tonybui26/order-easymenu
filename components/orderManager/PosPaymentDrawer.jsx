@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Banknote, CreditCard, Delete, HandCoins } from "lucide-react";
+import { Banknote, CreditCard, Delete, HandCoins, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { cn } from "@/lib/helper";
+import { usePosRegisterSession } from "@/components/context/PosRegisterSessionContext";
 import {
   buildTyroPurchaseParams,
   dollarsToTyroCents,
@@ -14,6 +15,9 @@ import {
   parseTyroSurchargeDollars,
 } from "@/lib/tyro/iclient";
 import SideDrawer from "./SideDrawer";
+
+const CASH_DISABLED_MESSAGE =
+  "Cash payments are unavailable because register counts have been finalised. Please use another payment method.";
 
 const KEYPAD_ROWS = [
   ["1", "2", "3", "backspace"],
@@ -70,12 +74,15 @@ export default function PosPaymentDrawer({
   tyroConfig = null,
   onOpenCashDrawer,
 }) {
+  const { session } = usePosRegisterSession();
+  const countsFinalised = Boolean(session?.countsFinalised);
   const [digits, setDigits] = useState("");
   const [step, setStep] = useState("tender"); // tender | finalise
   const [paymentSummary, setPaymentSummary] = useState(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isSalePersisted, setIsSalePersisted] = useState(false);
   const [tyroApproved, setTyroApproved] = useState(false);
+  const [isCashDisabledOpen, setIsCashDisabledOpen] = useState(false);
   const purchaseLockRef = useRef(false);
   const amountDueLabel = Number(amountDue || 0)
     .toFixed(2)
@@ -90,6 +97,7 @@ export default function PosPaymentDrawer({
     setIsPurchasing(false);
     setIsSalePersisted(false);
     setTyroApproved(false);
+    setIsCashDisabledOpen(false);
     purchaseLockRef.current = false;
   }, [isOpen, amountDue]);
 
@@ -204,6 +212,11 @@ export default function PosPaymentDrawer({
   function handleSelectPayment(methodId) {
     if (isPurchasing || isCompletingSale) return;
 
+    if (methodId === "cash" && countsFinalised && !trainingMode) {
+      setIsCashDisabledOpen(true);
+      return;
+    }
+
     const due = Number(amountDue) || 0;
     const tendered = resolvedAmount();
     const change = Math.max(0, Math.round((tendered - due) * 100) / 100);
@@ -251,6 +264,7 @@ export default function PosPaymentDrawer({
       : formatTenderDisplay(amountDueLabel);
 
   return (
+    <>
     <SideDrawer
       isOpen={isOpen}
       onClose={handleClose}
@@ -338,6 +352,8 @@ export default function PosPaymentDrawer({
           <div className="grid grid-cols-2 gap-2">
             {PAYMENT_METHODS.map(({ id, label, Icon, className }) => {
               const isCardWaiting = id === "credit-card" && isPurchasing;
+              const isCashLocked =
+                id === "cash" && countsFinalised && !trainingMode;
               return (
                 <button
                   key={id}
@@ -347,6 +363,7 @@ export default function PosPaymentDrawer({
                   className={cn(
                     "flex min-h-[5.5rem] flex-col items-center justify-center gap-1.5 rounded-lg px-3 py-3 text-sm font-bold uppercase tracking-wide shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-70",
                     className,
+                    isCashLocked && "opacity-55",
                   )}
                 >
                   <Icon size={28} strokeWidth={1.75} />
@@ -358,6 +375,40 @@ export default function PosPaymentDrawer({
         </div>
       )}
     </SideDrawer>
+
+      <dialog className={`modal ${isCashDisabledOpen ? "modal-open" : ""}`}>
+        <div className="modal-box w-[400px] max-w-md">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-neutral-900">
+              Cash unavailable
+            </h3>
+            <button
+              type="button"
+              onClick={() => setIsCashDisabledOpen(false)}
+              className="btn btn-circle btn-ghost btn-sm"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <p className="mb-6 text-sm text-neutral-700">{CASH_DISABLED_MESSAGE}</p>
+
+          <button
+            type="button"
+            onClick={() => setIsCashDisabledOpen(false)}
+            className="w-full rounded-xl bg-brand_accent px-4 py-3 text-sm font-semibold text-white transition-colors"
+          >
+            OK
+          </button>
+        </div>
+        <form method="dialog" className="modal-backdrop">
+          <button type="submit" onClick={() => setIsCashDisabledOpen(false)}>
+            close
+          </button>
+        </form>
+      </dialog>
+    </>
   );
 }
 

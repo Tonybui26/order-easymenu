@@ -102,6 +102,8 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
     session?.closingVariance ?? null,
   );
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [isMismatchOpen, setIsMismatchOpen] = useState(false);
+  const [varianceReason, setVarianceReason] = useState("");
   const [isFinalising, setIsFinalising] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
 
@@ -228,23 +230,49 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
     }
   }
 
-  async function handleCloseRegister() {
+  const hasCashMismatch =
+    isFinalised && cashVariance != null && Number(cashVariance) !== 0;
+
+  function handleCloseRegisterClick() {
+    if (isClosing) return;
+    if (hasCashMismatch) {
+      setVarianceReason("");
+      setIsMismatchOpen(true);
+      return;
+    }
+    void submitCloseRegister();
+  }
+
+  async function submitCloseRegister(reason = "") {
     if (isClosing) return;
     setIsClosing(true);
     try {
-      const result = await closePosRegisterSession({
+      const payload = {
         operator: registerOperatorPayload(activeOperator),
-      });
+      };
+      if (reason) payload.varianceReason = reason;
+
+      const result = await closePosRegisterSession(payload);
       if (!result.success) {
         toast.error(result.error || "Failed to close register");
         return;
       }
+      setIsMismatchOpen(false);
       toast.success("Register closed");
       setRegisterClosed();
       router.push(posHomePath);
     } finally {
       setIsClosing(false);
     }
+  }
+
+  async function handleConfirmMismatchClose() {
+    const reason = varianceReason.trim();
+    if (!reason) {
+      toast.error("Please enter a reason for the cash mismatch");
+      return;
+    }
+    await submitCloseRegister(reason);
   }
 
   return (
@@ -336,7 +364,7 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
             {isFinalised ? (
               <button
                 type="button"
-                onClick={handleCloseRegister}
+                onClick={handleCloseRegisterClick}
                 disabled={isClosing}
                 className="flex min-h-[3.5rem] items-center justify-center rounded-md bg-brand_accent text-base font-bold uppercase tracking-wide text-white transition active:scale-[0.99] disabled:opacity-50"
               >
@@ -477,6 +505,93 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
             type="submit"
             onClick={() => setIsConfirmOpen(false)}
             disabled={isFinalising}
+          >
+            close
+          </button>
+        </form>
+      </dialog>
+
+      <dialog className={`modal ${isMismatchOpen ? "modal-open" : ""}`}>
+        <div className="modal-box w-[440px] max-w-md">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-neutral-900">
+              Cash mismatch
+            </h3>
+            <button
+              type="button"
+              onClick={() => setIsMismatchOpen(false)}
+              disabled={isClosing}
+              className="btn btn-circle btn-ghost btn-sm"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <p className="mb-4 text-sm text-neutral-700">
+            The amount of reported cash in register does not match the system.
+          </p>
+
+          <div className="mb-4 space-y-2 rounded-lg bg-neutral-100 p-4 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-neutral-500">System expected</span>
+              <span className="font-semibold tabular-nums text-neutral-900">
+                {formatMoney(cashExpected)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-neutral-500">Reported actual</span>
+              <span className="font-semibold tabular-nums text-neutral-900">
+                {formatMoney(cashActual)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t border-neutral-200 pt-2">
+              <span className="text-neutral-500">Variance</span>
+              <span className="font-semibold tabular-nums text-red-600">
+                {formatMoney(cashVariance)}
+              </span>
+            </div>
+          </div>
+
+          <label className="mb-6 block">
+            <span className="mb-1.5 block text-sm font-medium text-neutral-700">
+              Reason for mismatch
+            </span>
+            <textarea
+              value={varianceReason}
+              onChange={(event) => setVarianceReason(event.target.value)}
+              disabled={isClosing}
+              rows={3}
+              maxLength={500}
+              placeholder="Enter why the cash amounts do not match"
+              className="w-full resize-none rounded-xl border border-neutral-300 px-3 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-brand_accent focus:ring-2 focus:ring-brand_accent/20 disabled:opacity-50"
+            />
+          </label>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setIsMismatchOpen(false)}
+              disabled={isClosing}
+              className="flex-1 rounded-xl border border-neutral-300 px-4 py-3 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmMismatchClose}
+              disabled={isClosing || !varianceReason.trim()}
+              className="flex-1 rounded-xl bg-brand_accent px-4 py-3 text-sm font-semibold text-white transition-colors disabled:opacity-50"
+            >
+              {isClosing ? "Closing…" : "Close Register"}
+            </button>
+          </div>
+        </div>
+        <form method="dialog" className="modal-backdrop">
+          <button
+            type="submit"
+            onClick={() => setIsMismatchOpen(false)}
+            disabled={isClosing}
           >
             close
           </button>
