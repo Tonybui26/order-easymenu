@@ -48,7 +48,7 @@ When testing, Auto Offline backup, or Second test is on (and native Order Manage
 | **Send / Pay, localDatabase on** | Same local save as offline Send, but the outbox does not flush or retry until `localDatabase` is turned off. |
 | **Send / Pay, secondTest on** | Same as `localDatabase` (local save, no auto-sync) without requiring Testing store. |
 | **Register finalise, secondTest on** | Staff counts saved on-device only; local expected includes synced + outbox cash; cash tender locked. No `/finalise` API. |
-| **Register close, secondTest on** | `close-second-test`: server force-matches actual to expected from synced cash, then closes. Local counts kept for reports. |
+| **Register close, secondTest on** | `close-second-test`: server force-matches actual to expected from synced cash, auto-builds matching `closingCounts`, then closes. Local counts kept for reports. |
 | **Live Orders** | Untouched — always polls the API. |
 
 SSR in `app/layout.jsx` may still fetch the menu on full loads; when cache-first applies, `MenuContext` **ignores** that SSR payload and applies SQLite instead (unless force-sync).
