@@ -13,18 +13,35 @@ import { useSession } from "next-auth/react";
 import { App } from "@capacitor/app";
 import { fetchPosRegisterSession } from "@/lib/api/fetchApi";
 import { isNativeApp } from "@/lib/helper/platformDetection";
+import {
+  clearLocalRegisterFinalise,
+  loadLocalRegisterFinalise,
+  mergeLocalRegisterFinalise,
+} from "@/lib/localDb/registerFinaliseStore";
 import { useMenuContext } from "@/components/context/MenuContext";
 
 const PosRegisterSessionContext = createContext(null);
 
-function applyFetchResult(result) {
+async function applyFetchResult(result) {
   if (!result.success) {
     return { ok: false, error: result.error };
   }
-  const session = result.session ?? null;
+  const remote = result.session ?? null;
+  if (!remote) {
+    await clearLocalRegisterFinalise();
+    return { ok: true, isOpen: false, session: null };
+  }
+
+  const local = await loadLocalRegisterFinalise();
+  if (local && String(local.sessionId) !== String(remote.id)) {
+    await clearLocalRegisterFinalise();
+    return { ok: true, isOpen: true, session: remote };
+  }
+
+  const session = mergeLocalRegisterFinalise(remote, local);
   return {
     ok: true,
-    isOpen: Boolean(session),
+    isOpen: true,
     session,
   };
 }
@@ -51,6 +68,7 @@ export function PosRegisterSessionProvider({ children }) {
   const setRegisterClosed = useCallback(() => {
     setIsOpen(false);
     setSession(null);
+    void clearLocalRegisterFinalise();
   }, []);
 
   const refreshRegisterSession = useCallback(async () => {
@@ -60,7 +78,7 @@ export function PosRegisterSessionProvider({ children }) {
 
     const promise = (async () => {
       const result = await fetchPosRegisterSession();
-      const parsed = applyFetchResult(result);
+      const parsed = await applyFetchResult(result);
       if (parsed.ok) {
         setIsOpen(parsed.isOpen);
         setSession(parsed.session);

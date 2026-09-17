@@ -2,7 +2,9 @@
 
 Pilot scaffolding for on-device cache. Catalog (menu + printers) plus the
 last held-orders list and resume payloads. This is **not** full offline POS —
-Live Orders polling stays always live, and Send / pay / register stay network.
+Live Orders polling stays always live. Send / pay stay network unless
+`localDatabase` / `secondTest` / offline Send paths apply. Register stays
+network except under `secondTest` (local finalise + `close-second-test`).
 
 ## Store gate
 
@@ -21,6 +23,8 @@ Live Orders polling stays always live, and Send / pay / register stay network.
 `localDatabase` is testing-only. When on (with Testing store + native), Send and Pay write to the on-device outbox and **do not** auto-sync. Turn it off (then Sync / open POS) to let queued rows upload. Offline mode can still auto-sync when `localDatabase` is off.
 
 `secondTest` is a debug lane with the same local Send/Pay + no auto-sync behaviour as `localDatabase`, but **does not** require Testing store. Default off. Print Receipt (Finalise Sale or Order History) uploads only that check’s outbox rows so Mongo can assign `taxInvoiceNo` before the thermal Tax Invoice prints. Card Complete Sale also uploads that check immediately (invoice without printing).
+
+**Register under `secondTest`:** Finalise saves staff tender counts **on-device only** (Preferences) for later report printing — it does **not** call `/finalise`. Local expected = synced server cash **plus** unsynced outbox cash pays (so drawer variance can match on-device). Cash sales and Cash Pay In/Out stay locked after that local finalise (same UX as normal). Close uses `POST /api/pos/register/session/close-second-test`, which auto-finalises with `actual = expected` from **already-synced** counter-cash sales only, then closes. Staff counts and any local variance reason stay on-device; the server never stores them. Unsynced Send/Pay outbox rows remain in the outbox.
 
 When testing, Auto Offline backup, or Second test is on (and native Order Manager), Settings shows **Local Mode foundation
 (testing)** with a probe for SQLite + snapshot ages.
@@ -43,6 +47,8 @@ When testing, Auto Offline backup, or Second test is on (and native Order Manage
 | **Send, isOffline on** | Save on this device first (`localId`, empty server id), print from that row, then sync in the background to `POST /api/pos/orders/send-offline`. A retry with the same `localId` returns the existing Mongo order. Pay first or pay later also saves the tender locally (`localPaymentId`) and syncs it to `POST /api/pos/orders/complete-offline` after those tickets have server ids. |
 | **Send / Pay, localDatabase on** | Same local save as offline Send, but the outbox does not flush or retry until `localDatabase` is turned off. |
 | **Send / Pay, secondTest on** | Same as `localDatabase` (local save, no auto-sync) without requiring Testing store. |
+| **Register finalise, secondTest on** | Staff counts saved on-device only; local expected includes synced + outbox cash; cash tender locked. No `/finalise` API. |
+| **Register close, secondTest on** | `close-second-test`: server force-matches actual to expected from synced cash, then closes. Local counts kept for reports. |
 | **Live Orders** | Untouched — always polls the API. |
 
 SSR in `app/layout.jsx` may still fetch the menu on full loads; when cache-first applies, `MenuContext` **ignores** that SSR payload and applies SQLite instead (unless force-sync).

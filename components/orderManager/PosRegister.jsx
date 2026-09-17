@@ -6,6 +6,7 @@ import { Delete } from "lucide-react";
 import toast from "react-hot-toast";
 import { cn } from "@/lib/helper";
 import { openPosRegisterSession } from "@/lib/api/fetchApi";
+import { clearLocalRegisterFinalise } from "@/lib/localDb/registerFinaliseStore";
 import { registerOperatorPayload } from "@/lib/pos/registerOperatorPayload";
 import { getPosHomePath } from "@/lib/pos/posConfig";
 import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
@@ -180,6 +181,7 @@ export default function PosRegister() {
         return;
       }
       setRegisterOpen(result.session);
+      void clearLocalRegisterFinalise();
       router.push(posHomePath);
     } finally {
       setIsOpening(false);

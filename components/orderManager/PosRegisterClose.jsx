@@ -7,10 +7,19 @@ import toast from "react-hot-toast";
 import { cn } from "@/lib/helper";
 import {
   closePosRegisterSession,
+  closePosRegisterSessionSecondTest,
+  fetchPosRegisterClosingPreview,
   finalisePosRegisterSession,
 } from "@/lib/api/fetchApi";
 import { registerOperatorPayload } from "@/lib/pos/registerOperatorPayload";
 import { getPosHomePath } from "@/lib/pos/posConfig";
+import { isStoreSecondTest } from "@/lib/store/isSecondTest";
+import {
+  clearLocalRegisterFinalise,
+  patchLocalRegisterFinalise,
+  saveLocalRegisterFinalise,
+} from "@/lib/localDb/registerFinaliseStore";
+import { sumPendingOutboxCashSalesSince } from "@/lib/localDb/offlineSendStore";
 import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { usePosRegisterSession } from "@/components/context/PosRegisterSessionContext";
@@ -80,6 +89,18 @@ function buildCountsPayload(countsMap) {
   }));
 }
 
+function computeActualFromCounts(countsMap) {
+  return CASH_DENOMINATIONS.reduce(
+    (sum, denomination) =>
+      sum + denominationAmount(denomination, countsMap[denomination.id]),
+    0,
+  );
+}
+
+function roundMoney(amount) {
+  return Math.round((Number(amount) || 0) * 100) / 100;
+}
+
 /**
  * Close Register — denomination counts + finalise / close.
  */
@@ -89,6 +110,7 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
   const { menuConfig } = useMenuContext();
   const { setRegisterClosed, setRegisterOpen } = usePosRegisterSession();
   const posHomePath = getPosHomePath(menuConfig);
+  const secondTestOn = isStoreSecondTest(menuConfig);
   const [counts, setCounts] = useState(() => countsFromSession(session));
   const [selectedId, setSelectedId] = useState(null);
   const [digits, setDigits] = useState("");
@@ -100,6 +122,9 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
   );
   const [cashVariance, setCashVariance] = useState(
     session?.closingVariance ?? null,
+  );
+  const [localClosingActual, setLocalClosingActual] = useState(
+    session?.locallyFinalised ? session?.closingActual ?? null : null,
   );
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isMismatchOpen, setIsMismatchOpen] = useState(false);
@@ -113,21 +138,23 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
     setCounts(countsFromSession(session));
     setCashExpected(session.closingExpected);
     setCashVariance(session.closingVariance);
+    if (session.locallyFinalised) {
+      setLocalClosingActual(session.closingActual ?? null);
+    }
   }, [session]);
 
   const selectedDenomination = CASH_DENOMINATIONS.find(
     (denomination) => denomination.id === selectedId,
   );
   const cashActual = useMemo(() => {
+    if (isFinalised && localClosingActual != null) {
+      return Number(localClosingActual) || 0;
+    }
     if (isFinalised && session?.closingActual != null) {
       return Number(session.closingActual) || 0;
     }
-    return CASH_DENOMINATIONS.reduce(
-      (sum, denomination) =>
-        sum + denominationAmount(denomination, counts[denomination.id]),
-      0,
-    );
-  }, [counts, isFinalised, session?.closingActual]);
+    return computeActualFromCounts(counts);
+  }, [counts, isFinalised, localClosingActual, session?.closingActual]);
 
   const hasEnteredCount = digits !== "";
   const instruction = selectedDenomination
@@ -207,6 +234,67 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
 
     setIsFinalising(true);
     try {
+      if (secondTestOn) {
+        const preview = await fetchPosRegisterClosingPreview();
+        if (!preview.success) {
+          toast.error(preview.error || "Failed to load expected cash");
+          return;
+        }
+
+        const outboxCashSales = await sumPendingOutboxCashSalesSince(
+          session?.openedAt,
+        );
+        const syncedCashSales = roundMoney(Number(preview.cashSalesTotal) || 0);
+        const cashSalesTotal = roundMoney(syncedCashSales + outboxCashSales);
+        // Server expected is openingFloat + movements + synced cash only.
+        // Add pending outbox cash so local variance matches the drawer.
+        const closingExpected = roundMoney(
+          (Number(preview.closingExpected) || 0) + outboxCashSales,
+        );
+
+        const closingCounts = buildCountsPayload(nextCounts).map((row) => ({
+          ...row,
+          amount: roundMoney((row.cents * row.count) / 100),
+        }));
+        const closingActual = roundMoney(computeActualFromCounts(nextCounts));
+        const closingVariance = roundMoney(closingActual - closingExpected);
+
+        const localSnapshot = {
+          sessionId: String(session?.id || preview.sessionId || ""),
+          countsFinalised: true,
+          closingCounts,
+          closingActual,
+          closingExpected,
+          closingVariance,
+          cashSalesTotal,
+          closingVarianceReason: null,
+          finalisedAt: new Date().toISOString(),
+        };
+        await saveLocalRegisterFinalise(localSnapshot);
+
+        const nextSession = {
+          ...session,
+          countsFinalised: true,
+          locallyFinalised: true,
+          closingCounts,
+          closingActual,
+          closingExpected,
+          closingVariance,
+          cashSalesTotal,
+        };
+
+        setIsConfirmOpen(false);
+        setIsFinalised(true);
+        setLocalClosingActual(closingActual);
+        setCashExpected(closingExpected);
+        setCashVariance(closingVariance);
+        setCounts(countsFromSession(nextSession));
+        onSessionUpdated?.(nextSession);
+        setRegisterOpen(nextSession);
+        toast.success("Counts finalised (local)");
+        return;
+      }
+
       const result = await finalisePosRegisterSession({
         counts: buildCountsPayload(nextCounts),
         operator: registerOperatorPayload(activeOperator),
@@ -217,6 +305,7 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
       }
       setIsConfirmOpen(false);
       setIsFinalised(true);
+      setLocalClosingActual(null);
       setCashExpected(result.session?.closingExpected ?? null);
       setCashVariance(result.session?.closingVariance ?? null);
       if (result.session?.closingCounts?.length) {
@@ -247,6 +336,28 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
     if (isClosing) return;
     setIsClosing(true);
     try {
+      if (secondTestOn) {
+        if (reason) {
+          await patchLocalRegisterFinalise({
+            closingVarianceReason: reason.trim().slice(0, 500),
+          });
+        }
+
+        const result = await closePosRegisterSessionSecondTest({
+          operator: registerOperatorPayload(activeOperator),
+        });
+        if (!result.success) {
+          toast.error(result.error || "Failed to close register");
+          return;
+        }
+        await clearLocalRegisterFinalise();
+        setIsMismatchOpen(false);
+        toast.success("Register closed");
+        setRegisterClosed();
+        router.push(posHomePath);
+        return;
+      }
+
       const payload = {
         operator: registerOperatorPayload(activeOperator),
       };
