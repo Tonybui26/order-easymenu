@@ -21,10 +21,15 @@ import {
   flushOfflineSendOutbox,
   isOfflineAutoSyncEnabled,
   isOfflineSendEnabled,
+  localTicketsAlreadySynced,
+  lookupLocalIdsByServerOrderIds,
   onOfflineSendSynced,
   queueOfflinePosPayment,
   queueOfflinePosSend,
+  syncLocalTicketsForInvoice,
 } from "@/lib/localDb/offlineSendStore";
+import { isStoreSecondTest } from "@/lib/store/isSecondTest";
+import { isMongoObjectId } from "@/lib/localDb/localHeldOrders";
 import {
   buildDefaultModifierSelections,
   buildDefaultVariantSelections,
@@ -1466,13 +1471,71 @@ export default function PosTerminal() {
 
     setIsPrintingReceipt(true);
     try {
+      let invoiceForPrint = taxInvoiceNo;
+      let linesForPrint = printableLines;
+
+      // secondTest: local outbox has no taxInvoiceNo until this check is uploaded.
+      if (isStoreSecondTest(menuConfig) && !invoiceForPrint) {
+        if (printableLines.some(isOpenCartLine)) {
+          const sendResult = await sendUnsentLinesToKitchen({
+            showSuccessToast: false,
+          });
+          if (!sendResult?.success) {
+            showDismissibleToast(
+              sendResult?.error || "Failed to print receipt",
+            );
+            return;
+          }
+          if (sendResult.localId) {
+            linesForPrint = printableLines.map((line) =>
+              isOpenCartLine(line)
+                ? { ...line, sourceOrderId: sendResult.localId }
+                : line,
+            );
+          }
+        }
+
+        const localIds = [
+          ...new Set(
+            [
+              ...checkOrderIds.map((id) => String(id || "").trim()),
+              ...linesForPrint.map((line) =>
+                String(line.sourceOrderId || "").trim(),
+              ),
+              activeOrderId ? String(activeOrderId).trim() : "",
+            ].filter((id) => id && !isMongoObjectId(id)),
+          ),
+        ];
+
+        if (localIds.length > 0) {
+          // Quiet: keep localIds on the cart so Complete Sale can still queue pay.
+          const syncResult = await syncLocalTicketsForInvoice(localIds, {
+            notify: false,
+          });
+          if (!syncResult?.success) {
+            showDismissibleToast(
+              syncResult?.error || "Failed to print receipt",
+            );
+            return;
+          }
+          invoiceForPrint = String(syncResult.taxInvoiceNo || "").trim();
+          if (invoiceForPrint) {
+            setTaxInvoiceNo((prev) => prev || invoiceForPrint);
+          }
+          if (!invoiceForPrint) {
+            showDismissibleToast("Failed to print receipt");
+            return;
+          }
+        }
+      }
+
       const payload = buildTaxInvoiceReceiptFromPosCheck({
         storeProfile,
-        cartLines: printableLines,
+        cartLines: linesForPrint,
         orderType: resolvedOrderType,
         tableNumber: resolvedTableNumber,
         paymentSummary,
-        taxInvoiceNo,
+        taxInvoiceNo: invoiceForPrint,
         discount: footerDiscount,
       });
 
@@ -1529,6 +1592,13 @@ export default function PosTerminal() {
       }
     }
 
+    // Print-before-complete may have remapped cart lines to Mongo ids — recover
+    // the original localIds so the pay outbox still ties to local_orders.
+    if (localIds.size === 0 && serverIds.size > 0) {
+      const recovered = await lookupLocalIdsByServerOrderIds([...serverIds]);
+      for (const id of recovered) localIds.add(id);
+    }
+
     const queued = await queueOfflinePosPayment({
       localIds: [...localIds],
       orderIds: [...serverIds],
@@ -1550,6 +1620,35 @@ export default function PosTerminal() {
         error: queued?.error || "Failed to save payment on this device",
       };
     }
+
+    // Print already uploaded the send (unpaid). Push this tender now so the
+    // check is not left unpaid on the server — only when tickets are already synced.
+    // Card: always sync on Complete Sale so Tax Invoice exists without printing.
+    const isCard = paymentSummary.method === "credit-card";
+    const shouldSyncNow =
+      isStoreSecondTest(menuConfig) &&
+      localIds.size > 0 &&
+      (isCard || (await localTicketsAlreadySynced([...localIds])));
+
+    if (shouldSyncNow) {
+      const paySync = await syncLocalTicketsForInvoice([...localIds], {
+        notify: false,
+      });
+      if (!paySync?.success) {
+        return {
+          success: false,
+          error: paySync?.error || "Failed to sync payment",
+        };
+      }
+      const invoice = String(paySync.taxInvoiceNo || "").trim();
+      if (invoice) setTaxInvoiceNo((prev) => prev || invoice);
+      return {
+        success: true,
+        pendingSync: false,
+        taxInvoiceNo: invoice || undefined,
+      };
+    }
+
     return { success: true, pendingSync: true };
   }
 

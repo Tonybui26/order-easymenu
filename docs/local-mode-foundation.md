@@ -20,7 +20,7 @@ Live Orders polling stays always live, and Send / pay / register stay network.
 
 `localDatabase` is testing-only. When on (with Testing store + native), Send and Pay write to the on-device outbox and **do not** auto-sync. Turn it off (then Sync / open POS) to let queued rows upload. Offline mode can still auto-sync when `localDatabase` is off.
 
-`secondTest` is a debug lane with the same local Send/Pay + no auto-sync behaviour as `localDatabase`, but **does not** require Testing store. Default off.
+`secondTest` is a debug lane with the same local Send/Pay + no auto-sync behaviour as `localDatabase`, but **does not** require Testing store. Default off. Print Receipt (Finalise Sale or Order History) uploads only that check’s outbox rows so Mongo can assign `taxInvoiceNo` before the thermal Tax Invoice prints. Card Complete Sale also uploads that check immediately (invoice without printing).
 
 When testing, Auto Offline backup, or Second test is on (and native Order Manager), Settings shows **Local Mode foundation
 (testing)** with a probe for SQLite + snapshot ages.

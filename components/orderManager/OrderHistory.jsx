@@ -51,7 +51,10 @@ import {
   listPendingOfflinePayments,
   onOfflinePaymentSynced,
   onOfflineSendSynced,
+  syncLocalTicketsForInvoice,
 } from "@/lib/localDb/offlineSendStore";
+import { isStoreSecondTest } from "@/lib/store/isSecondTest";
+import { isMongoObjectId } from "@/lib/localDb/localHeldOrders";
 
 const TABLE_COLUMNS = [
   { key: "invoice", label: "Invoice Number", className: "min-w-[9rem]" },
@@ -155,8 +158,9 @@ const DATE_FILTER_OPTIONS = ORDER_HISTORY_DATE_FILTER_OPTIONS.map((option) => ({
 
 export default function OrderHistory() {
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
-  const { storeProfile } = useMenuContext();
+  const { storeProfile, menuConfig } = useMenuContext();
   const storeTimezone = storeProfile?.timezone || "Australia/Melbourne";
+  const secondTestOn = isStoreSecondTest(menuConfig);
 
   const [orders, setOrders] = useState([]);
   const [localSends, setLocalSends] = useState([]);
@@ -301,9 +305,22 @@ export default function OrderHistory() {
       );
       if (stillSending) return [];
       const method = String(payment.method || "").trim() || null;
-      const records = (payment.localIds || [])
+      let records = (payment.localIds || [])
         .map((id) => localSends.find((record) => record.localId === id))
         .filter(Boolean);
+      // Print-before-complete may queue pay with orderIds only — resolve items
+      // from synced local_orders by server_order_id.
+      if (records.length === 0 && (payment.orderIds || []).length > 0) {
+        records = (payment.orderIds || [])
+          .map((id) =>
+            localSends.find(
+              (record) => String(record.serverOrderId || "") === String(id),
+            ),
+          )
+          .filter(Boolean);
+      }
+      // No ticket payload → skip empty "Payment" placeholder rows.
+      if (records.length === 0) return [];
       const createdAt =
         records[0]?.createdAt || payment.createdAt || Date.now();
       if (createdAt < startMs || createdAt > endMs) return [];
@@ -318,7 +335,9 @@ export default function OrderHistory() {
       return [
         {
           id: `pay:${payment.localPaymentId}`,
-          orderIds: records.map((record) => record.serverOrderId || record.localId),
+          orderIds: records.map(
+            (record) => record.serverOrderId || record.localId,
+          ),
           orders: historyOrders,
           invoice: "Pending",
           isCancelled: false,
@@ -326,12 +345,14 @@ export default function OrderHistory() {
           customer: historyOrders[0]
             ? formatOrderHistoryCustomer(historyOrders[0])
             : "—",
-          details: historyOrders[0]
-            ? formatOrderHistoryOrderDetails(historyOrders[0], records.length || 1)
-            : "Payment",
-          drawerSubtitle: historyOrders[0]
-            ? formatOrderHistoryDrawerSubtitle(historyOrders[0], records.length || 1)
-            : "Payment",
+          details: formatOrderHistoryOrderDetails(
+            historyOrders[0],
+            records.length || 1,
+          ),
+          drawerSubtitle: formatOrderHistoryDrawerSubtitle(
+            historyOrders[0],
+            records.length || 1,
+          ),
           payment: formatOrderHistoryPaymentMethod(method) || "—",
           refundBadge: null,
           grossTotal: amount,
@@ -393,7 +414,47 @@ export default function OrderHistory() {
 
     setIsProcessing(true);
     try {
-      const result = await printReceiptForHistoryCheck(row.orders, {
+      let ordersToPrint = row.orders;
+
+      // secondTest: pending local rows have no taxInvoiceNo until uploaded.
+      // Sync only this check, then print with the server invoice number.
+      if (secondTestOn && row.syncPending) {
+        const localIds = (row.orderIds || [])
+          .map((id) => String(id || "").trim())
+          .filter((id) => id && !isMongoObjectId(id));
+        if (localIds.length > 0) {
+          const syncResult = await syncLocalTicketsForInvoice(localIds);
+          if (!syncResult?.success) {
+            toast.error(
+              syncResult?.error || "Failed to print receipt",
+            );
+            return;
+          }
+
+          const nextOrders = await loadOrders();
+          await loadLocalSends();
+          const serverIds = new Set(
+            (syncResult.serverOrderIds || []).map(String),
+          );
+          const syncedOrders = (nextOrders || []).filter((order) =>
+            serverIds.has(String(order._id)),
+          );
+          if (syncedOrders.length > 0) {
+            ordersToPrint = syncedOrders;
+          } else if (syncResult.taxInvoiceNo) {
+            ordersToPrint = row.orders.map((order) => ({
+              ...order,
+              taxInvoiceNo: syncResult.taxInvoiceNo,
+              paymentStatus: order.paymentStatus || "paid",
+            }));
+          } else {
+            toast.error("Failed to print receipt");
+            return;
+          }
+        }
+      }
+
+      const result = await printReceiptForHistoryCheck(ordersToPrint, {
         storeProfile,
       });
       if (result.success) {
