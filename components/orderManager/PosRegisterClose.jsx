@@ -19,7 +19,12 @@ import {
   patchLocalRegisterFinalise,
   saveLocalRegisterFinalise,
 } from "@/lib/localDb/registerFinaliseStore";
-import { sumPendingOutboxCashSalesSince } from "@/lib/localDb/offlineSendStore";
+import {
+  sumPendingOutboxCardSalesSince,
+  sumPendingOutboxCashSalesSince,
+} from "@/lib/localDb/offlineSendStore";
+import { printSalesReportReceipt } from "@/lib/printers/printSalesReportReceipt";
+import { isStaffPinLockEnabled } from "@/lib/staff/staffRoles";
 import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { usePosRegisterSession } from "@/components/context/PosRegisterSessionContext";
@@ -101,16 +106,26 @@ function roundMoney(amount) {
   return Math.round((Number(amount) || 0) * 100) / 100;
 }
 
+function formatSalesReportDate(date = new Date()) {
+  return date.toLocaleDateString("en-AU", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 /**
  * Close Register — denomination counts + finalise / close.
  */
 export default function PosRegisterClose({ session, onSessionUpdated }) {
   const router = useRouter();
-  const { activeOperator } = useActiveOperator();
-  const { menuConfig } = useMenuContext();
+  const { activeOperator, lock } = useActiveOperator();
+  const { menuConfig, storeProfile } = useMenuContext();
   const { setRegisterClosed, setRegisterOpen } = usePosRegisterSession();
   const posHomePath = getPosHomePath(menuConfig);
   const secondTestOn = isStoreSecondTest(menuConfig);
+  const pinLockEnabled = isStaffPinLockEnabled(menuConfig);
   const [counts, setCounts] = useState(() => countsFromSession(session));
   const [selectedId, setSelectedId] = useState(null);
   const [digits, setDigits] = useState("");
@@ -128,9 +143,12 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
   );
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isMismatchOpen, setIsMismatchOpen] = useState(false);
+  const [isPrintReportOpen, setIsPrintReportOpen] = useState(false);
+  const [pendingCloseReason, setPendingCloseReason] = useState("");
   const [varianceReason, setVarianceReason] = useState("");
   const [isFinalising, setIsFinalising] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [isPrintingReport, setIsPrintingReport] = useState(false);
 
   useEffect(() => {
     if (!session?.countsFinalised) return;
@@ -322,59 +340,20 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
   const hasCashMismatch =
     isFinalised && cashVariance != null && Number(cashVariance) !== 0;
 
+  function openPrintReportPrompt(reason = "") {
+    setPendingCloseReason(reason || "");
+    setIsMismatchOpen(false);
+    setIsPrintReportOpen(true);
+  }
+
   function handleCloseRegisterClick() {
-    if (isClosing) return;
+    if (isClosing || isPrintingReport) return;
     if (hasCashMismatch) {
       setVarianceReason("");
       setIsMismatchOpen(true);
       return;
     }
-    void submitCloseRegister();
-  }
-
-  async function submitCloseRegister(reason = "") {
-    if (isClosing) return;
-    setIsClosing(true);
-    try {
-      if (secondTestOn) {
-        if (reason) {
-          await patchLocalRegisterFinalise({
-            closingVarianceReason: reason.trim().slice(0, 500),
-          });
-        }
-
-        const result = await closePosRegisterSessionSecondTest({
-          operator: registerOperatorPayload(activeOperator),
-        });
-        if (!result.success) {
-          toast.error(result.error || "Failed to close register");
-          return;
-        }
-        await clearLocalRegisterFinalise();
-        setIsMismatchOpen(false);
-        toast.success("Register closed");
-        setRegisterClosed();
-        router.push(posHomePath);
-        return;
-      }
-
-      const payload = {
-        operator: registerOperatorPayload(activeOperator),
-      };
-      if (reason) payload.varianceReason = reason;
-
-      const result = await closePosRegisterSession(payload);
-      if (!result.success) {
-        toast.error(result.error || "Failed to close register");
-        return;
-      }
-      setIsMismatchOpen(false);
-      toast.success("Register closed");
-      setRegisterClosed();
-      router.push(posHomePath);
-    } finally {
-      setIsClosing(false);
-    }
+    openPrintReportPrompt();
   }
 
   async function handleConfirmMismatchClose() {
@@ -383,7 +362,134 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
       toast.error("Please enter a reason for the cash mismatch");
       return;
     }
-    await submitCloseRegister(reason);
+    openPrintReportPrompt(reason);
+  }
+
+  async function resolveSalesTotalsForReport() {
+    const preview = await fetchPosRegisterClosingPreview();
+    if (!preview.success) {
+      return {
+        success: false,
+        error: preview.error || "Failed to load sales totals",
+      };
+    }
+
+    let cashTotal = roundMoney(Number(preview.cashSalesTotal) || 0);
+    let cardTotal = roundMoney(Number(preview.cardSalesTotal) || 0);
+
+    if (secondTestOn) {
+      const since = session?.openedAt || preview.openedAt;
+      const [outboxCash, outboxCard] = await Promise.all([
+        sumPendingOutboxCashSalesSince(since),
+        sumPendingOutboxCardSalesSince(since),
+      ]);
+      cashTotal = roundMoney(cashTotal + outboxCash);
+      cardTotal = roundMoney(cardTotal + outboxCard);
+    }
+
+    return {
+      success: true,
+      cashTotal,
+      cardTotal,
+      dateLabel: formatSalesReportDate(new Date()),
+    };
+  }
+
+  async function finishCloseRegister(reason = "") {
+    if (secondTestOn) {
+      if (reason) {
+        await patchLocalRegisterFinalise({
+          closingVarianceReason: reason.trim().slice(0, 500),
+        });
+      }
+
+      const result = await closePosRegisterSessionSecondTest({
+        operator: registerOperatorPayload(activeOperator),
+      });
+      if (!result.success) {
+        return {
+          success: false,
+          error: result.error || "Failed to close register",
+        };
+      }
+      await clearLocalRegisterFinalise();
+      return { success: true };
+    }
+
+    const payload = {
+      operator: registerOperatorPayload(activeOperator),
+    };
+    if (reason) payload.varianceReason = reason;
+
+    const result = await closePosRegisterSession(payload);
+    if (!result.success) {
+      return {
+        success: false,
+        error: result.error || "Failed to close register",
+      };
+    }
+    return { success: true };
+  }
+
+  function afterRegisterClosed() {
+    setIsPrintReportOpen(false);
+    setIsMismatchOpen(false);
+    toast.success("Register closed");
+    setRegisterClosed();
+    if (pinLockEnabled) {
+      lock();
+      return;
+    }
+    router.push(posHomePath);
+  }
+
+  async function handleSkipPrintAndClose() {
+    if (isClosing || isPrintingReport) return;
+    setIsClosing(true);
+    try {
+      const result = await finishCloseRegister(pendingCloseReason);
+      if (!result.success) {
+        toast.error(result.error || "Failed to close register");
+        return;
+      }
+      afterRegisterClosed();
+    } finally {
+      setIsClosing(false);
+    }
+  }
+
+  async function handlePrintReportAndClose() {
+    if (isClosing || isPrintingReport) return;
+    setIsPrintingReport(true);
+    try {
+      const totals = await resolveSalesTotalsForReport();
+      if (!totals.success) {
+        toast.error(totals.error || "Failed to load sales totals");
+        return;
+      }
+
+      const printResult = await printSalesReportReceipt({
+        storeName: storeProfile?.storeName || "",
+        dateLabel: totals.dateLabel,
+        cashTotal: totals.cashTotal,
+        cardTotal: totals.cardTotal,
+      });
+      if (!printResult.success) {
+        toast.error(printResult.message || "Failed to print sales report");
+        return;
+      }
+
+      setIsClosing(true);
+      const result = await finishCloseRegister(pendingCloseReason);
+      if (!result.success) {
+        toast.error(result.error || "Failed to close register");
+        return;
+      }
+      afterRegisterClosed();
+    } finally {
+      setIsPrintingReport(false);
+      setIsClosing(false);
+    }
   }
 
   return (
@@ -691,10 +797,10 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
             <button
               type="button"
               onClick={handleConfirmMismatchClose}
-              disabled={isClosing || !varianceReason.trim()}
+              disabled={isClosing || isPrintingReport || !varianceReason.trim()}
               className="flex-1 rounded-xl bg-brand_accent px-4 py-3 text-sm font-semibold text-white transition-colors disabled:opacity-50"
             >
-              {isClosing ? "Closing…" : "Close Register"}
+              Continue
             </button>
           </div>
         </div>
@@ -702,7 +808,58 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
           <button
             type="submit"
             onClick={() => setIsMismatchOpen(false)}
-            disabled={isClosing}
+            disabled={isClosing || isPrintingReport}
+          >
+            close
+          </button>
+        </form>
+      </dialog>
+
+      <dialog className={`modal ${isPrintReportOpen ? "modal-open" : ""}`}>
+        <div className="modal-box w-[400px] max-w-md">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-neutral-900">
+              Print sales report?
+            </h3>
+            <button
+              type="button"
+              onClick={() => setIsPrintReportOpen(false)}
+              disabled={isClosing || isPrintingReport}
+              className="btn btn-circle btn-ghost btn-sm"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <p className="mb-6 text-sm text-neutral-700">
+            Do you want to print the sales report before closing the register?
+          </p>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={handleSkipPrintAndClose}
+              disabled={isClosing || isPrintingReport}
+              className="flex-1 rounded-xl border border-neutral-300 px-4 py-3 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50"
+            >
+              {isClosing && !isPrintingReport ? "Closing…" : "Cancel"}
+            </button>
+            <button
+              type="button"
+              onClick={handlePrintReportAndClose}
+              disabled={isClosing || isPrintingReport}
+              className="flex-1 rounded-xl bg-brand_accent px-4 py-3 text-sm font-semibold text-white transition-colors disabled:opacity-50"
+            >
+              {isPrintingReport ? "Printing…" : "Print"}
+            </button>
+          </div>
+        </div>
+        <form method="dialog" className="modal-backdrop">
+          <button
+            type="submit"
+            onClick={() => setIsPrintReportOpen(false)}
+            disabled={isClosing || isPrintingReport}
           >
             close
           </button>
