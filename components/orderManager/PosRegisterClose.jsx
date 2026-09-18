@@ -436,6 +436,8 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
     setIsMismatchOpen(false);
     toast.success("Register closed");
     setRegisterClosed();
+    // Sign out the current operator (PIN lock). Call after clearing register
+    // state; RequireOpenRegister skips /pos/register redirect while locked.
     if (pinLockEnabled) {
       lock();
       return;
@@ -687,10 +689,11 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
             </button>
           </div>
 
-          <p className="mb-2 text-sm text-neutral-600">
-            Are you sure the amount is correct? You won&apos;t be able to change
-            it later.
-          </p>
+          <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-neutral-600">
+            <li>All orders and sales are finalised and synced</li>
+            <li>The cash amount is correct</li>
+            <li>Counts can&apos;t be changed later; cash sales will be blocked</li>
+          </ul>
           <div className="mb-6 rounded-lg bg-neutral-100 p-4 text-center">
             <p className="text-sm font-medium text-neutral-500">Cash actual</p>
             <p className="mt-1 text-2xl font-bold tabular-nums text-neutral-900">

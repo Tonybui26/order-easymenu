@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { usePosRegisterSession } from "@/components/context/PosRegisterSessionContext";
 import { isRegisterGateExempt } from "@/lib/pos/registerGate";
+import { isTerminalLocked } from "@/lib/staff/activeOperatorStorage";
 
 /**
  * When POS is enabled and no register session is open, force staff to
@@ -38,6 +39,9 @@ export default function RequireOpenRegister({ children }) {
     }
 
     if (isOpen === false) {
+      // Closing register then PIN-locking: don't redirect to /pos/register
+      // and steal navigation from lock() → /lock.
+      if (isTerminalLocked()) return;
       router.replace("/pos/register");
       return;
     }
@@ -89,6 +93,7 @@ export default function RequireOpenRegister({ children }) {
   }
 
   if (shouldGate && isOpen === false) {
+    if (isTerminalLocked()) return null;
     return (
       <div className="flex min-h-[100vh] items-center justify-center bg-[#fff8f4]">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand_accent/30 border-t-brand_accent" />
