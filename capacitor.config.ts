@@ -4,7 +4,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
  * Keep in sync with `isDev` / URLs in capacitor-shell/index.html.
  * Dev: LAN Next server. Prod: live Order Manager.
  */
-const isDev = true;
+const isDev = false;
 const APP_URL = isDev
   ? "http://192.168.0.98:3001"
   : "https://order.goeasy.menu";
