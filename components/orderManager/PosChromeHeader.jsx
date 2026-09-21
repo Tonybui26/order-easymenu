@@ -88,10 +88,10 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
           src={Logo}
           alt=""
           aria-hidden
-          className="size-8 xl:size-9"
+          className="size-8 xl:size-8"
           priority
         />
-        <span className="font-brand text-lg font-extrabold text-white xl:text-lg">
+        <span className="font-brand text-xl font-extrabold text-white xl:text-[1.4rem]">
           Easy<span className="text-brand_accent">Menu</span>
         </span>
       </button>
