@@ -426,6 +426,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
       consecutiveErrorsRef.current = 0;
       if (hadErrors) {
         connectionLostDismissedForOutageRef.current = false;
+        setConnectionLostAlert(null);
         toast.success("Connection restored!", { duration: 2000 });
       }
 
