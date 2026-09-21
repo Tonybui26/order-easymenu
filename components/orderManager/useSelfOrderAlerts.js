@@ -24,6 +24,9 @@ import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 /** Fixed interval — next tick is independent of the last fetch finishing. */
 const SELF_ORDER_ALERT_POLL_MS = 10000;
 
+/** Ignore a single poll blip (local HMR / emulator). Show the card on the 2nd miss. */
+const CONNECTION_LOST_AFTER_FAILURES = 1;
+
 /** Keep auto-print alerts visible briefly so they don't flash off. */
 const AUTO_PRINT_ALERT_MIN_VISIBLE_MS = 3500;
 
@@ -69,7 +72,9 @@ function batchToAlert(orders) {
     kind: "batch",
     id: SELF_ORDER_BATCH_ALERT_ID,
     count: sorted.length,
-    orderIds: sorted.map((order) => normalizeOrderId(order._id)).filter(Boolean),
+    orderIds: sorted
+      .map((order) => normalizeOrderId(order._id))
+      .filter(Boolean),
     createdAt: sorted[0]?.createdAt,
     title: formatSelfOrderBatchTitle(sorted.length),
     description: formatSelfOrderBatchDescription(sorted),
@@ -214,9 +219,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
         ...alert,
         isSending: isManualSending || isAutoSending,
         isAutoSending,
-        sendLabel: isAutoSending
-          ? "Auto sending…"
-          : alert.sendLabel || "Send",
+        sendLabel: isAutoSending ? "Auto sending…" : alert.sendLabel || "Send",
       };
     });
 
@@ -422,11 +425,11 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
       const data = await fetchOrders();
       let activeOrders = filterOrdersForActiveList(data, menuConfig);
 
-      const hadErrors = consecutiveErrorsRef.current > 0;
+      const failedPolls = consecutiveErrorsRef.current;
       consecutiveErrorsRef.current = 0;
-      if (hadErrors) {
+      if (failedPolls >= CONNECTION_LOST_AFTER_FAILURES) {
         connectionLostDismissedForOutageRef.current = false;
-        setConnectionLostAlert(null);
+        // setConnectionLostAlert(null);
         toast.success("Connection restored!", { duration: 2000 });
       }
 
@@ -454,7 +457,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
       consecutiveErrorsRef.current += 1;
 
       if (
-        consecutiveErrorsRef.current === 1 &&
+        consecutiveErrorsRef.current === CONNECTION_LOST_AFTER_FAILURES &&
         !connectionLostDismissedForOutageRef.current
       ) {
         setConnectionLostAlert(buildConnectionLostAlert());
