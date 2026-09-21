@@ -41,6 +41,9 @@ export default function SystemSettings({
   const tyroEnabled = Boolean(
     resolvePosPaymentsConfig(menuConfig).tyro.enabled,
   );
+  const linklyEnabled = Boolean(
+    resolvePosPaymentsConfig(menuConfig).linkly.enabled,
+  );
   const kitchenPrintingOn = Boolean(draftKitchenPrintingEnabled);
 
   function updatePosDraft(patch) {
@@ -212,6 +215,24 @@ export default function SystemSettings({
               <span className="mt-1 block text-base text-neutral-600">
                 Authorise your in-store terminal with MID and TID from the
                 EFTPOS machine.
+              </span>
+            </span>
+            <ChevronRight className="h-5 w-5 shrink-0 text-neutral-400" />
+          </Link>
+          <Link
+            href="/settings/payments/linkly"
+            className="flex items-center justify-between gap-4 border-t border-gray-100 px-6 py-4 transition-colors duration-200 hover:bg-brand_accent/[0.1]"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base font-semibold uppercase tracking-wide text-neutral-900">
+                  Linkly Cloud EFTPOS
+                </h3>
+                <SettingsOnOffBadge checked={linklyEnabled} variant="payment" />
+              </span>
+              <span className="mt-1 block text-base text-neutral-600">
+                Pair with a bank Cloud terminal or Virtual Pinpad using your
+                Linkly username, password, and pair code.
               </span>
             </span>
             <ChevronRight className="h-5 w-5 shrink-0 text-neutral-400" />
