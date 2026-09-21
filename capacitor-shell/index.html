@@ -159,12 +159,11 @@
   </main>
 
   <script>
-    // Keep in sync with isDev / APP_URL in capacitor.config.ts.
+    // Keep in sync with server.url in capacitor.config.ts.
     // This page is Capacitor server.errorPath — shown only when server.url fails.
-    const isDev = false;
-    const appUrl = isDev
-      ? "http://192.168.0.89:3001"
-      : "https://order.goeasy.menu";
+    const appUrl = "https://order.goeasy.menu";
+    // const appUrl = "http://192.168.0.98:3001";
+
     const messageEl = document.getElementById("message");
     const statusEl = document.getElementById("status");
     const retryButton = document.getElementById("retryButton");

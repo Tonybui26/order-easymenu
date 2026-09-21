@@ -1,14 +1,9 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 /**
- * Keep in sync with `isDev` / URLs in capacitor-shell/index.html.
- * Dev: LAN Next server. Prod: live Order Manager.
+ * Flip `server.url` for local Capacitor builds (comment one, uncomment the other).
+ * Keep the LAN IP in sync with capacitor-shell/index.html and allowNavigation.
  */
-const isDev = false;
-const APP_URL = isDev
-  ? "http://192.168.0.98:3001"
-  : "https://order.goeasy.menu";
-
 const config: CapacitorConfig = {
   appId: "order.goeasy.menu",
   appName: "EasyMenu OM",
@@ -17,11 +12,12 @@ const config: CapacitorConfig = {
   // (customer display, printers, immersive) working — unlike shell→location.replace.
   webDir: "capacitor-shell",
   server: {
-    url: APP_URL,
+    url: "https://order.goeasy.menu",
+    // url: "http://192.168.0.98:3001",
     // Local offline UI when server.url fails to load (no network / host down).
     errorPath: "index.html",
-    cleartext: true, // LAN HTTP in Capacitor dev
-    allowNavigation: ["order.goeasy.menu", "*.goeasy.menu", "192.168.0.89"],
+    cleartext: true, // needed for local HTTP (192.168.x.x) during Capacitor dev
+    allowNavigation: ["order.goeasy.menu", "*.goeasy.menu", "192.168.0.98"],
   },
   plugins: {
     SplashScreen: {
