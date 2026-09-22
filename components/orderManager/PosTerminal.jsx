@@ -77,6 +77,7 @@ import {
   isLinklyPosCardReady,
   resolvePosPaymentsConfig,
 } from "@/lib/pos/posPaymentsConfig";
+import { useLinklyInflightRecovery } from "@/components/orderManager/useLinklyInflightRecovery";
 import { buildTrainingKitchenOrder } from "@/lib/pos/buildTrainingKitchenOrder";
 import { clearPosTableMergeGroupsForTables } from "@/lib/pos/posTableMapMerge";
 import { formatPosItemDisplayName } from "@/lib/helper/printNameAlias";
@@ -359,6 +360,7 @@ export default function PosTerminal() {
   );
   const tyroCardEnabled = isTyroPosCardReady(menuConfig);
   const linklyCardEnabled = isLinklyPosCardReady(menuConfig);
+  useLinklyInflightRecovery(linklyCardEnabled);
   const isTrainingMode = Boolean(posConfig.trainingModeEnabled);
   const isPayFirstMode = Boolean(posConfig.payFirstModeEnabled);
   const useKitchenPrintAliases = Boolean(

@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { NextAuthOptions } from "@/lib/auth/nextAuthOptions";
 import { createTokenFromSession } from "@/lib/auth/tokenUtils";
-import { getMainAppUrl, readMainAppApiError } from "@/lib/api/mainAppServer";
+import { getMainAppUrl } from "@/lib/api/mainAppServer";
 
 /**
  * POST /api/linkly/refund
@@ -52,6 +52,9 @@ export async function POST(request) {
     if (body?.txnRef) {
       payload.txnRef = String(body.txnRef).trim().slice(0, 16);
     }
+    if (body?.sessionId) {
+      payload.sessionId = String(body.sessionId).trim();
+    }
 
     const response = await fetch(
       `${MAIN_APP_URL_API}/api/order-app/linkly/refund`,
@@ -67,9 +70,23 @@ export async function POST(request) {
     );
 
     if (!response.ok) {
-      const error = await readMainAppApiError(response);
+      const text = await response.text();
+      let data = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = {};
+      }
       return NextResponse.json(
-        { error: error || "Linkly refund failed" },
+        {
+          error:
+            data.error ||
+            data.message ||
+            `Linkly refund failed (${response.status})`,
+          sessionId: data.sessionId ?? payload.sessionId ?? null,
+          txnRef: data.txnRef ?? null,
+          resultUnknown: Boolean(data.resultUnknown) || response.status === 504,
+        },
         { status: response.status },
       );
     }

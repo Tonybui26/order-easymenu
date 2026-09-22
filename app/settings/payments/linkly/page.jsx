@@ -10,8 +10,8 @@
  * 4. Run a test purchase (token + sync txn on easymenu). VPP should prompt.
  *
  * REVIEW / next steps:
- * - Error recovery accreditation cases (power-fail / status poll)
  * - Persist Linkly txnRef/rfn on orders for matched refunds from live sales
+ * - Full power-fail print path after recovered approve
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -31,8 +31,13 @@ import {
   fetchGetMenuByOwnerEmail,
   pairLinklyTerminal,
   purchaseLinkly,
+  queryLinklyTransactionStatus,
   refundLinkly,
 } from "@/lib/api/fetchApi";
+import {
+  getLinklyInflightSession,
+  clearLinklyInflightSession,
+} from "@/lib/linkly/inflightSession";
 import {
   buildMenuConfigWithLinklyUnpair,
   isLinklyPosPaymentPaired,
@@ -115,6 +120,13 @@ export default function LinklyPaymentSettingsPage() {
   const [lastRefund, setLastRefund] = useState(null);
   const [refundError, setRefundError] = useState("");
 
+  // Mandatory error recovery (accreditation 3.1 / 4.1).
+  const [recoverySessionId, setRecoverySessionId] = useState("");
+  const [isRecovering, setIsRecovering] = useState(false);
+  const [lastRecovery, setLastRecovery] = useState(null);
+  const [recoveryError, setRecoveryError] = useState("");
+  const [deviceInflight, setDeviceInflight] = useState(null);
+
   const isPaired = isLinklyPosPaymentPaired(savedLinkly);
   const pairedAtLabel = formatPairedAt(savedLinkly.pairedAt);
 
@@ -124,6 +136,31 @@ export default function LinklyPaymentSettingsPage() {
     if (storedUsername) setUsername(storedUsername);
     setHasSeededUsername(true);
   }, [dataLoaded, hasSeededUsername, savedLinkly.username]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadInflight() {
+      const inflight = await getLinklyInflightSession();
+      if (cancelled) return;
+      setDeviceInflight(inflight);
+      if (inflight?.sessionId && !recoverySessionId) {
+        setRecoverySessionId(inflight.sessionId);
+      } else if (
+        !recoverySessionId &&
+        (savedLinkly.pendingSessionId || savedLinkly.lastSessionId)
+      ) {
+        setRecoverySessionId(
+          String(savedLinkly.pendingSessionId || savedLinkly.lastSessionId),
+        );
+      }
+    }
+    loadInflight();
+    return () => {
+      cancelled = true;
+    };
+    // Seed once when config / pair state is available.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataLoaded, isPaired, savedLinkly.pendingSessionId, savedLinkly.lastSessionId]);
 
   async function handlePair() {
     const usernameTrimmed = String(username ?? "").trim();
@@ -194,6 +231,11 @@ export default function LinklyPaymentSettingsPage() {
       setLastRefund(null);
       setRefundError("");
       setRefundRfn("");
+      setLastRecovery(null);
+      setRecoveryError("");
+      setRecoverySessionId("");
+      await clearLinklyInflightSession();
+      setDeviceInflight(null);
       toast.success("Linkly pairing cleared");
     } catch (error) {
       toast.error(error?.message || "Failed to unpair");
@@ -224,10 +266,18 @@ export default function LinklyPaymentSettingsPage() {
       const result = await purchaseLinkly({ amountCents });
 
       if (!result?.success) {
+        if (result?.sessionId) setRecoverySessionId(result.sessionId);
+        if (result?.resultUnknown) {
+          setDeviceInflight(await getLinklyInflightSession());
+        }
         throw new Error(result?.error || "Purchase failed");
       }
 
       setLastPurchase(result.transaction);
+      if (result.transaction?.sessionId) {
+        setRecoverySessionId(result.transaction.sessionId);
+      }
+      setDeviceInflight(null);
       // Prefill refund form from this purchase. VPP sandbox often has empty RFN —
       // use a placeholder so Test refund can still be run in development.
       if (result.transaction?.success) {
@@ -253,6 +303,9 @@ export default function LinklyPaymentSettingsPage() {
       const message = error?.message || "Purchase failed";
       setPurchaseError(message);
       toast.error(message);
+      const inflight = await getLinklyInflightSession();
+      setDeviceInflight(inflight);
+      if (inflight?.sessionId) setRecoverySessionId(inflight.sessionId);
     } finally {
       setIsPurchasing(false);
     }
@@ -288,10 +341,18 @@ export default function LinklyPaymentSettingsPage() {
       });
 
       if (!result?.success) {
+        if (result?.sessionId) setRecoverySessionId(result.sessionId);
+        if (result?.resultUnknown) {
+          setDeviceInflight(await getLinklyInflightSession());
+        }
         throw new Error(result?.error || "Refund failed");
       }
 
       setLastRefund(result.transaction);
+      if (result.transaction?.sessionId) {
+        setRecoverySessionId(result.transaction.sessionId);
+      }
+      setDeviceInflight(null);
       if (result.transaction?.success) {
         toast.success(
           `Refund approved · TxnRef ${result.transaction.txnRef || "—"}`,
@@ -306,9 +367,85 @@ export default function LinklyPaymentSettingsPage() {
       const message = error?.message || "Refund failed";
       setRefundError(message);
       toast.error(message);
+      const inflight = await getLinklyInflightSession();
+      setDeviceInflight(inflight);
+      if (inflight?.sessionId) setRecoverySessionId(inflight.sessionId);
     } finally {
       setIsRefunding(false);
     }
+  }
+
+  /**
+   * Accreditation 3.1 / 4.1 — GET session status or recover-last with optional backoff.
+   */
+  async function handleRecovery({ wait = false, recoverLast = false } = {}) {
+    if (!isPaired) {
+      toast.error("Pair the terminal before recovering a transaction");
+      return;
+    }
+
+    const sessionId = String(recoverySessionId ?? "").trim();
+    if (!recoverLast && !sessionId) {
+      toast.error("Enter a sessionId, or use Recover last");
+      return;
+    }
+
+    setIsRecovering(true);
+    setRecoveryError("");
+    setLastRecovery(null);
+
+    try {
+      const result = await queryLinklyTransactionStatus({
+        sessionId: recoverLast ? undefined : sessionId,
+        recoverLast,
+        wait,
+      });
+
+      if (!result?.success) {
+        throw new Error(result?.error || "Recovery failed");
+      }
+
+      setLastRecovery(result);
+      if (result.sessionId) setRecoverySessionId(result.sessionId);
+
+      if (result.status === "complete" || result.status === "not_found") {
+        setDeviceInflight(null);
+        await syncCatalogFromServer({ ownerEmail: userData?.ownerEmail });
+      } else {
+        setDeviceInflight(await getLinklyInflightSession());
+      }
+
+      if (result.status === "complete") {
+        if (result.transaction?.success) {
+          toast.success(
+            `Recovered approved · TxnRef ${result.transaction.txnRef || "—"}`,
+          );
+        } else {
+          toast.error(
+            result.transaction?.responseText?.trim() ||
+              "Recovered: not approved",
+          );
+        }
+      } else if (result.status === "not_found") {
+        toast.success("Not found — safe to retry with a new session");
+      } else if (result.status === "unknown" || result.status === "in_progress") {
+        toast.error(result.message || "Result still unknown — do not assume decline");
+      } else {
+        toast(result.message || `Status: ${result.status}`);
+      }
+    } catch (error) {
+      const message = error?.message || "Recovery failed";
+      setRecoveryError(message);
+      toast.error(message);
+    } finally {
+      setIsRecovering(false);
+    }
+  }
+
+  async function handleClearDeviceInflight() {
+    await clearLinklyInflightSession();
+    setDeviceInflight(null);
+    toast.success("Cleared device in-flight session");
   }
 
   return (
@@ -745,6 +882,182 @@ export default function LinklyPaymentSettingsPage() {
                         <dt className="text-neutral-500">SessionId</dt>
                         <dd className="break-all font-mono text-xs text-neutral-700">
                           {lastRefund.sessionId || "—"}
+                        </dd>
+                      </div>
+                    </dl>
+                  ) : null}
+                </div>
+              </section>
+
+              <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                <div className="border-b border-gray-100 px-6 py-3">
+                  <h2 className="text-sm font-semibold text-neutral-900">
+                    Error recovery
+                  </h2>
+                  <p className="mt-0.5 text-sm text-neutral-500">
+                    Mandatory accreditation cases (power-fail / connection
+                    loss): query{" "}
+                    <span className="font-mono text-xs">
+                      GET /sessions/&#123;sessionId&#125;/transaction
+                    </span>{" "}
+                    by sessionId, or recover the store&apos;s pending/last
+                    session when no TxnRef is known. Do not assume decline when
+                    status is unknown. POS also auto-recovers a device
+                    in-flight session on startup.
+                  </p>
+                </div>
+                <div className="space-y-4 px-6 py-4">
+                  {!isPaired ? (
+                    <p className="text-sm text-amber-800">
+                      Pair a terminal above before running recovery.
+                    </p>
+                  ) : null}
+
+                  <dl className="grid gap-2 rounded-md border border-gray-100 bg-gray-50 px-4 py-3 text-sm sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <dt className="text-neutral-500">Device in-flight</dt>
+                      <dd className="break-all font-mono text-xs text-neutral-800">
+                        {deviceInflight?.sessionId || "—"}
+                        {deviceInflight?.kind ? (
+                          <span className="ml-2 font-sans text-neutral-500">
+                            ({deviceInflight.kind})
+                          </span>
+                        ) : null}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-neutral-500">Store pending</dt>
+                      <dd className="break-all font-mono text-xs text-neutral-800">
+                        {savedLinkly.pendingSessionId || "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-neutral-500">Store last</dt>
+                      <dd className="break-all font-mono text-xs text-neutral-800">
+                        {savedLinkly.lastSessionId || "—"}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <label className="block text-sm">
+                    <span className="font-medium text-neutral-700">
+                      SessionId
+                    </span>
+                    <input
+                      type="text"
+                      autoComplete="off"
+                      value={recoverySessionId}
+                      onChange={(event) =>
+                        setRecoverySessionId(event.target.value)
+                      }
+                      disabled={isRecovering || !isPaired}
+                      placeholder="Paste sessionId from last purchase / power-fail"
+                      className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm text-neutral-900 disabled:cursor-not-allowed disabled:bg-neutral-50"
+                    />
+                  </label>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleRecovery({ wait: false })}
+                      disabled={
+                        isRecovering ||
+                        !isPaired ||
+                        !String(recoverySessionId).trim()
+                      }
+                      className="rounded-md border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Query status
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRecovery({ wait: true })}
+                      disabled={
+                        isRecovering ||
+                        !isPaired ||
+                        !String(recoverySessionId).trim()
+                      }
+                      className="rounded-md bg-brand_accent px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isRecovering
+                        ? "Recovering…"
+                        : "Recover (backoff ≤3 min)"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleRecovery({ wait: true, recoverLast: true })
+                      }
+                      disabled={isRecovering || !isPaired}
+                      className="rounded-md border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Recover last
+                    </button>
+                    {deviceInflight?.sessionId ? (
+                      <button
+                        type="button"
+                        onClick={handleClearDeviceInflight}
+                        disabled={isRecovering}
+                        className="rounded-md border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-600 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Clear device in-flight
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {recoveryError ? (
+                    <StatusValue variant="error">{recoveryError}</StatusValue>
+                  ) : null}
+
+                  {lastRecovery ? (
+                    <dl className="grid gap-2 rounded-md border border-gray-100 bg-gray-50 px-4 py-3 text-sm sm:grid-cols-2">
+                      <div>
+                        <dt className="text-neutral-500">Status</dt>
+                        <dd className="font-medium text-neutral-900">
+                          {lastRecovery.status || "—"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-neutral-500">Result</dt>
+                        <dd>
+                          {lastRecovery.status === "complete" ? (
+                            lastRecovery.transaction?.success ? (
+                              <StatusValue variant="success">
+                                Approved
+                              </StatusValue>
+                            ) : (
+                              <StatusValue variant="error">
+                                {lastRecovery.transaction?.responseText?.trim() ||
+                                  "Declined"}
+                              </StatusValue>
+                            )
+                          ) : lastRecovery.status === "not_found" ? (
+                            <StatusValue variant="success">
+                              Not found (safe retry)
+                            </StatusValue>
+                          ) : (
+                            <StatusValue variant="pending">
+                              {lastRecovery.message || lastRecovery.status}
+                            </StatusValue>
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-neutral-500">TxnRef</dt>
+                        <dd className="font-mono font-medium text-neutral-900">
+                          {lastRecovery.transaction?.txnRef || "—"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-neutral-500">HTTP</dt>
+                        <dd className="font-medium text-neutral-900">
+                          {lastRecovery.httpStatus ?? "—"}
+                        </dd>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <dt className="text-neutral-500">SessionId</dt>
+                        <dd className="break-all font-mono text-xs text-neutral-700">
+                          {lastRecovery.sessionId || "—"}
                         </dd>
                       </div>
                     </dl>
