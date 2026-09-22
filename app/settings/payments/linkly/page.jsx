@@ -11,7 +11,7 @@
  *
  * REVIEW / next steps:
  * - Error recovery accreditation cases (power-fail / status poll)
- * - Wire PosPaymentDrawer / complete sale when Linkly is the active partner
+ * - Persist Linkly txnRef/rfn on orders for matched refunds from live sales
  */
 
 import { useEffect, useMemo, useState } from "react";

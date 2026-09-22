@@ -14,6 +14,7 @@ import {
   isTyroPurchaseApproved,
   parseTyroSurchargeDollars,
 } from "@/lib/tyro/iclient";
+import { purchaseLinkly } from "@/lib/api/fetchApi";
 import SideDrawer from "./SideDrawer";
 
 const CASH_DISABLED_MESSAGE =
@@ -72,6 +73,9 @@ export default function PosPaymentDrawer({
   onTrainingDone,
   tyroCardEnabled = false,
   tyroConfig = null,
+  /** When true, Credit Card runs Linkly Cloud purchase then persists the sale. */
+  linklyCardEnabled = false,
+  linklyConfig = null,
   onOpenCashDrawer,
 }) {
   const { session } = usePosRegisterSession();
@@ -81,13 +85,21 @@ export default function PosPaymentDrawer({
   const [paymentSummary, setPaymentSummary] = useState(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isSalePersisted, setIsSalePersisted] = useState(false);
-  const [tyroApproved, setTyroApproved] = useState(false);
+  // True after integrated EFTPOS (Tyro or Linkly) approved — blocks closing mid-flow.
+  const [cardApproved, setCardApproved] = useState(false);
   const [isCashDisabledOpen, setIsCashDisabledOpen] = useState(false);
   const purchaseLockRef = useRef(false);
   const amountDueLabel = Number(amountDue || 0)
     .toFixed(2)
     .replace(/\.00$/, "");
   const useTyroCard = Boolean(tyroCardEnabled) && !trainingMode;
+  const useLinklyCard = Boolean(linklyCardEnabled) && !trainingMode;
+  // Prefer Linkly when both somehow enabled (config mutual-exclusion should prevent this).
+  const integratedCardPartner = useLinklyCard
+    ? "linkly"
+    : useTyroCard
+      ? "tyro"
+      : null;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -96,15 +108,15 @@ export default function PosPaymentDrawer({
     setPaymentSummary(null);
     setIsPurchasing(false);
     setIsSalePersisted(false);
-    setTyroApproved(false);
+    setCardApproved(false);
     setIsCashDisabledOpen(false);
     purchaseLockRef.current = false;
   }, [isOpen, amountDue]);
 
   useEffect(() => {
-    if (!isOpen || !useTyroCard) return;
+    if (!isOpen || integratedCardPartner !== "tyro") return;
     getTyroIClientWithUI().catch(() => {});
-  }, [isOpen, useTyroCard]);
+  }, [isOpen, integratedCardPartner]);
 
   function appendToken(token) {
     setDigits((prev) => {
@@ -195,7 +207,65 @@ export default function PosPaymentDrawer({
       };
       setPaymentSummary(summary);
       setStep("finalise");
-      setTyroApproved(true);
+      setCardApproved(true);
+
+      const persist = await onPersistSale?.(summary);
+      if (persist?.success) {
+        setIsSalePersisted(true);
+      }
+    } catch (error) {
+      toast.error(error?.message || "Card payment failed");
+    } finally {
+      purchaseLockRef.current = false;
+      setIsPurchasing(false);
+    }
+  }
+
+  /**
+   * Linkly Cloud sync purchase → mark paid via same complete-sale path as Tyro.
+   * REVIEW: txnRef / rfn not persisted on the order yet (same as Tyro today).
+   */
+  async function runLinklyCardPurchase(due) {
+    if (purchaseLockRef.current) return;
+    purchaseLockRef.current = true;
+    setIsPurchasing(true);
+
+    try {
+      const amountCents = Math.round(Number(due) * 100);
+      if (!Number.isFinite(amountCents) || amountCents <= 0) {
+        toast.error("Invalid amount for card payment");
+        return;
+      }
+
+      const result = await purchaseLinkly({ amountCents });
+      if (!result?.success) {
+        toast.error(result?.error || "Card payment failed");
+        return;
+      }
+      if (!result.transaction?.success) {
+        toast.error(
+          result.transaction?.responseText?.trim() ||
+            "Card payment declined or not approved",
+        );
+        return;
+      }
+
+      const summary = {
+        method: "credit-card",
+        amountDue: due,
+        amountTendered: due,
+        change: 0,
+        processingFee: 0,
+        linkly: {
+          txnRef: result.transaction.txnRef || null,
+          rrn: result.transaction.rrn || null,
+          rfn: result.transaction.rfn || null,
+          sessionId: result.transaction.sessionId || null,
+        },
+      };
+      setPaymentSummary(summary);
+      setStep("finalise");
+      setCardApproved(true);
 
       const persist = await onPersistSale?.(summary);
       if (persist?.success) {
@@ -221,13 +291,24 @@ export default function PosPaymentDrawer({
     const tendered = resolvedAmount();
     const change = Math.max(0, Math.round((tendered - due) * 100) / 100);
 
-    if (methodId === "credit-card" && Boolean(tyroConfig?.enabled) && !trainingMode) {
-      if (!useTyroCard) {
-        toast.error("Authorise the Tyro terminal in Settings first");
+    if (methodId === "credit-card" && !trainingMode) {
+      if (integratedCardPartner === "linkly") {
+        runLinklyCardPurchase(due);
         return;
       }
-      runTyroCardPurchase(due);
-      return;
+      if (Boolean(linklyConfig?.enabled)) {
+        toast.error("Pair the Linkly terminal in Settings first");
+        return;
+      }
+      if (integratedCardPartner === "tyro" || Boolean(tyroConfig?.enabled)) {
+        if (!useTyroCard) {
+          toast.error("Authorise the Tyro terminal in Settings first");
+          return;
+        }
+        runTyroCardPurchase(due);
+        return;
+      }
+      // No integrated partner — manual card (approve on terminal, then Complete Sale).
     }
 
     if (methodId === "cash") {
@@ -252,7 +333,7 @@ export default function PosPaymentDrawer({
   }
 
   function handleClose() {
-    if (isPurchasing || tyroApproved) return;
+    if (isPurchasing || cardApproved) return;
     setStep("tender");
     setPaymentSummary(null);
     onClose?.();
@@ -270,7 +351,7 @@ export default function PosPaymentDrawer({
       onClose={handleClose}
       showHeader={false}
       side="right"
-      closeDisabled={isPurchasing || tyroApproved}
+      closeDisabled={isPurchasing || cardApproved}
       panelClassName="bg-[#984B28]"
       bodyClassName=""
       contentKey="pos-payment-drawer"
@@ -291,7 +372,7 @@ export default function PosPaymentDrawer({
           onTrainingDone={onTrainingDone}
           showManualCardInstruction={
             paymentSummary.method === "credit-card" &&
-            !tyroApproved &&
+            !cardApproved &&
             !trainingMode
           }
         />

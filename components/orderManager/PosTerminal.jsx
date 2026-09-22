@@ -74,6 +74,7 @@ import { printTaxInvoiceReceipt } from "@/lib/printers/printTaxInvoiceReceipt";
 import { resolvePosConfig, getPosHomePath, isRestaurantModeEnabled } from "@/lib/pos/posConfig";
 import {
   isTyroPosCardReady,
+  isLinklyPosCardReady,
   resolvePosPaymentsConfig,
 } from "@/lib/pos/posPaymentsConfig";
 import { buildTrainingKitchenOrder } from "@/lib/pos/buildTrainingKitchenOrder";
@@ -352,7 +353,12 @@ export default function PosTerminal() {
     () => resolvePosPaymentsConfig(menuConfig).tyro,
     [menuConfig],
   );
+  const linklyPayments = useMemo(
+    () => resolvePosPaymentsConfig(menuConfig).linkly,
+    [menuConfig],
+  );
   const tyroCardEnabled = isTyroPosCardReady(menuConfig);
+  const linklyCardEnabled = isLinklyPosCardReady(menuConfig);
   const isTrainingMode = Boolean(posConfig.trainingModeEnabled);
   const isPayFirstMode = Boolean(posConfig.payFirstModeEnabled);
   const useKitchenPrintAliases = Boolean(
@@ -2095,6 +2101,8 @@ export default function PosTerminal() {
               onTrainingDone={handleTrainingPaymentDone}
               tyroCardEnabled={tyroCardEnabled}
               tyroConfig={tyroPayments}
+              linklyCardEnabled={linklyCardEnabled}
+              linklyConfig={linklyPayments}
               onOpenCashDrawer={handleOpenCashDrawer}
             />
 
