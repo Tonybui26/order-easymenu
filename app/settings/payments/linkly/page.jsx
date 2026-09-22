@@ -11,7 +11,7 @@
  *
  * REVIEW / next steps:
  * - Persist Linkly txnRef/rfn on orders for matched refunds from live sales
- * - Full power-fail print path after recovered approve
+ * - Host merchant pairing guide URL (1.4) + supply POS logo (1.5)
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -38,6 +38,16 @@ import {
   getLinklyInflightSession,
   clearLinklyInflightSession,
 } from "@/lib/linkly/inflightSession";
+import {
+  getLinklyLastTxnOutcome,
+  clearLinklyLastTxnOutcome,
+  setLinklyLastTxnOutcome,
+} from "@/lib/linkly/lastTxnOutcome";
+import {
+  classifyLinklyTxnOutcome,
+  linklyOutcomeMessage,
+} from "@/lib/linkly/txnOutcome";
+import { printLinklyTxnReceipt } from "@/lib/printers/printLinklyTxnReceipt";
 import {
   buildMenuConfigWithLinklyUnpair,
   isLinklyPosPaymentPaired,
@@ -92,6 +102,7 @@ export default function LinklyPaymentSettingsPage() {
     saveMenuConfigExplicit,
     syncCatalogFromServer,
     dataLoaded,
+    storeProfile,
   } = useMenuContext();
 
   const savedLinkly = useMemo(
@@ -126,6 +137,7 @@ export default function LinklyPaymentSettingsPage() {
   const [lastRecovery, setLastRecovery] = useState(null);
   const [recoveryError, setRecoveryError] = useState("");
   const [deviceInflight, setDeviceInflight] = useState(null);
+  const [lastPosOutcome, setLastPosOutcome] = useState(null);
 
   const isPaired = isLinklyPosPaymentPaired(savedLinkly);
   const pairedAtLabel = formatPairedAt(savedLinkly.pairedAt);
@@ -140,9 +152,13 @@ export default function LinklyPaymentSettingsPage() {
   useEffect(() => {
     let cancelled = false;
     async function loadInflight() {
-      const inflight = await getLinklyInflightSession();
+      const [inflight, outcome] = await Promise.all([
+        getLinklyInflightSession(),
+        getLinklyLastTxnOutcome(),
+      ]);
       if (cancelled) return;
       setDeviceInflight(inflight);
+      setLastPosOutcome(outcome);
       if (inflight?.sessionId && !recoverySessionId) {
         setRecoverySessionId(inflight.sessionId);
       } else if (
@@ -236,6 +252,8 @@ export default function LinklyPaymentSettingsPage() {
       setRecoverySessionId("");
       await clearLinklyInflightSession();
       setDeviceInflight(null);
+      await clearLinklyLastTxnOutcome();
+      setLastPosOutcome(null);
       toast.success("Linkly pairing cleared");
     } catch (error) {
       toast.error(error?.message || "Failed to unpair");
@@ -278,9 +296,25 @@ export default function LinklyPaymentSettingsPage() {
         setRecoverySessionId(result.transaction.sessionId);
       }
       setDeviceInflight(null);
-      // Prefill refund form from this purchase. VPP sandbox often has empty RFN —
-      // use a placeholder so Test refund can still be run in development.
-      if (result.transaction?.success) {
+
+      const txn = result.transaction || {};
+      const outcome = txn.outcome || classifyLinklyTxnOutcome(txn);
+      const markedFailed =
+        outcome === "declined" || outcome === "operator_timeout";
+      await setLinklyLastTxnOutcome({
+        sessionId: txn.sessionId,
+        txnRef: txn.txnRef,
+        outcome,
+        success: Boolean(txn.success),
+        responseCode: txn.responseCode,
+        responseText: txn.responseText,
+        amountCents: txn.amtPurchase || amountCents,
+        markedFailed,
+        source: "settings-purchase",
+      });
+      setLastPosOutcome(await getLinklyLastTxnOutcome());
+
+      if (outcome === "approved" || outcome === "approved_signature") {
         setRefundAmountDollars(
           (
             Number(result.transaction.amtPurchase || amountCents) / 100
@@ -290,14 +324,9 @@ export default function LinklyPaymentSettingsPage() {
         setRefundRfn(purchaseRfn || SANDBOX_REFUND_RFN_PLACEHOLDER);
         setLastRefund(null);
         setRefundError("");
-        toast.success(
-          `Approved · TxnRef ${result.transaction.txnRef || "—"}`,
-        );
+        toast.success(linklyOutcomeMessage(outcome, txn));
       } else {
-        toast.error(
-          result.transaction?.responseText?.trim() ||
-            "Purchase declined or not approved",
-        );
+        toast.error(linklyOutcomeMessage(outcome, txn));
       }
     } catch (error) {
       const message = error?.message || "Purchase failed";
@@ -415,18 +444,56 @@ export default function LinklyPaymentSettingsPage() {
         setDeviceInflight(await getLinklyInflightSession());
       }
 
-      if (result.status === "complete") {
-        if (result.transaction?.success) {
+      if (result.status === "complete" && result.transaction) {
+        const txn = result.transaction;
+        const outcome = txn.outcome || classifyLinklyTxnOutcome(txn);
+        const approved =
+          outcome === "approved" || outcome === "approved_signature";
+        await setLinklyLastTxnOutcome({
+          sessionId: txn.sessionId || result.sessionId,
+          txnRef: txn.txnRef,
+          outcome,
+          success: Boolean(txn.success),
+          responseCode: txn.responseCode,
+          responseText: txn.responseText,
+          amountCents: txn.amtPurchase || txn.requestedAmountCents,
+          markedFailed: !approved,
+          source: "settings-recovery",
+        });
+        setLastPosOutcome(await getLinklyLastTxnOutcome());
+
+        try {
+          await printLinklyTxnReceipt(txn, storeProfile || {}, {
+            documentTitle: approved
+              ? "CARD RECEIPT (RECOVERED)"
+              : "CARD RESULT (FAILED)",
+          });
+        } catch {
+          /* print optional in settings */
+        }
+
+        if (approved) {
           toast.success(
-            `Recovered approved · TxnRef ${result.transaction.txnRef || "—"}`,
+            `Recovered approved · TxnRef ${txn.txnRef || "—"}`,
           );
         } else {
           toast.error(
-            result.transaction?.responseText?.trim() ||
-              "Recovered: not approved",
+            `Marked failed · ${linklyOutcomeMessage(outcome, txn)}`,
           );
         }
       } else if (result.status === "not_found") {
+        await setLinklyLastTxnOutcome({
+          sessionId: result.sessionId,
+          txnRef: null,
+          outcome: "declined",
+          success: false,
+          responseCode: null,
+          responseText: "Not found",
+          amountCents: null,
+          markedFailed: true,
+          source: "settings-recovery",
+        });
+        setLastPosOutcome(await getLinklyLastTxnOutcome());
         toast.success("Not found — safe to retry with a new session");
       } else if (result.status === "unknown" || result.status === "in_progress") {
         toast.error(result.message || "Result still unknown — do not assume decline");
@@ -469,9 +536,11 @@ export default function LinklyPaymentSettingsPage() {
               Linkly Cloud EFTPOS
             </h1>
             <p className="mt-0.5 text-sm text-neutral-500">
-              Pair this store with a Linkly Cloud PIN pad or Virtual Pinpad, then
-              run sandbox purchase and matched refund tests. Wiring card pay on
-              live orders comes after refund + recovery.
+              Pair this store with a Linkly Cloud PIN pad or Virtual Pinpad
+              (synchronous Cloud REST). Sync mode does not support live receipt
+              events, display mirroring, or key-press cancel from the POS — the
+              terminal completes the card flow, then Order Manager reads the
+              final result (and recovers via session status if needed).
             </p>
           </div>
 
@@ -721,13 +790,37 @@ export default function LinklyPaymentSettingsPage() {
                       <div>
                         <dt className="text-neutral-500">Result</dt>
                         <dd>
-                          {lastPurchase.success ? (
-                            <StatusValue variant="success">Approved</StatusValue>
-                          ) : (
-                            <StatusValue variant="error">
-                              {lastPurchase.responseText?.trim() || "Declined"}
-                            </StatusValue>
-                          )}
+                          {(() => {
+                            const outcome =
+                              lastPurchase.outcome ||
+                              classifyLinklyTxnOutcome(lastPurchase);
+                            if (outcome === "approved") {
+                              return (
+                                <StatusValue variant="success">
+                                  Approved
+                                </StatusValue>
+                              );
+                            }
+                            if (outcome === "approved_signature") {
+                              return (
+                                <StatusValue variant="success">
+                                  Approved · signature (08)
+                                </StatusValue>
+                              );
+                            }
+                            if (outcome === "operator_timeout") {
+                              return (
+                                <StatusValue variant="error">
+                                  Operator timeout (TO)
+                                </StatusValue>
+                              );
+                            }
+                            return (
+                              <StatusValue variant="error">
+                                {lastPurchase.responseText?.trim() || "Declined"}
+                              </StatusValue>
+                            );
+                          })()}
                         </dd>
                       </div>
                       <div>
@@ -935,6 +1028,34 @@ export default function LinklyPaymentSettingsPage() {
                       <dt className="text-neutral-500">Store last</dt>
                       <dd className="break-all font-mono text-xs text-neutral-800">
                         {savedLinkly.lastSessionId || "—"}
+                      </dd>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <dt className="text-neutral-500">
+                        Last POS outcome (3.1.2)
+                      </dt>
+                      <dd className="text-sm text-neutral-900">
+                        {lastPosOutcome ? (
+                          <>
+                            <span
+                              className={
+                                lastPosOutcome.markedFailed
+                                  ? "font-semibold text-red-700"
+                                  : "font-semibold text-emerald-700"
+                              }
+                            >
+                              {lastPosOutcome.markedFailed
+                                ? "FAILED"
+                                : "OK"}{" "}
+                              · {lastPosOutcome.outcome}
+                            </span>
+                            <span className="ml-2 font-mono text-xs text-neutral-600">
+                              TxnRef {lastPosOutcome.txnRef || "—"}
+                            </span>
+                          </>
+                        ) : (
+                          "—"
+                        )}
                       </dd>
                     </div>
                   </dl>
