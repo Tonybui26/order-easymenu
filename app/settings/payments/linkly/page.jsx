@@ -10,7 +10,7 @@
  * 4. Run a test purchase (token + sync txn on easymenu). VPP should prompt.
  *
  * REVIEW / next steps:
- * - Matched refund (RFN) + accreditation error-recovery cases
+ * - Error recovery accreditation cases (power-fail / status poll)
  * - Wire PosPaymentDrawer / complete sale when Linkly is the active partner
  */
 
@@ -31,12 +31,16 @@ import {
   fetchGetMenuByOwnerEmail,
   pairLinklyTerminal,
   purchaseLinkly,
+  refundLinkly,
 } from "@/lib/api/fetchApi";
 import {
   buildMenuConfigWithLinklyUnpair,
   isLinklyPosPaymentPaired,
   resolvePosPaymentsConfig,
 } from "@/lib/pos/posPaymentsConfig";
+
+/** VPP sandbox often returns empty PAD/RFN; placeholder lets refund UI be exercised. */
+const SANDBOX_REFUND_RFN_PLACEHOLDER = "SANDBOX-RFN";
 
 function formatPairedAt(iso) {
   if (!iso) return null;
@@ -99,11 +103,17 @@ export default function LinklyPaymentSettingsPage() {
   const [pairMessage, setPairMessage] = useState("");
   const [hasSeededUsername, setHasSeededUsername] = useState(false);
 
-  // Sandbox purchase test (does not mark an order paid).
+  // Sandbox purchase / refund tests (do not update live orders).
   const [purchaseAmountDollars, setPurchaseAmountDollars] = useState("1.00");
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [lastPurchase, setLastPurchase] = useState(null);
   const [purchaseError, setPurchaseError] = useState("");
+
+  const [refundAmountDollars, setRefundAmountDollars] = useState("1.00");
+  const [refundRfn, setRefundRfn] = useState("");
+  const [isRefunding, setIsRefunding] = useState(false);
+  const [lastRefund, setLastRefund] = useState(null);
+  const [refundError, setRefundError] = useState("");
 
   const isPaired = isLinklyPosPaymentPaired(savedLinkly);
   const pairedAtLabel = formatPairedAt(savedLinkly.pairedAt);
@@ -181,6 +191,9 @@ export default function LinklyPaymentSettingsPage() {
       setPairMessage("");
       setLastPurchase(null);
       setPurchaseError("");
+      setLastRefund(null);
+      setRefundError("");
+      setRefundRfn("");
       toast.success("Linkly pairing cleared");
     } catch (error) {
       toast.error(error?.message || "Failed to unpair");
@@ -215,7 +228,18 @@ export default function LinklyPaymentSettingsPage() {
       }
 
       setLastPurchase(result.transaction);
+      // Prefill refund form from this purchase. VPP sandbox often has empty RFN —
+      // use a placeholder so Test refund can still be run in development.
       if (result.transaction?.success) {
+        setRefundAmountDollars(
+          (
+            Number(result.transaction.amtPurchase || amountCents) / 100
+          ).toFixed(2),
+        );
+        const purchaseRfn = String(result.transaction.rfn || "").trim();
+        setRefundRfn(purchaseRfn || SANDBOX_REFUND_RFN_PLACEHOLDER);
+        setLastRefund(null);
+        setRefundError("");
         toast.success(
           `Approved · TxnRef ${result.transaction.txnRef || "—"}`,
         );
@@ -231,6 +255,59 @@ export default function LinklyPaymentSettingsPage() {
       toast.error(message);
     } finally {
       setIsPurchasing(false);
+    }
+  }
+
+  async function handleTestRefund() {
+    if (!isPaired) {
+      toast.error("Pair the terminal before running a refund");
+      return;
+    }
+
+    const dollars = Number(String(refundAmountDollars).replace(/[^0-9.]/g, ""));
+    const amountCents = Math.round(dollars * 100);
+    const rfnTrimmed = String(refundRfn ?? "").trim();
+
+    if (!Number.isFinite(amountCents) || amountCents <= 0) {
+      toast.error("Enter a valid refund amount (e.g. 1.00)");
+      return;
+    }
+    if (!rfnTrimmed) {
+      toast.error("RFN is required for a matched refund");
+      return;
+    }
+
+    setIsRefunding(true);
+    setRefundError("");
+    setLastRefund(null);
+
+    try {
+      const result = await refundLinkly({
+        amountCents,
+        rfn: rfnTrimmed,
+      });
+
+      if (!result?.success) {
+        throw new Error(result?.error || "Refund failed");
+      }
+
+      setLastRefund(result.transaction);
+      if (result.transaction?.success) {
+        toast.success(
+          `Refund approved · TxnRef ${result.transaction.txnRef || "—"}`,
+        );
+      } else {
+        toast.error(
+          result.transaction?.responseText?.trim() ||
+            "Refund declined or not approved",
+        );
+      }
+    } catch (error) {
+      const message = error?.message || "Refund failed";
+      setRefundError(message);
+      toast.error(message);
+    } finally {
+      setIsRefunding(false);
     }
   }
 
@@ -256,8 +333,8 @@ export default function LinklyPaymentSettingsPage() {
             </h1>
             <p className="mt-0.5 text-sm text-neutral-500">
               Pair this store with a Linkly Cloud PIN pad or Virtual Pinpad, then
-              run a sandbox test purchase. Wiring card pay on live orders comes
-              after refund + recovery.
+              run sandbox purchase and matched refund tests. Wiring card pay on
+              live orders comes after refund + recovery.
             </p>
           </div>
 
@@ -545,6 +622,129 @@ export default function LinklyPaymentSettingsPage() {
                         <dt className="text-neutral-500">SessionId</dt>
                         <dd className="break-all font-mono text-xs text-neutral-700">
                           {lastPurchase.sessionId || "—"}
+                        </dd>
+                      </div>
+                    </dl>
+                  ) : null}
+                </div>
+              </section>
+
+              <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                <div className="border-b border-gray-100 px-6 py-3">
+                  <h2 className="text-sm font-semibold text-neutral-900">
+                    Test refund
+                  </h2>
+                  <p className="mt-0.5 text-sm text-neutral-500">
+                    Matched refund (`TxnType` R) using RFN from the original
+                    purchase. VPP sandbox often returns empty
+                    purchaseAnalysisData — if RFN is blank after purchase, ask
+                    Linkly or paste an RFN when you have one. Does not change
+                    order payment state.
+                  </p>
+                </div>
+                <div className="space-y-4 px-6 py-4">
+                  {!isPaired ? (
+                    <p className="text-sm text-amber-800">
+                      Pair a terminal above before running a refund.
+                    </p>
+                  ) : null}
+
+                  {lastPurchase?.success && !lastPurchase.rfn ? (
+                    <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                      Last purchase had no RFN (common on VPP sandbox). Prefilled
+                      with <span className="font-mono">{SANDBOX_REFUND_RFN_PLACEHOLDER}</span>{" "}
+                      for development only — replace with a real RFN when the
+                      terminal returns one.
+                    </p>
+                  ) : null}
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="block text-sm">
+                      <span className="font-medium text-neutral-700">
+                        Amount (AUD)
+                      </span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={refundAmountDollars}
+                        onChange={(event) =>
+                          setRefundAmountDollars(event.target.value)
+                        }
+                        disabled={isRefunding || !isPaired}
+                        className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-neutral-900 disabled:cursor-not-allowed disabled:bg-neutral-50"
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      <span className="font-medium text-neutral-700">
+                        RFN (from purchase)
+                      </span>
+                      <input
+                        type="text"
+                        autoComplete="off"
+                        value={refundRfn}
+                        onChange={(event) => setRefundRfn(event.target.value)}
+                        disabled={isRefunding || !isPaired}
+                        placeholder={`e.g. ${SANDBOX_REFUND_RFN_PLACEHOLDER}`}
+                        className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm text-neutral-900 disabled:cursor-not-allowed disabled:bg-neutral-50"
+                      />
+                    </label>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleTestRefund}
+                    disabled={
+                      isRefunding ||
+                      isPurchasing ||
+                      !isPaired ||
+                      isPairing ||
+                      !String(refundRfn).trim()
+                    }
+                    className="rounded-md bg-brand_accent px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isRefunding ? "Refunding on terminal…" : "Run refund"}
+                  </button>
+
+                  {refundError ? (
+                    <StatusValue variant="error">{refundError}</StatusValue>
+                  ) : null}
+
+                  {lastRefund ? (
+                    <dl className="grid gap-2 rounded-md border border-gray-100 bg-gray-50 px-4 py-3 text-sm sm:grid-cols-2">
+                      <div>
+                        <dt className="text-neutral-500">Result</dt>
+                        <dd>
+                          {lastRefund.success ? (
+                            <StatusValue variant="success">Approved</StatusValue>
+                          ) : (
+                            <StatusValue variant="error">
+                              {lastRefund.responseText?.trim() || "Declined"}
+                            </StatusValue>
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-neutral-500">TxnRef</dt>
+                        <dd className="font-mono font-medium text-neutral-900">
+                          {lastRefund.txnRef || "—"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-neutral-500">Amount (cents)</dt>
+                        <dd className="font-medium text-neutral-900">
+                          {lastRefund.amtPurchase}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-neutral-500">TxnType</dt>
+                        <dd className="font-medium text-neutral-900">
+                          {lastRefund.txnType || "R"}
+                        </dd>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <dt className="text-neutral-500">SessionId</dt>
+                        <dd className="break-all font-mono text-xs text-neutral-700">
+                          {lastRefund.sessionId || "—"}
                         </dd>
                       </div>
                     </dl>
