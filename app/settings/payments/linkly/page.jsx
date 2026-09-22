@@ -1,18 +1,17 @@
 "use client";
 
 /**
- * Linkly Cloud terminal pairing settings (Phase 2 — pairing only).
+ * Linkly Cloud terminal settings — pairing + sandbox purchase test.
  *
  * Flow (sandbox accreditation):
  * 1. Enable Linkly for the store in easymenu Admin → POS → Payments.
- * 2. On Windows VPP: FUNC → 8880 → Enter → copy pair code.
- * 3. Enter Cloud username + password (from Linkly support) + pair code here.
- * 4. easymenu POSTs to Linkly Cloud pairing; stores `secret` on menu.config.
+ * 2. On Windows VPP: enable Cloud (FUNC 7410…) then FUNC → 8880 → pair code.
+ * 3. Pair here with Cloud username + password + pair code.
+ * 4. Run a test purchase (token + sync txn on easymenu). VPP should prompt.
  *
- * REVIEW / next steps (not in this page yet):
- * - Token exchange + purchase/refund APIs
- * - Mark order paid from PosPaymentDrawer when Linkly is the active partner
- * - Accreditation spreadsheet runs after purchase path exists
+ * REVIEW / next steps:
+ * - Matched refund (RFN) + accreditation error-recovery cases
+ * - Wire PosPaymentDrawer / complete sale when Linkly is the active partner
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -31,6 +30,7 @@ import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import {
   fetchGetMenuByOwnerEmail,
   pairLinklyTerminal,
+  purchaseLinkly,
 } from "@/lib/api/fetchApi";
 import {
   buildMenuConfigWithLinklyUnpair,
@@ -98,6 +98,12 @@ export default function LinklyPaymentSettingsPage() {
   const [pairStatus, setPairStatus] = useState("");
   const [pairMessage, setPairMessage] = useState("");
   const [hasSeededUsername, setHasSeededUsername] = useState(false);
+
+  // Sandbox purchase test (does not mark an order paid).
+  const [purchaseAmountDollars, setPurchaseAmountDollars] = useState("1.00");
+  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [lastPurchase, setLastPurchase] = useState(null);
+  const [purchaseError, setPurchaseError] = useState("");
 
   const isPaired = isLinklyPosPaymentPaired(savedLinkly);
   const pairedAtLabel = formatPairedAt(savedLinkly.pairedAt);
@@ -173,11 +179,58 @@ export default function LinklyPaymentSettingsPage() {
 
       setPairStatus("");
       setPairMessage("");
+      setLastPurchase(null);
+      setPurchaseError("");
       toast.success("Linkly pairing cleared");
     } catch (error) {
       toast.error(error?.message || "Failed to unpair");
     } finally {
       setIsUnpairing(false);
+    }
+  }
+
+  async function handleTestPurchase() {
+    if (!isPaired) {
+      toast.error("Pair the terminal before running a purchase");
+      return;
+    }
+
+    const dollars = Number(String(purchaseAmountDollars).replace(/[^0-9.]/g, ""));
+    const amountCents = Math.round(dollars * 100);
+    if (!Number.isFinite(amountCents) || amountCents <= 0) {
+      toast.error("Enter a valid amount (e.g. 1.00)");
+      return;
+    }
+
+    setIsPurchasing(true);
+    setPurchaseError("");
+    setLastPurchase(null);
+
+    try {
+      // easymenu: secret → token → sync purchase; VPP should show the txn.
+      const result = await purchaseLinkly({ amountCents });
+
+      if (!result?.success) {
+        throw new Error(result?.error || "Purchase failed");
+      }
+
+      setLastPurchase(result.transaction);
+      if (result.transaction?.success) {
+        toast.success(
+          `Approved · TxnRef ${result.transaction.txnRef || "—"}`,
+        );
+      } else {
+        toast.error(
+          result.transaction?.responseText?.trim() ||
+            "Purchase declined or not approved",
+        );
+      }
+    } catch (error) {
+      const message = error?.message || "Purchase failed";
+      setPurchaseError(message);
+      toast.error(message);
+    } finally {
+      setIsPurchasing(false);
     }
   }
 
@@ -202,8 +255,9 @@ export default function LinklyPaymentSettingsPage() {
               Linkly Cloud EFTPOS
             </h1>
             <p className="mt-0.5 text-sm text-neutral-500">
-              Pair this store with a Linkly Cloud PIN pad or Virtual Pinpad.
-              Purchase and refund come in the next integration step.
+              Pair this store with a Linkly Cloud PIN pad or Virtual Pinpad, then
+              run a sandbox test purchase. Wiring card pay on live orders comes
+              after refund + recovery.
             </p>
           </div>
 
@@ -395,6 +449,105 @@ export default function LinklyPaymentSettingsPage() {
                         </p>
                       )}
                     </div>
+                  ) : null}
+                </div>
+              </section>
+
+              <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                <div className="border-b border-gray-100 px-6 py-3">
+                  <h2 className="text-sm font-semibold text-neutral-900">
+                    Test purchase
+                  </h2>
+                  <p className="mt-0.5 text-sm text-neutral-500">
+                    Runs token + sync purchase on easymenu against the paired
+                    VPP. Does not mark an order paid — for sandbox / accreditation
+                    only. Record the TxnRef from the result in your test sheet.
+                    Stay on this screen while the VPP prompts for the card; a
+                    long wait is normal and should no longer show Connection lost.
+                  </p>
+                </div>
+                <div className="space-y-4 px-6 py-4">
+                  {!isPaired ? (
+                    <p className="text-sm text-amber-800">
+                      Pair a terminal above before running a purchase.
+                    </p>
+                  ) : null}
+
+                  <label className="block max-w-xs text-sm">
+                    <span className="font-medium text-neutral-700">
+                      Amount (AUD)
+                    </span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={purchaseAmountDollars}
+                      onChange={(event) =>
+                        setPurchaseAmountDollars(event.target.value)
+                      }
+                      disabled={isPurchasing || !isPaired}
+                      className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-neutral-900 disabled:cursor-not-allowed disabled:bg-neutral-50"
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={handleTestPurchase}
+                    disabled={isPurchasing || !isPaired || isPairing}
+                    className="rounded-md bg-brand_accent px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isPurchasing ? "Purchasing on terminal…" : "Run purchase"}
+                  </button>
+
+                  {purchaseError ? (
+                    <StatusValue variant="error">{purchaseError}</StatusValue>
+                  ) : null}
+
+                  {lastPurchase ? (
+                    <dl className="grid gap-2 rounded-md border border-gray-100 bg-gray-50 px-4 py-3 text-sm sm:grid-cols-2">
+                      <div>
+                        <dt className="text-neutral-500">Result</dt>
+                        <dd>
+                          {lastPurchase.success ? (
+                            <StatusValue variant="success">Approved</StatusValue>
+                          ) : (
+                            <StatusValue variant="error">
+                              {lastPurchase.responseText?.trim() || "Declined"}
+                            </StatusValue>
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-neutral-500">TxnRef</dt>
+                        <dd className="font-mono font-medium text-neutral-900">
+                          {lastPurchase.txnRef || "—"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-neutral-500">Amount (cents)</dt>
+                        <dd className="font-medium text-neutral-900">
+                          {lastPurchase.amtPurchase}
+                          {lastPurchase.requestedAmountCents != null &&
+                          lastPurchase.requestedAmountCents !==
+                            lastPurchase.amtPurchase ? (
+                            <span className="ml-1 text-xs text-neutral-500">
+                              (requested {lastPurchase.requestedAmountCents})
+                            </span>
+                          ) : null}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-neutral-500">RRN / RFN</dt>
+                        <dd className="font-mono text-xs text-neutral-900">
+                          {lastPurchase.rrn || "—"} / {lastPurchase.rfn || "—"}
+                        </dd>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <dt className="text-neutral-500">SessionId</dt>
+                        <dd className="break-all font-mono text-xs text-neutral-700">
+                          {lastPurchase.sessionId || "—"}
+                        </dd>
+                      </div>
+                    </dl>
                   ) : null}
                 </div>
               </section>
