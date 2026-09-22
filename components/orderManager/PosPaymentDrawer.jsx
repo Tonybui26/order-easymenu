@@ -310,7 +310,13 @@ export default function PosPaymentDrawer({
           markedFailed: true,
           source: "pos-purchase",
         });
-        toast.error(linklyOutcomeMessage(outcome, txn), { duration: 7000 });
+        setPendingLinklyTxn(txn);
+        setPendingLinklyDue(due);
+        setStep("timeout");
+        // Accreditation 2.1.3 — leave sale incomplete; print result slip with TxnRef.
+        printLinklyTxnReceipt(txn, storeProfile || {}, {
+          documentTitle: "CARD RESULT (TIMEOUT)",
+        }).catch(() => {});
         return;
       }
 
@@ -319,7 +325,12 @@ export default function PosPaymentDrawer({
           markedFailed: true,
           source: "pos-purchase",
         });
-        toast.error(linklyOutcomeMessage(outcome, txn));
+        setPendingLinklyTxn(txn);
+        setPendingLinklyDue(due);
+        setStep("declined");
+        printLinklyTxnReceipt(txn, storeProfile || {}, {
+          documentTitle: "CARD RESULT (FAILED)",
+        }).catch(() => {});
         return;
       }
 
@@ -375,6 +386,12 @@ export default function PosPaymentDrawer({
     setPendingLinklyDue(0);
     setStep("tender");
     toast.error("Signature rejected — sale not completed");
+  }
+
+  function handleLinklyFailedDismiss() {
+    setPendingLinklyTxn(null);
+    setPendingLinklyDue(0);
+    setStep("tender");
   }
 
   function handleSelectPayment(methodId) {
@@ -444,6 +461,8 @@ export default function PosPaymentDrawer({
       ? formatTenderDisplay(digits)
       : formatTenderDisplay(amountDueLabel);
 
+  const isFailedResultStep = step === "timeout" || step === "declined";
+
   return (
     <>
     <SideDrawer
@@ -451,7 +470,9 @@ export default function PosPaymentDrawer({
       onClose={handleClose}
       showHeader={false}
       side="right"
-      closeDisabled={isPurchasing || cardApproved || step === "signature"}
+      closeDisabled={
+        isPurchasing || cardApproved || step === "signature"
+      }
       panelClassName="bg-[#984B28]"
       bodyClassName=""
       contentKey="pos-payment-drawer"
@@ -460,7 +481,11 @@ export default function PosPaymentDrawer({
           ? "Finalise Sale"
           : step === "signature"
             ? "Signature verification"
-            : "Amount Tendered"
+            : step === "timeout"
+              ? "Operator timeout"
+              : step === "declined"
+                ? "Card declined"
+                : "Amount Tendered"
       }
     >
       {step === "signature" && pendingLinklyTxn ? (
@@ -514,6 +539,53 @@ export default function PosPaymentDrawer({
               Reject — cancel sale
             </button>
           </div>
+        </div>
+      ) : isFailedResultStep && pendingLinklyTxn ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 text-white">
+          <p className="mb-2 text-center text-xl font-semibold">
+            {step === "timeout" ? "Operator timeout" : "Card not approved"}
+          </p>
+          <p className="mb-4 text-center text-sm text-white/90">
+            {step === "timeout"
+              ? "TO — Operator TimeOut. Sale is incomplete — do not mark as paid."
+              : "Card payment failed. Sale is incomplete — do not mark as paid."}
+          </p>
+          <dl className="mb-6 space-y-2 rounded-lg bg-white/10 px-4 py-3 text-sm">
+            <div className="flex justify-between gap-2">
+              <dt className="text-white/70">ResponseCode</dt>
+              <dd className="font-mono font-semibold">
+                {pendingLinklyTxn.responseCode ||
+                  (step === "timeout" ? "TO" : "—")}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-white/70">TxnRef</dt>
+              <dd className="font-mono text-xs">
+                {pendingLinklyTxn.txnRef || "—"}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-white/70">Message</dt>
+              <dd className="text-right text-xs">
+                {linklyOutcomeMessage(
+                  pendingLinklyTxn.outcome ||
+                    (step === "timeout" ? "operator_timeout" : "declined"),
+                  pendingLinklyTxn,
+                )}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-white/70">POS status</dt>
+              <dd className="font-semibold text-red-200">FAILED</dd>
+            </div>
+          </dl>
+          <button
+            type="button"
+            onClick={handleLinklyFailedDismiss}
+            className="mt-auto w-full rounded-lg bg-white py-3.5 text-base font-bold text-[#984B28]"
+          >
+            OK — retry card or choose another method
+          </button>
         </div>
       ) : step === "finalise" && paymentSummary ? (
         <FinaliseSaleStep

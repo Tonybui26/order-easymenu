@@ -4,31 +4,44 @@ import { useEffect, useRef } from "react";
 import toast from "react-hot-toast";
 import { queryLinklyTransactionStatus } from "@/lib/api/fetchApi";
 import { getLinklyInflightSession } from "@/lib/linkly/inflightSession";
-import { setLinklyLastTxnOutcome } from "@/lib/linkly/lastTxnOutcome";
+import {
+  getLinklyLastTxnOutcome,
+  setLinklyLastTxnOutcome,
+} from "@/lib/linkly/lastTxnOutcome";
 import {
   classifyLinklyTxnOutcome,
   linklyOutcomeMessage,
 } from "@/lib/linkly/txnOutcome";
 import { printLinklyTxnReceipt } from "@/lib/printers/printLinklyTxnReceipt";
 import { useMenuContext } from "@/components/context/MenuContext";
+import { resolvePosPaymentsConfig } from "@/lib/pos/posPaymentsConfig";
 
 /**
- * On POS mount: if a Linkly session was left in-flight (power-fail / kill app
- * mid-purchase), poll GET transaction status with backoff, print a result
- * receipt (4.1.3), and mark failed outcomes in POS state (3.1.2).
+ * On POS mount: recover interrupted Linkly sessions (device inflight or store
+ * pending), print a TxnRef result slip (4.1.3), and mark failed outcomes in
+ * POS state (3.1.2).
  *
- * Does not auto-complete a sale — staff must re-take payment or apply a
- * recovered approval manually until order-level txn persistence lands.
+ * @param {boolean} enabled
+ * @param {{ onOutcomeChange?: (outcome: object|null) => void }} [options]
  */
-export function useLinklyInflightRecovery(enabled) {
+export function useLinklyInflightRecovery(enabled, options = {}) {
   const ranRef = useRef(false);
-  const { storeProfile } = useMenuContext();
+  const onOutcomeChangeRef = useRef(options.onOutcomeChange);
+  onOutcomeChangeRef.current = options.onOutcomeChange;
+  const { storeProfile, menuConfig } = useMenuContext();
 
   useEffect(() => {
     if (!enabled || ranRef.current) return;
     ranRef.current = true;
 
     let cancelled = false;
+
+    async function publishOutcome(record) {
+      if (cancelled) return;
+      onOutcomeChangeRef.current?.(
+        record || (await getLinklyLastTxnOutcome()),
+      );
+    }
 
     async function recordAndPrint(txn, { markedFailed, source }) {
       const outcome = txn.outcome || classifyLinklyTxnOutcome(txn);
@@ -44,6 +57,7 @@ export function useLinklyInflightRecovery(enabled) {
         markedFailed,
         source,
       });
+      await publishOutcome();
 
       try {
         const printResult = await printLinklyTxnReceipt(
@@ -55,7 +69,12 @@ export function useLinklyInflightRecovery(enabled) {
               : "CARD RECEIPT (RECOVERED)",
           },
         );
-        if (!printResult?.success) {
+        if (printResult?.success) {
+          toast.success(
+            `Printed card result · TxnRef ${txn.txnRef || printResult.txnRef || "—"}`,
+            { duration: 5000 },
+          );
+        } else {
           toast.error(
             printResult?.message ||
               "Could not print recovered card receipt — check receipt printer",
@@ -70,19 +89,7 @@ export function useLinklyInflightRecovery(enabled) {
       }
     }
 
-    async function run() {
-      const inflight = await getLinklyInflightSession();
-      if (!inflight?.sessionId || cancelled) return;
-
-      toast("Recovering interrupted Linkly payment…", { duration: 4000 });
-
-      const result = await queryLinklyTransactionStatus({
-        sessionId: inflight.sessionId,
-        wait: true,
-      });
-
-      if (cancelled) return;
-
+    async function handleStatusResult(result, fallbackSessionId) {
       if (!result?.success) {
         toast.error(result?.error || "Linkly recovery failed");
         return;
@@ -107,7 +114,7 @@ export function useLinklyInflightRecovery(enabled) {
           );
         } else {
           toast.error(
-            `Recovered as failed · ${linklyOutcomeMessage(outcome, txn)}`,
+            `Marked failed · ${linklyOutcomeMessage(outcome, txn)}`,
             { duration: 8000 },
           );
         }
@@ -116,16 +123,17 @@ export function useLinklyInflightRecovery(enabled) {
 
       if (result.status === "not_found") {
         await setLinklyLastTxnOutcome({
-          sessionId: inflight.sessionId,
+          sessionId: result.sessionId || fallbackSessionId || null,
           txnRef: null,
           outcome: "declined",
           success: false,
           responseCode: null,
           responseText: "Interrupted session not found",
-          amountCents: inflight.amountCents,
+          amountCents: null,
           markedFailed: true,
           source: "pos-startup-recovery",
         });
+        await publishOutcome();
         toast("Interrupted Linkly session not found — safe to retry card", {
           duration: 6000,
         });
@@ -139,6 +147,41 @@ export function useLinklyInflightRecovery(enabled) {
       );
     }
 
+    async function run() {
+      // Seed banner from any prior failed outcome (3.1.2).
+      const existing = await getLinklyLastTxnOutcome();
+      if (!cancelled && existing?.markedFailed) {
+        onOutcomeChangeRef.current?.(existing);
+      }
+
+      const inflight = await getLinklyInflightSession();
+      const linkly = resolvePosPaymentsConfig(menuConfig).linkly;
+      const pendingSessionId = String(linkly?.pendingSessionId || "").trim();
+
+      let sessionId = inflight?.sessionId || "";
+      let recoverLast = false;
+
+      if (!sessionId && pendingSessionId) {
+        // Device lost inflight prefs but store still has pending (power-fail).
+        sessionId = pendingSessionId;
+        recoverLast = true;
+      }
+
+      if (!sessionId && !recoverLast) return;
+      if (cancelled) return;
+
+      toast("Recovering interrupted Linkly payment…", { duration: 4000 });
+
+      const result = await queryLinklyTransactionStatus(
+        recoverLast && !inflight?.sessionId
+          ? { recoverLast: true, wait: true }
+          : { sessionId, wait: true },
+      );
+
+      if (cancelled) return;
+      await handleStatusResult(result, sessionId || pendingSessionId);
+    }
+
     run().catch((error) => {
       console.error("useLinklyInflightRecovery:", error);
     });
@@ -146,5 +189,5 @@ export function useLinklyInflightRecovery(enabled) {
     return () => {
       cancelled = true;
     };
-  }, [enabled, storeProfile]);
+  }, [enabled, storeProfile, menuConfig]);
 }

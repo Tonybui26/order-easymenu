@@ -743,10 +743,10 @@ export default function LinklyPaymentSettingsPage() {
                   </h2>
                   <p className="mt-0.5 text-sm text-neutral-500">
                     Runs token + sync purchase on easymenu against the paired
-                    VPP. Does not mark an order paid — for sandbox / accreditation
-                    only. Record the TxnRef from the result in your test sheet.
-                    Stay on this screen while the VPP prompts for the card; a
-                    long wait is normal and should no longer show Connection lost.
+                    VPP. Does not mark an order paid — for sandbox /
+                    accreditation only. Use $10.00 and leave incomplete for
+                    60–90s to test operator timeout (TO). Stay on this screen
+                    while the VPP prompts; a long wait is normal.
                   </p>
                 </div>
                 <div className="space-y-4 px-6 py-4">
@@ -988,15 +988,11 @@ export default function LinklyPaymentSettingsPage() {
                     Error recovery
                   </h2>
                   <p className="mt-0.5 text-sm text-neutral-500">
-                    Mandatory accreditation cases (power-fail / connection
-                    loss): query{" "}
-                    <span className="font-mono text-xs">
-                      GET /sessions/&#123;sessionId&#125;/transaction
-                    </span>{" "}
-                    by sessionId, or recover the store&apos;s pending/last
-                    session when no TxnRef is known. Do not assume decline when
-                    status is unknown. POS also auto-recovers a device
-                    in-flight session on startup.
+                    Run a purchase for $10.00 and leave the VPP incomplete for
+                    60–90s to capture operator timeout (TO / 2.1.3). Power-fail:
+                    kill the app mid-purchase, reopen POS — auto-recover prints
+                    a TxnRef slip (4.1.3) and marks FAILED on the POS banner
+                    (3.1.2). Or use Recover last below after a failed sale.
                   </p>
                 </div>
                 <div className="space-y-4 px-6 py-4">
