@@ -10,7 +10,8 @@ import { getMainAppUrl } from "@/lib/api/mainAppServer";
  * Same pattern as purchase: Route Handler proxy so long VPP waits do not
  * block order-polling server actions.
  *
- * Body: { amountCents: number, rfn: string, txnRef?: string }
+ * Body: { amountCents: number, rfn?: string, txnRef?: string, sessionId?: string }
+ * RFN optional — unmatched refund (Linkly: matched RFN not required).
  */
 export const maxDuration = 300;
 
@@ -37,18 +38,9 @@ export async function POST(request) {
       );
     }
 
-    if (!rfn) {
-      return NextResponse.json(
-        {
-          error:
-            "RFN from the original purchase is required for a matched refund",
-        },
-        { status: 400 },
-      );
-    }
-
     const jwtToken = createTokenFromSession(session);
-    const payload = { amountCents, rfn };
+    const payload = { amountCents };
+    if (rfn) payload.rfn = rfn;
     if (body?.txnRef) {
       payload.txnRef = String(body.txnRef).trim().slice(0, 16);
     }

@@ -54,8 +54,8 @@ import {
   resolvePosPaymentsConfig,
 } from "@/lib/pos/posPaymentsConfig";
 
-/** VPP sandbox often returns empty PAD/RFN; placeholder lets refund UI be exercised. */
-const SANDBOX_REFUND_RFN_PLACEHOLDER = "SANDBOX-RFN";
+/** Optional RFN for matched refunds if an acquirer ever returns it. */
+const OPTIONAL_REFUND_RFN_PLACEHOLDER = "optional";
 
 function formatPairedAt(iso) {
   if (!iso) return null;
@@ -321,7 +321,7 @@ export default function LinklyPaymentSettingsPage() {
           ).toFixed(2),
         );
         const purchaseRfn = String(result.transaction.rfn || "").trim();
-        setRefundRfn(purchaseRfn || SANDBOX_REFUND_RFN_PLACEHOLDER);
+        setRefundRfn(purchaseRfn);
         setLastRefund(null);
         setRefundError("");
         toast.success(linklyOutcomeMessage(outcome, txn));
@@ -354,10 +354,6 @@ export default function LinklyPaymentSettingsPage() {
       toast.error("Enter a valid refund amount (e.g. 1.00)");
       return;
     }
-    if (!rfnTrimmed) {
-      toast.error("RFN is required for a matched refund");
-      return;
-    }
 
     setIsRefunding(true);
     setRefundError("");
@@ -366,7 +362,7 @@ export default function LinklyPaymentSettingsPage() {
     try {
       const result = await refundLinkly({
         amountCents,
-        rfn: rfnTrimmed,
+        ...(rfnTrimmed ? { rfn: rfnTrimmed } : {}),
       });
 
       if (!result?.success) {
@@ -865,26 +861,16 @@ export default function LinklyPaymentSettingsPage() {
                     Test refund
                   </h2>
                   <p className="mt-0.5 text-sm text-neutral-500">
-                    Matched refund (`TxnType` R) using RFN from the original
-                    purchase. VPP sandbox often returns empty
-                    purchaseAnalysisData — if RFN is blank after purchase, ask
-                    Linkly or paste an RFN when you have one. Does not change
-                    order payment state.
+                    Unmatched refund (`TxnType` R). RFN is optional — Linkly
+                    confirms matched RFN is not supported by acquirers and not
+                    required for accreditation. Does not change order payment
+                    state (use Order History for live refunds).
                   </p>
                 </div>
                 <div className="space-y-4 px-6 py-4">
                   {!isPaired ? (
                     <p className="text-sm text-amber-800">
                       Pair a terminal above before running a refund.
-                    </p>
-                  ) : null}
-
-                  {lastPurchase?.success && !lastPurchase.rfn ? (
-                    <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-                      Last purchase had no RFN (common on VPP sandbox). Prefilled
-                      with <span className="font-mono">{SANDBOX_REFUND_RFN_PLACEHOLDER}</span>{" "}
-                      for development only — replace with a real RFN when the
-                      terminal returns one.
                     </p>
                   ) : null}
 
@@ -906,7 +892,7 @@ export default function LinklyPaymentSettingsPage() {
                     </label>
                     <label className="block text-sm">
                       <span className="font-medium text-neutral-700">
-                        RFN (from purchase)
+                        RFN (optional)
                       </span>
                       <input
                         type="text"
@@ -914,7 +900,7 @@ export default function LinklyPaymentSettingsPage() {
                         value={refundRfn}
                         onChange={(event) => setRefundRfn(event.target.value)}
                         disabled={isRefunding || !isPaired}
-                        placeholder={`e.g. ${SANDBOX_REFUND_RFN_PLACEHOLDER}`}
+                        placeholder={OPTIONAL_REFUND_RFN_PLACEHOLDER}
                         className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm text-neutral-900 disabled:cursor-not-allowed disabled:bg-neutral-50"
                       />
                     </label>
@@ -927,8 +913,7 @@ export default function LinklyPaymentSettingsPage() {
                       isRefunding ||
                       isPurchasing ||
                       !isPaired ||
-                      isPairing ||
-                      !String(refundRfn).trim()
+                      isPairing
                     }
                     className="rounded-md bg-brand_accent px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
