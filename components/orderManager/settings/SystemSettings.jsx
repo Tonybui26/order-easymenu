@@ -226,13 +226,13 @@ export default function SystemSettings({
             <span className="min-w-0 flex-1">
               <span className="flex flex-wrap items-center gap-2">
                 <h3 className="text-base font-semibold uppercase tracking-wide text-neutral-900">
-                  Linkly Cloud EFTPOS
+                  Linkly Cloud
                 </h3>
                 <SettingsOnOffBadge checked={linklyEnabled} variant="payment" />
               </span>
               <span className="mt-1 block text-base text-neutral-600">
-                Pair with a bank Cloud terminal or Virtual Pinpad using your
-                Linkly username, password, and pair code.
+                Pair with a Linkly Cloud EFTPOS terminal using your Linkly
+                username, password, and pair code.
               </span>
             </span>
             <ChevronRight className="h-5 w-5 shrink-0 text-neutral-400" />

@@ -11,18 +11,13 @@
  *
  * REVIEW / next steps:
  * - Persist Linkly txnRef/rfn on orders for matched refunds from live sales
- * - Host merchant pairing guide URL (1.4) + supply POS logo (1.5)
+ * - Supply POS logo for Linkly partners page (1.5)
  */
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import {
-  CheckCircle2,
-  Circle,
-  Loader2,
-  XCircle,
-} from "lucide-react";
+import { CheckCircle2, Circle, Loader2, XCircle } from "lucide-react";
 import PosChromeHeader from "@/components/orderManager/PosChromeHeader";
 import { usePosOpenCashDrawer } from "@/components/orderManager/usePosOpenCashDrawer";
 import { useMenuContext } from "@/components/context/MenuContext";
@@ -176,7 +171,12 @@ export default function LinklyPaymentSettingsPage() {
     };
     // Seed once when config / pair state is available.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataLoaded, isPaired, savedLinkly.pendingSessionId, savedLinkly.lastSessionId]);
+  }, [
+    dataLoaded,
+    isPaired,
+    savedLinkly.pendingSessionId,
+    savedLinkly.lastSessionId,
+  ]);
 
   async function handlePair() {
     const usernameTrimmed = String(username ?? "").trim();
@@ -184,7 +184,9 @@ export default function LinklyPaymentSettingsPage() {
     const pairCodeTrimmed = String(pairCode ?? "").trim();
 
     if (!usernameTrimmed || !passwordValue || !pairCodeTrimmed) {
-      toast.error("Enter username, password, and the pair code from the VPP");
+      toast.error(
+        "Enter username, password, and the pair code from the terminal",
+      );
       return;
     }
 
@@ -268,7 +270,9 @@ export default function LinklyPaymentSettingsPage() {
       return;
     }
 
-    const dollars = Number(String(purchaseAmountDollars).replace(/[^0-9.]/g, ""));
+    const dollars = Number(
+      String(purchaseAmountDollars).replace(/[^0-9.]/g, ""),
+    );
     const amountCents = Math.round(dollars * 100);
     if (!Number.isFinite(amountCents) || amountCents <= 0) {
       toast.error("Enter a valid amount (e.g. 1.00)");
@@ -316,9 +320,9 @@ export default function LinklyPaymentSettingsPage() {
 
       if (outcome === "approved" || outcome === "approved_signature") {
         setRefundAmountDollars(
-          (
-            Number(result.transaction.amtPurchase || amountCents) / 100
-          ).toFixed(2),
+          (Number(result.transaction.amtPurchase || amountCents) / 100).toFixed(
+            2,
+          ),
         );
         const purchaseRfn = String(result.transaction.rfn || "").trim();
         setRefundRfn(purchaseRfn);
@@ -469,13 +473,9 @@ export default function LinklyPaymentSettingsPage() {
         }
 
         if (approved) {
-          toast.success(
-            `Recovered approved · TxnRef ${txn.txnRef || "—"}`,
-          );
+          toast.success(`Recovered approved · TxnRef ${txn.txnRef || "—"}`);
         } else {
-          toast.error(
-            `Marked failed · ${linklyOutcomeMessage(outcome, txn)}`,
-          );
+          toast.error(`Marked failed · ${linklyOutcomeMessage(outcome, txn)}`);
         }
       } else if (result.status === "not_found") {
         await setLinklyLastTxnOutcome({
@@ -491,8 +491,13 @@ export default function LinklyPaymentSettingsPage() {
         });
         setLastPosOutcome(await getLinklyLastTxnOutcome());
         toast.success("Not found — safe to retry with a new session");
-      } else if (result.status === "unknown" || result.status === "in_progress") {
-        toast.error(result.message || "Result still unknown — do not assume decline");
+      } else if (
+        result.status === "unknown" ||
+        result.status === "in_progress"
+      ) {
+        toast.error(
+          result.message || "Result still unknown — do not assume decline",
+        );
       } else {
         toast(result.message || `Status: ${result.status}`);
       }
@@ -526,17 +531,15 @@ export default function LinklyPaymentSettingsPage() {
                 Settings
               </Link>
               <span className="mx-1.5">/</span>
-              Linkly Cloud EFTPOS
+              Linkly Cloud
             </p>
             <h1 className="mt-1 text-xl font-bold text-neutral-900 sm:text-2xl">
-              Linkly Cloud EFTPOS
+              Linkly Cloud
             </h1>
             <p className="mt-0.5 text-sm text-neutral-500">
-              Pair this store with a Linkly Cloud PIN pad or Virtual Pinpad
-              (synchronous Cloud REST). Sync mode does not support live receipt
-              events, display mirroring, or key-press cancel from the POS — the
-              terminal completes the card flow, then Order Manager reads the
-              final result (and recovers via session status if needed).
+              Pair this store with a Linkly Cloud EFTPOS terminal. The terminal
+              completes the card flow, then Order Manager reads the final result
+              (and recovers via session status if needed).
             </p>
           </div>
 
@@ -616,7 +619,7 @@ export default function LinklyPaymentSettingsPage() {
                     <dd>
                       {isPaired ? (
                         <StatusValue variant="success">
-                          Stored on server (not shown)
+                          Stored on server
                         </StatusValue>
                       ) : (
                         <StatusValue variant="neutral">Not stored</StatusValue>
@@ -632,9 +635,9 @@ export default function LinklyPaymentSettingsPage() {
                     Pair terminal
                   </h2>
                   <p className="mt-0.5 text-sm text-neutral-500">
-                    On the Virtual Pinpad press <strong>FUNC</strong>, then{" "}
-                    <strong>8880</strong>, then Enter to show a pair code. Use
-                    your sandbox Cloud username and password from Linkly.
+                    On the EFTPOS terminal, open the Cloud pairing function to
+                    show a pair code. Enter your Linkly Cloud username and
+                    password from your bank, then the pair code below.
                   </p>
                 </div>
                 <div className="space-y-4 px-6 py-4">
@@ -676,7 +679,7 @@ export default function LinklyPaymentSettingsPage() {
                         value={pairCode}
                         onChange={(event) => setPairCode(event.target.value)}
                         disabled={isPairing}
-                        placeholder="From VPP / terminal"
+                        placeholder="From terminal"
                         className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-neutral-900 disabled:cursor-not-allowed disabled:bg-neutral-50"
                       />
                     </label>
@@ -738,11 +741,9 @@ export default function LinklyPaymentSettingsPage() {
                     Test purchase
                   </h2>
                   <p className="mt-0.5 text-sm text-neutral-500">
-                    Runs token + sync purchase on easymenu against the paired
-                    VPP. Does not mark an order paid — for sandbox /
-                    accreditation only. Use $10.00 and leave incomplete for
-                    60–90s to test operator timeout (TO). Stay on this screen
-                    while the VPP prompts; a long wait is normal.
+                    Runs a test purchase on the paired terminal. Does not mark
+                    an order paid. Stay on this screen while the terminal
+                    prompts; a long wait is normal.
                   </p>
                 </div>
                 <div className="space-y-4 px-6 py-4">
@@ -813,7 +814,8 @@ export default function LinklyPaymentSettingsPage() {
                             }
                             return (
                               <StatusValue variant="error">
-                                {lastPurchase.responseText?.trim() || "Declined"}
+                                {lastPurchase.responseText?.trim() ||
+                                  "Declined"}
                               </StatusValue>
                             );
                           })()}
@@ -910,10 +912,7 @@ export default function LinklyPaymentSettingsPage() {
                     type="button"
                     onClick={handleTestRefund}
                     disabled={
-                      isRefunding ||
-                      isPurchasing ||
-                      !isPaired ||
-                      isPairing
+                      isRefunding || isPurchasing || !isPaired || isPairing
                     }
                     className="rounded-md bg-brand_accent px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -930,7 +929,9 @@ export default function LinklyPaymentSettingsPage() {
                         <dt className="text-neutral-500">Result</dt>
                         <dd>
                           {lastRefund.success ? (
-                            <StatusValue variant="success">Approved</StatusValue>
+                            <StatusValue variant="success">
+                              Approved
+                            </StatusValue>
                           ) : (
                             <StatusValue variant="error">
                               {lastRefund.responseText?.trim() || "Declined"}
@@ -973,11 +974,10 @@ export default function LinklyPaymentSettingsPage() {
                     Error recovery
                   </h2>
                   <p className="mt-0.5 text-sm text-neutral-500">
-                    Run a purchase for $10.00 and leave the VPP incomplete for
-                    60–90s to capture operator timeout (TO / 2.1.3). Power-fail:
-                    kill the app mid-purchase, reopen POS — auto-recover prints
-                    a TxnRef slip (4.1.3) and marks FAILED on the POS banner
-                    (3.1.2). Or use Recover last below after a failed sale.
+                    If a purchase was interrupted, use Recover last below after
+                    a failed sale. Power-fail: kill the app mid-purchase, reopen
+                    POS — auto-recover prints a TxnRef slip and marks FAILED on
+                    the POS banner.
                   </p>
                 </div>
                 <div className="space-y-4 px-6 py-4">
@@ -1025,10 +1025,8 @@ export default function LinklyPaymentSettingsPage() {
                                   : "font-semibold text-emerald-700"
                               }
                             >
-                              {lastPosOutcome.markedFailed
-                                ? "FAILED"
-                                : "OK"}{" "}
-                              · {lastPosOutcome.outcome}
+                              {lastPosOutcome.markedFailed ? "FAILED" : "OK"} ·{" "}
+                              {lastPosOutcome.outcome}
                             </span>
                             <span className="ml-2 font-mono text-xs text-neutral-600">
                               TxnRef {lastPosOutcome.txnRef || "—"}
