@@ -74,8 +74,13 @@ import { printTaxInvoiceReceipt } from "@/lib/printers/printTaxInvoiceReceipt";
 import { resolvePosConfig, getPosHomePath, isRestaurantModeEnabled } from "@/lib/pos/posConfig";
 import {
   isTyroPosCardReady,
+  isLinklyPosCardReady,
   resolvePosPaymentsConfig,
 } from "@/lib/pos/posPaymentsConfig";
+import { useLinklyInflightRecovery } from "@/components/orderManager/useLinklyInflightRecovery";
+import LinklyFailedSaleBanner from "@/components/orderManager/LinklyFailedSaleBanner";
+import { clearLinklyLastTxnOutcome } from "@/lib/linkly/lastTxnOutcome";
+import { printLinklyTxnReceipt } from "@/lib/printers/printLinklyTxnReceipt";
 import { buildTrainingKitchenOrder } from "@/lib/pos/buildTrainingKitchenOrder";
 import { clearPosTableMergeGroupsForTables } from "@/lib/pos/posTableMapMerge";
 import { formatPosItemDisplayName } from "@/lib/helper/printNameAlias";
@@ -352,7 +357,20 @@ export default function PosTerminal() {
     () => resolvePosPaymentsConfig(menuConfig).tyro,
     [menuConfig],
   );
+  const linklyPayments = useMemo(
+    () => resolvePosPaymentsConfig(menuConfig).linkly,
+    [menuConfig],
+  );
   const tyroCardEnabled = isTyroPosCardReady(menuConfig);
+  const linklyCardEnabled = isLinklyPosCardReady(menuConfig);
+  const [linklyFailedOutcome, setLinklyFailedOutcome] = useState(null);
+  const [isLinklyReprintPending, setIsLinklyReprintPending] = useState(false);
+  useLinklyInflightRecovery(linklyCardEnabled, {
+    onOutcomeChange: (outcome) => {
+      if (outcome?.markedFailed) setLinklyFailedOutcome(outcome);
+      else setLinklyFailedOutcome(null);
+    },
+  });
   const isTrainingMode = Boolean(posConfig.trainingModeEnabled);
   const isPayFirstMode = Boolean(posConfig.payFirstModeEnabled);
   const useKitchenPrintAliases = Boolean(
@@ -1993,6 +2011,51 @@ export default function PosTerminal() {
           </div>
         ) : null}
 
+        {linklyCardEnabled ? (
+          <LinklyFailedSaleBanner
+            outcome={linklyFailedOutcome}
+            onDismiss={async () => {
+              await clearLinklyLastTxnOutcome();
+              setLinklyFailedOutcome(null);
+            }}
+            isReprintPending={isLinklyReprintPending}
+            onReprint={async () => {
+              if (!linklyFailedOutcome || isLinklyReprintPending) return;
+              setIsLinklyReprintPending(true);
+              try {
+                const result = await printLinklyTxnReceipt(
+                  {
+                    txnRef: linklyFailedOutcome.txnRef,
+                    sessionId: linklyFailedOutcome.sessionId,
+                    outcome: linklyFailedOutcome.outcome,
+                    success: false,
+                    responseCode: linklyFailedOutcome.responseCode,
+                    responseText: linklyFailedOutcome.responseText,
+                    amtPurchase: linklyFailedOutcome.amountCents,
+                  },
+                  storeProfile || {},
+                  { documentTitle: "CARD RESULT (FAILED)" },
+                );
+                if (result?.success) {
+                  showDismissibleToast(
+                    `Reprinted · TxnRef ${linklyFailedOutcome.txnRef || "—"}`,
+                  );
+                } else {
+                  showDismissibleToast(
+                    result?.message || "Reprint failed",
+                  );
+                }
+              } catch (error) {
+                showDismissibleToast(
+                  error?.message || "Reprint failed",
+                );
+              } finally {
+                setIsLinklyReprintPending(false);
+              }
+            }}
+          />
+        ) : null}
+
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {/* Left: current order */}
           <section className="flex w-[34%] min-w-[280px] max-w-[440px] shrink-0 flex-col bg-white pb-[env(safe-area-inset-bottom)]">
@@ -2095,6 +2158,8 @@ export default function PosTerminal() {
               onTrainingDone={handleTrainingPaymentDone}
               tyroCardEnabled={tyroCardEnabled}
               tyroConfig={tyroPayments}
+              linklyCardEnabled={linklyCardEnabled}
+              linklyConfig={linklyPayments}
               onOpenCashDrawer={handleOpenCashDrawer}
             />
 

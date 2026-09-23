@@ -5,10 +5,11 @@ import toast from "react-hot-toast";
 import DropDownList from "@/components/DropDownList";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { cn } from "@/lib/helper";
-import { refundOrder } from "@/lib/api/fetchApi";
+import { refundOrder, refundLinkly } from "@/lib/api/fetchApi";
 import {
   buildRefundMethodOptions,
   canRefundPosOrderOnCard,
+  getPosCardRefundPartner,
   getRefundMethodHelpText,
   REFUND_METHODS,
   REFUND_METHOD_LABELS,
@@ -19,9 +20,15 @@ import {
   POS_CANCEL_OTHER_REASON,
 } from "@/lib/pos/posCancelLineReasons";
 import {
+  isLinklyPosCardReady,
   isTyroPosCardReady,
   resolvePosPaymentsConfig,
 } from "@/lib/pos/posPaymentsConfig";
+import {
+  classifyLinklyTxnOutcome,
+  isLinklyOutcomePayable,
+  linklyOutcomeMessage,
+} from "@/lib/linkly/txnOutcome";
 import {
   buildTyroRefundParams,
   dollarsToTyroCents,
@@ -65,7 +72,7 @@ export default function RefundModal({
   const [otherReason, setOtherReason] = useState("");
   const [partialAmount, setPartialAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [tyroRefundApproved, setTyroRefundApproved] = useState(false);
+  const [terminalRefundApproved, setTerminalRefundApproved] = useState(false);
   const refundLockRef = useRef(false);
 
   const tyroConfig = useMemo(
@@ -73,10 +80,12 @@ export default function RefundModal({
     [menuConfig],
   );
   const tyroCardReady = isTyroPosCardReady(menuConfig);
+  const linklyCardReady = isLinklyPosCardReady(menuConfig);
   const refundMethodContext = useMemo(
-    () => ({ tyroCardReady }),
-    [tyroCardReady],
+    () => ({ tyroCardReady, linklyCardReady }),
+    [tyroCardReady, linklyCardReady],
   );
+  const posCardRefundPartner = getPosCardRefundPartner(refundMethodContext);
   const posCardRefundReady = canRefundPosOrderOnCard(
     order,
     refundMethodContext,
@@ -89,7 +98,7 @@ export default function RefundModal({
       setSelectedReason("");
       setOtherReason("");
       setPartialAmount("");
-      setTyroRefundApproved(false);
+      setTerminalRefundApproved(false);
       refundLockRef.current = false;
       return;
     }
@@ -98,9 +107,9 @@ export default function RefundModal({
   }, [isOpen, order?._id, refundMethodContext]);
 
   useEffect(() => {
-    if (!isOpen || !posCardRefundReady) return;
+    if (!isOpen || posCardRefundPartner !== "tyro") return;
     getTyroIClientWithUI().catch(() => {});
-  }, [isOpen, posCardRefundReady]);
+  }, [isOpen, posCardRefundPartner]);
 
   if (!order) return null;
 
@@ -118,7 +127,7 @@ export default function RefundModal({
     refundType === "full"
       ? orderTotal
       : parseFloat(partialAmount) || 0;
-  const needsTyroRefund =
+  const needsTerminalCardRefund =
     posCardRefundReady && refundMethod === REFUND_METHODS.CARD;
 
   const resolvedRefundReason =
@@ -166,31 +175,63 @@ export default function RefundModal({
 
     refundLockRef.current = true;
     setIsProcessing(true);
-    let terminalRefundApproved = tyroRefundApproved;
+    let cardTerminalApproved = terminalRefundApproved;
     try {
-      if (needsTyroRefund && !terminalRefundApproved) {
-        const iclient = await getTyroIClientWithUI();
-        const requestParams = buildTyroRefundParams({
-          amount: dollarsToTyroCents(refundAmount),
-          mid: tyroConfig?.mid,
-          tid: tyroConfig?.tid,
-          integrationKey: tyroConfig?.integrationKey,
-          integratedReceipt: Boolean(tyroConfig?.integratedReceipt),
-        });
+      if (needsTerminalCardRefund && !cardTerminalApproved) {
+        if (posCardRefundPartner === "linkly") {
+          const amountCents = Math.round(Number(refundAmount) * 100);
+          if (!Number.isFinite(amountCents) || amountCents <= 0) {
+            toast.error("Invalid amount for card refund");
+            return;
+          }
 
-        if (!requestParams) {
-          toast.error("Invalid amount for card refund");
+          const linklyResult = await refundLinkly({ amountCents });
+          if (!linklyResult?.success) {
+            toast.error(linklyResult?.error || "Linkly card refund failed");
+            return;
+          }
+
+          const txn = linklyResult.transaction || {};
+          const outcome = txn.outcome || classifyLinklyTxnOutcome(txn);
+          if (!txn.success && !isLinklyOutcomePayable(outcome)) {
+            toast.error(
+              linklyOutcomeMessage(outcome, txn) ||
+                "Card refund declined or not approved",
+            );
+            return;
+          }
+
+          cardTerminalApproved = true;
+          setTerminalRefundApproved(true);
+        } else if (posCardRefundPartner === "tyro") {
+          const iclient = await getTyroIClientWithUI();
+          const requestParams = buildTyroRefundParams({
+            amount: dollarsToTyroCents(refundAmount),
+            mid: tyroConfig?.mid,
+            tid: tyroConfig?.tid,
+            integrationKey: tyroConfig?.integrationKey,
+            integratedReceipt: Boolean(tyroConfig?.integratedReceipt),
+          });
+
+          if (!requestParams) {
+            toast.error("Invalid amount for card refund");
+            return;
+          }
+
+          const result = await initiateTyroRefund(iclient, requestParams);
+          if (!isTyroRefundApproved(result)) {
+            toast.error(getTyroRefundStatusMessage(result));
+            return;
+          }
+
+          cardTerminalApproved = true;
+          setTerminalRefundApproved(true);
+        } else {
+          toast.error(
+            "Pair Linkly or authorise Tyro in Settings to refund on the terminal",
+          );
           return;
         }
-
-        const result = await initiateTyroRefund(iclient, requestParams);
-        if (!isTyroRefundApproved(result)) {
-          toast.error(getTyroRefundStatusMessage(result));
-          return;
-        }
-
-        terminalRefundApproved = true;
-        setTyroRefundApproved(true);
       }
 
       const result = await refundOrder({
@@ -204,7 +245,7 @@ export default function RefundModal({
 
       if (!result?.success) {
         toast.error(
-          terminalRefundApproved
+          cardTerminalApproved
             ? result?.error ||
                 "Card was refunded on the terminal but the order could not be updated. Do not refund again."
             : result?.error || "Refund failed.",
@@ -219,7 +260,7 @@ export default function RefundModal({
       onClose();
     } catch (error) {
       toast.error(
-        terminalRefundApproved
+        cardTerminalApproved
           ? "Card was refunded on the terminal but the order could not be updated. Do not refund again."
           : error?.message || "Refund failed.",
       );
@@ -237,7 +278,7 @@ export default function RefundModal({
     !isProcessing;
 
   const confirmLabel = isProcessing
-    ? needsTyroRefund && !tyroRefundApproved
+    ? needsTerminalCardRefund && !terminalRefundApproved
       ? "Waiting for EFTPOS…"
       : "Processing…"
     : "Confirm refund";

@@ -14,6 +14,15 @@ import {
   isTyroPurchaseApproved,
   parseTyroSurchargeDollars,
 } from "@/lib/tyro/iclient";
+import { purchaseLinkly } from "@/lib/api/fetchApi";
+import {
+  classifyLinklyTxnOutcome,
+  isLinklyOutcomePayable,
+  linklyOutcomeMessage,
+} from "@/lib/linkly/txnOutcome";
+import { setLinklyLastTxnOutcome } from "@/lib/linkly/lastTxnOutcome";
+import { printLinklyTxnReceipt } from "@/lib/printers/printLinklyTxnReceipt";
+import { useMenuContext } from "@/components/context/MenuContext";
 import SideDrawer from "./SideDrawer";
 
 const CASH_DISABLED_MESSAGE =
@@ -72,22 +81,37 @@ export default function PosPaymentDrawer({
   onTrainingDone,
   tyroCardEnabled = false,
   tyroConfig = null,
+  /** When true, Credit Card runs Linkly Cloud purchase then persists the sale. */
+  linklyCardEnabled = false,
+  linklyConfig = null,
   onOpenCashDrawer,
 }) {
   const { session } = usePosRegisterSession();
+  const { storeProfile } = useMenuContext();
   const countsFinalised = Boolean(session?.countsFinalised);
   const [digits, setDigits] = useState("");
-  const [step, setStep] = useState("tender"); // tender | finalise
+  const [step, setStep] = useState("tender"); // tender | finalise | signature
   const [paymentSummary, setPaymentSummary] = useState(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isSalePersisted, setIsSalePersisted] = useState(false);
-  const [tyroApproved, setTyroApproved] = useState(false);
+  // True after integrated EFTPOS (Tyro or Linkly) approved — blocks closing mid-flow.
+  const [cardApproved, setCardApproved] = useState(false);
   const [isCashDisabledOpen, setIsCashDisabledOpen] = useState(false);
+  /** Linkly txn awaiting merchant signature accept/reject (ResponseCode 08). */
+  const [pendingLinklyTxn, setPendingLinklyTxn] = useState(null);
+  const [pendingLinklyDue, setPendingLinklyDue] = useState(0);
   const purchaseLockRef = useRef(false);
   const amountDueLabel = Number(amountDue || 0)
     .toFixed(2)
     .replace(/\.00$/, "");
   const useTyroCard = Boolean(tyroCardEnabled) && !trainingMode;
+  const useLinklyCard = Boolean(linklyCardEnabled) && !trainingMode;
+  // Prefer Linkly when both somehow enabled (config mutual-exclusion should prevent this).
+  const integratedCardPartner = useLinklyCard
+    ? "linkly"
+    : useTyroCard
+      ? "tyro"
+      : null;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -96,15 +120,17 @@ export default function PosPaymentDrawer({
     setPaymentSummary(null);
     setIsPurchasing(false);
     setIsSalePersisted(false);
-    setTyroApproved(false);
+    setCardApproved(false);
     setIsCashDisabledOpen(false);
+    setPendingLinklyTxn(null);
+    setPendingLinklyDue(0);
     purchaseLockRef.current = false;
   }, [isOpen, amountDue]);
 
   useEffect(() => {
-    if (!isOpen || !useTyroCard) return;
+    if (!isOpen || integratedCardPartner !== "tyro") return;
     getTyroIClientWithUI().catch(() => {});
-  }, [isOpen, useTyroCard]);
+  }, [isOpen, integratedCardPartner]);
 
   function appendToken(token) {
     setDigits((prev) => {
@@ -195,7 +221,7 @@ export default function PosPaymentDrawer({
       };
       setPaymentSummary(summary);
       setStep("finalise");
-      setTyroApproved(true);
+      setCardApproved(true);
 
       const persist = await onPersistSale?.(summary);
       if (persist?.success) {
@@ -207,6 +233,165 @@ export default function PosPaymentDrawer({
       purchaseLockRef.current = false;
       setIsPurchasing(false);
     }
+  }
+
+  /**
+   * Linkly Cloud sync purchase → mark paid via same complete-sale path as Tyro.
+   * Handles accreditation outcomes: 08 signature gate, TO timeout, declined.
+   * REVIEW: txnRef / rfn not persisted on the order yet (same as Tyro today).
+   */
+  async function finaliseLinklyApprovedSale(due, transaction) {
+    const summary = {
+      method: "credit-card",
+      amountDue: due,
+      amountTendered: due,
+      change: 0,
+      processingFee: 0,
+      linkly: {
+        txnRef: transaction.txnRef || null,
+        rrn: transaction.rrn || null,
+        rfn: transaction.rfn || null,
+        sessionId: transaction.sessionId || null,
+        responseCode: transaction.responseCode || null,
+        outcome: transaction.outcome || null,
+      },
+    };
+    setPaymentSummary(summary);
+    setStep("finalise");
+    setCardApproved(true);
+    setPendingLinklyTxn(null);
+
+    const persist = await onPersistSale?.(summary);
+    if (persist?.success) {
+      setIsSalePersisted(true);
+    }
+  }
+
+  async function recordLinklyOutcome(transaction, { markedFailed, source }) {
+    const outcome =
+      transaction?.outcome || classifyLinklyTxnOutcome(transaction || {});
+    await setLinklyLastTxnOutcome({
+      sessionId: transaction?.sessionId,
+      txnRef: transaction?.txnRef,
+      outcome,
+      success: Boolean(transaction?.success),
+      responseCode: transaction?.responseCode,
+      responseText: transaction?.responseText,
+      amountCents: transaction?.amtPurchase || transaction?.requestedAmountCents,
+      markedFailed,
+      source,
+    });
+  }
+
+  async function runLinklyCardPurchase(due) {
+    if (purchaseLockRef.current) return;
+    purchaseLockRef.current = true;
+    setIsPurchasing(true);
+
+    try {
+      const amountCents = Math.round(Number(due) * 100);
+      if (!Number.isFinite(amountCents) || amountCents <= 0) {
+        toast.error("Invalid amount for card payment");
+        return;
+      }
+
+      const result = await purchaseLinkly({ amountCents });
+      if (!result?.success) {
+        toast.error(result?.error || "Card payment failed");
+        return;
+      }
+
+      const txn = result.transaction || {};
+      const outcome = txn.outcome || classifyLinklyTxnOutcome(txn);
+      txn.outcome = outcome;
+
+      if (outcome === "operator_timeout") {
+        await recordLinklyOutcome(txn, {
+          markedFailed: true,
+          source: "pos-purchase",
+        });
+        setPendingLinklyTxn(txn);
+        setPendingLinklyDue(due);
+        setStep("timeout");
+        // Accreditation 2.1.3 — leave sale incomplete; print result slip with TxnRef.
+        printLinklyTxnReceipt(txn, storeProfile || {}, {
+          documentTitle: "CARD RESULT (TIMEOUT)",
+        }).catch(() => {});
+        return;
+      }
+
+      if (outcome === "declined" || !isLinklyOutcomePayable(outcome)) {
+        await recordLinklyOutcome(txn, {
+          markedFailed: true,
+          source: "pos-purchase",
+        });
+        setPendingLinklyTxn(txn);
+        setPendingLinklyDue(due);
+        setStep("declined");
+        printLinklyTxnReceipt(txn, storeProfile || {}, {
+          documentTitle: "CARD RESULT (FAILED)",
+        }).catch(() => {});
+        return;
+      }
+
+      if (outcome === "approved_signature") {
+        setPendingLinklyTxn(txn);
+        setPendingLinklyDue(due);
+        setStep("signature");
+        toast(linklyOutcomeMessage(outcome, txn), { duration: 6000 });
+        // Print signature / merchant copy for verification (sync has no ReceiptEvent).
+        printLinklyTxnReceipt(txn, storeProfile || {}, {
+          documentTitle: "SIGNATURE COPY",
+        }).catch(() => {});
+        return;
+      }
+
+      await recordLinklyOutcome(txn, {
+        markedFailed: false,
+        source: "pos-purchase",
+      });
+      await finaliseLinklyApprovedSale(due, txn);
+    } catch (error) {
+      toast.error(error?.message || "Card payment failed");
+    } finally {
+      purchaseLockRef.current = false;
+      setIsPurchasing(false);
+    }
+  }
+
+  async function handleLinklySignatureAccept() {
+    if (!pendingLinklyTxn || isPurchasing || isCompletingSale) return;
+    const txn = pendingLinklyTxn;
+    const due = pendingLinklyDue;
+    await recordLinklyOutcome(txn, {
+      markedFailed: false,
+      source: "pos-signature",
+    });
+    await finaliseLinklyApprovedSale(due, txn);
+  }
+
+  async function handleLinklySignatureReject() {
+    if (!pendingLinklyTxn || isPurchasing || isCompletingSale) return;
+    const txn = {
+      ...pendingLinklyTxn,
+      outcome: "declined",
+      success: false,
+      responseText: "Signature rejected by merchant",
+    };
+    await recordLinklyOutcome(txn, {
+      markedFailed: true,
+      source: "pos-signature",
+    });
+    setPendingLinklyTxn(null);
+    setPendingLinklyDue(0);
+    setStep("tender");
+    toast.error("Signature rejected — sale not completed");
+  }
+
+  function handleLinklyFailedDismiss() {
+    setPendingLinklyTxn(null);
+    setPendingLinklyDue(0);
+    setStep("tender");
   }
 
   function handleSelectPayment(methodId) {
@@ -221,13 +406,24 @@ export default function PosPaymentDrawer({
     const tendered = resolvedAmount();
     const change = Math.max(0, Math.round((tendered - due) * 100) / 100);
 
-    if (methodId === "credit-card" && Boolean(tyroConfig?.enabled) && !trainingMode) {
-      if (!useTyroCard) {
-        toast.error("Authorise the Tyro terminal in Settings first");
+    if (methodId === "credit-card" && !trainingMode) {
+      if (integratedCardPartner === "linkly") {
+        runLinklyCardPurchase(due);
         return;
       }
-      runTyroCardPurchase(due);
-      return;
+      if (Boolean(linklyConfig?.enabled)) {
+        toast.error("Pair the Linkly terminal in Settings first");
+        return;
+      }
+      if (integratedCardPartner === "tyro" || Boolean(tyroConfig?.enabled)) {
+        if (!useTyroCard) {
+          toast.error("Authorise the Tyro terminal in Settings first");
+          return;
+        }
+        runTyroCardPurchase(due);
+        return;
+      }
+      // No integrated partner — manual card (approve on terminal, then Complete Sale).
     }
 
     if (methodId === "cash") {
@@ -252,9 +448,11 @@ export default function PosPaymentDrawer({
   }
 
   function handleClose() {
-    if (isPurchasing || tyroApproved) return;
+    if (isPurchasing || cardApproved) return;
+    if (step === "signature") return;
     setStep("tender");
     setPaymentSummary(null);
+    setPendingLinklyTxn(null);
     onClose?.();
   }
 
@@ -263,6 +461,8 @@ export default function PosPaymentDrawer({
       ? formatTenderDisplay(digits)
       : formatTenderDisplay(amountDueLabel);
 
+  const isFailedResultStep = step === "timeout" || step === "declined";
+
   return (
     <>
     <SideDrawer
@@ -270,13 +470,124 @@ export default function PosPaymentDrawer({
       onClose={handleClose}
       showHeader={false}
       side="right"
-      closeDisabled={isPurchasing || tyroApproved}
+      closeDisabled={
+        isPurchasing || cardApproved || step === "signature"
+      }
       panelClassName="bg-[#984B28]"
       bodyClassName=""
       contentKey="pos-payment-drawer"
-      ariaLabel={step === "finalise" ? "Finalise Sale" : "Amount Tendered"}
+      ariaLabel={
+        step === "finalise"
+          ? "Finalise Sale"
+          : step === "signature"
+            ? "Signature verification"
+            : step === "timeout"
+              ? "Operator timeout"
+              : step === "declined"
+                ? "Card declined"
+                : "Amount Tendered"
+      }
     >
-      {step === "finalise" && paymentSummary ? (
+      {step === "signature" && pendingLinklyTxn ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 text-white">
+          <p className="mb-2 text-center text-xl font-semibold">
+            Signature required
+          </p>
+          <p className="mb-4 text-center text-sm text-white/90">
+            ResponseCode{" "}
+            <span className="font-mono">
+              {pendingLinklyTxn.responseCode || "08"}
+            </span>
+            . Verify the customer signature on the merchant copy, then accept or
+            reject.
+          </p>
+          <dl className="mb-6 space-y-2 rounded-lg bg-white/10 px-4 py-3 text-sm">
+            <div className="flex justify-between gap-2">
+              <dt className="text-white/70">Amount</dt>
+              <dd className="font-semibold">
+                {formatMoney(pendingLinklyDue)}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-white/70">TxnRef</dt>
+              <dd className="font-mono text-xs">
+                {pendingLinklyTxn.txnRef || "—"}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-white/70">Message</dt>
+              <dd className="text-right text-xs">
+                {pendingLinklyTxn.responseText || "Approved with signature"}
+              </dd>
+            </div>
+          </dl>
+          <div className="mt-auto flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={handleLinklySignatureAccept}
+              disabled={isCompletingSale}
+              className="w-full rounded-lg bg-[#42ecaf] py-3.5 text-base font-bold text-[#0f583e] disabled:opacity-60"
+            >
+              Accept signature
+            </button>
+            <button
+              type="button"
+              onClick={handleLinklySignatureReject}
+              disabled={isCompletingSale}
+              className="w-full rounded-lg bg-white/15 py-3.5 text-base font-semibold text-white hover:bg-white/25 disabled:opacity-60"
+            >
+              Reject — cancel sale
+            </button>
+          </div>
+        </div>
+      ) : isFailedResultStep && pendingLinklyTxn ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 text-white">
+          <p className="mb-2 text-center text-xl font-semibold">
+            {step === "timeout" ? "Operator timeout" : "Card not approved"}
+          </p>
+          <p className="mb-4 text-center text-sm text-white/90">
+            {step === "timeout"
+              ? "TO — Operator TimeOut. Sale is incomplete — do not mark as paid."
+              : "Card payment failed. Sale is incomplete — do not mark as paid."}
+          </p>
+          <dl className="mb-6 space-y-2 rounded-lg bg-white/10 px-4 py-3 text-sm">
+            <div className="flex justify-between gap-2">
+              <dt className="text-white/70">ResponseCode</dt>
+              <dd className="font-mono font-semibold">
+                {pendingLinklyTxn.responseCode ||
+                  (step === "timeout" ? "TO" : "—")}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-white/70">TxnRef</dt>
+              <dd className="font-mono text-xs">
+                {pendingLinklyTxn.txnRef || "—"}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-white/70">Message</dt>
+              <dd className="text-right text-xs">
+                {linklyOutcomeMessage(
+                  pendingLinklyTxn.outcome ||
+                    (step === "timeout" ? "operator_timeout" : "declined"),
+                  pendingLinklyTxn,
+                )}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-white/70">POS status</dt>
+              <dd className="font-semibold text-red-200">FAILED</dd>
+            </div>
+          </dl>
+          <button
+            type="button"
+            onClick={handleLinklyFailedDismiss}
+            className="mt-auto w-full rounded-lg bg-white py-3.5 text-base font-bold text-[#984B28]"
+          >
+            OK — retry card or choose another method
+          </button>
+        </div>
+      ) : step === "finalise" && paymentSummary ? (
         <FinaliseSaleStep
           paymentSummary={paymentSummary}
           amountTendered={paymentSummary.amountTendered}
@@ -291,7 +602,7 @@ export default function PosPaymentDrawer({
           onTrainingDone={onTrainingDone}
           showManualCardInstruction={
             paymentSummary.method === "credit-card" &&
-            !tyroApproved &&
+            !cardApproved &&
             !trainingMode
           }
         />
