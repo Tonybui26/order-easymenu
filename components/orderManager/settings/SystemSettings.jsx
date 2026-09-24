@@ -45,6 +45,9 @@ export default function SystemSettings({
     resolvePosPaymentsConfig(menuConfig).linkly.enabled,
   );
   const kitchenPrintingOn = Boolean(draftKitchenPrintingEnabled);
+  const showLocalModeFoundation =
+    process.env.NODE_ENV === "development" &&
+    (storeIsTesting || storeAutoOfflineBackup || storeSecondTest);
 
   function updatePosDraft(patch) {
     onDraftPosChange?.({ ...draftPosConfig, ...patch });
@@ -52,9 +55,7 @@ export default function SystemSettings({
 
   return (
     <div className="space-y-6">
-      {storeIsTesting || storeAutoOfflineBackup || storeSecondTest ? (
-        <LocalDbTestingPanel />
-      ) : null}
+      {showLocalModeFoundation ? <LocalDbTestingPanel /> : null}
 
       <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 px-6 py-3">
