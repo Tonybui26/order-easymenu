@@ -17,7 +17,9 @@ import {
   editCounterQrOrderItem,
   applyPosCheckDiscount,
   updateOrderStatus,
+  markOrderPayLater,
 } from "@/lib/api/fetchApi";
+import { updateHeldCheckStatusMixed } from "@/lib/localDb/localHeldActions";
 import { hydrateResumeOrders } from "@/lib/localDb/posLiveSnapshot";
 import {
   flushOfflineSendOutbox,
@@ -51,7 +53,7 @@ import {
   planPosResumeApply,
   posCartLineReactKey,
 } from "@/lib/pos/posResumeOrder";
-import { isCounterPayment } from "@/lib/helper/payLater";
+import { isCounterPayment, isPayLaterAtCounterEnabled } from "@/lib/helper/payLater";
 import { printHeldCheckKitchenOnPrepare } from "@/lib/pos/posHeldOrderPrint";
 import {
   buildCustomerDisplayCartSnapshot,
@@ -183,6 +185,11 @@ function isOpenCartLine(line) {
 /** Open lines that may be sent as a new POS kitchen fire (exclude editable QR). */
 function isSendableCartLine(line) {
   return isOpenCartLine(line) && !isQrCounterEditableCartLine(line);
+}
+
+/** Unpaid counter QR still awaiting kitchen — Send on POS menu only. */
+function isKitchenPendingQrCartLine(line) {
+  return isQrCounterEditableCartLine(line) && !isCancelledCartLine(line);
 }
 
 function isPayableCartLine(line) {
@@ -1411,7 +1418,10 @@ export default function PosTerminal() {
     router.replace(getPosHomePath(menuConfig), { scroll: false });
   }
 
-  async function sendUnsentLinesToKitchen({ showSuccessToast = true } = {}) {
+  async function sendUnsentLinesToKitchen({
+    showSuccessToast = true,
+    forceOnline = false,
+  } = {}) {
     if (isViewOnly) {
       return { success: false, error: "Order is view only" };
     }
@@ -1508,7 +1518,9 @@ export default function PosTerminal() {
       if (customerPhone.trim()) payload.customerPhone = customerPhone.trim();
       if (customerEmail.trim()) payload.customerEmail = customerEmail.trim();
 
-      if (isOfflineSendEnabled(menuConfig)) {
+      // Pay-with-server-QR must create a real Mongo fire so batch complete can
+      // settle QR + POS together (offline outbox would leave QR unpaid).
+      if (isOfflineSendEnabled(menuConfig) && !forceOnline) {
         const result = await queueOfflinePosSend(payload);
         if (!result?.success) {
           const error = result?.error || "Failed to save order on this device";
@@ -1588,16 +1600,35 @@ export default function PosTerminal() {
       }
 
       if (checkDiscount) {
-        const discountResult = await applyPosCheckDiscount({
-          orderIds: nextCheckOrderIds,
-          discountAmount: checkDiscount.discountAmount ?? 0,
-          discountPercent: checkDiscount.discountPercent ?? null,
-          discountType: checkDiscount.discountType ?? null,
-        });
-        if (!discountResult?.success) {
-          showDismissibleToast(
-            discountResult?.error || "Discount could not be saved to the check",
-          );
+        // Discount API is POS-only; QR tickets receive discount fields on complete.
+        const qrOrderIds = new Set(
+          cartLines
+            .filter(
+              (line) =>
+                isQrCounterEditableCartLine(line) ||
+                isUnpaidExternalPayableCartLine(line) ||
+                (isExternalContextCartLine(line) &&
+                  String(line.source || "").trim() !== "pos"),
+            )
+            .map((line) => String(line.sourceOrderId || "").trim())
+            .filter(Boolean),
+        );
+        const discountOrderIds = nextCheckOrderIds.filter(
+          (id) => !qrOrderIds.has(String(id)),
+        );
+        if (discountOrderIds.length > 0) {
+          const discountResult = await applyPosCheckDiscount({
+            orderIds: discountOrderIds,
+            discountAmount: checkDiscount.discountAmount ?? 0,
+            discountPercent: checkDiscount.discountPercent ?? null,
+            discountType: checkDiscount.discountType ?? null,
+          });
+          if (!discountResult?.success) {
+            showDismissibleToast(
+              discountResult?.error ||
+                "Discount could not be saved to the check",
+            );
+          }
         }
       }
 
@@ -1627,16 +1658,183 @@ export default function PosTerminal() {
     }
   }
 
+  async function sendQrCounterOrdersToKitchen({ showSuccessToast = true } = {}) {
+    if (isViewOnly) {
+      return { success: false, error: "Order is view only" };
+    }
+    if (isTrainingMode) {
+      return {
+        success: false,
+        error: "QR kitchen send is not available in training mode",
+      };
+    }
+    if (isSending) {
+      return { success: false, error: "Send already in progress" };
+    }
+
+    const qrLines = cartLines.filter(isKitchenPendingQrCartLine);
+    const orderIds = [
+      ...new Set(
+        qrLines
+          .map((line) => String(line.sourceOrderId || "").trim())
+          .filter(Boolean),
+      ),
+    ];
+    if (orderIds.length === 0) {
+      return { success: true, skipped: true, orderIds: [] };
+    }
+
+    setIsSending(true);
+    try {
+      let orders = [];
+      const hydrateResult = await hydrateResumeOrders(
+        orderIds,
+        (ids) => fetchPosResumeOrders(ids),
+        {
+          onOrders: (next) => {
+            orders = Array.isArray(next) ? next : [];
+          },
+        },
+      );
+      if (!hydrateResult?.success && orders.length === 0) {
+        return {
+          success: false,
+          error: hydrateResult?.error || "Could not load QR orders to send",
+        };
+      }
+      if (orders.length === 0) {
+        return { success: false, error: "Could not load QR orders to send" };
+      }
+
+      const byId = new Map(orders.map((order) => [String(order._id), order]));
+      const payLaterEnabled = isPayLaterAtCounterEnabled(menuConfig);
+
+      for (const orderId of orderIds) {
+        const order = byId.get(String(orderId));
+        if (!order) continue;
+
+        const isPaid = String(order.paymentStatus || "").trim() === "paid";
+        const status = String(order.status || "").trim();
+
+        if (!isPaid && payLaterEnabled && !order.isPayLater) {
+          try {
+            await markOrderPayLater(orderId, payLaterEnabled);
+          } catch (payLaterError) {
+            console.error(
+              `Failed to mark pay-later for QR order ${orderId}:`,
+              payLaterError,
+            );
+          }
+        }
+
+        if (status === "pending") {
+          try {
+            const confirmed = await updateOrderStatus(orderId, "confirmed");
+            byId.set(String(orderId), confirmed);
+          } catch (statusError) {
+            console.error(
+              `Failed to confirm QR order ${orderId} before kitchen:`,
+              statusError,
+            );
+          }
+        }
+      }
+
+      const prepareIds = orderIds.filter((orderId) => {
+        const order = byId.get(String(orderId));
+        if (!order) return false;
+        const status = String(order.status || "").trim();
+        return ["confirmed", "accepted", "pending"].includes(status);
+      });
+
+      if (prepareIds.length === 0) {
+        return { success: false, error: "No QR tickets to send to kitchen" };
+      }
+
+      const result = await updateHeldCheckStatusMixed({
+        orderIds: prepareIds,
+        status: "preparing",
+      });
+      if (!result?.success) {
+        return {
+          success: false,
+          error: result?.error || "Failed to send QR order to kitchen",
+        };
+      }
+
+      const preparedIdSet = new Set(prepareIds.map((id) => String(id)));
+      setCartLines((prev) =>
+        prev.map((line) => {
+          if (!isKitchenPendingQrCartLine(line)) return line;
+          if (!preparedIdSet.has(String(line.sourceOrderId || "").trim())) {
+            return line;
+          }
+          return {
+            ...line,
+            isQrCounterEditable: false,
+            isExternalContext: true,
+            isUnpaidExternalPayable: true,
+            kitchenStatus: "sent",
+          };
+        }),
+      );
+      if (
+        customizingLineId &&
+        qrLines.some((line) => line.lineId === customizingLineId)
+      ) {
+        closeCustomization();
+      }
+
+      void (async () => {
+        try {
+          await printHeldCheckKitchenOnPrepare(
+            [...byId.values()],
+            prepareIds,
+            {
+              storeProfile,
+              itemGroups,
+              menuConfig,
+            },
+          );
+        } catch (printError) {
+          console.error("[pos] Kitchen print for unpaid QR failed:", printError);
+        }
+      })();
+
+      if (showSuccessToast) {
+        toast.success("Sent to kitchen");
+      }
+      return { success: true, orderIds: prepareIds };
+    } catch (error) {
+      const message = error?.message || "Failed to send QR order to kitchen";
+      showDismissibleToast(message);
+      return { success: false, error: message };
+    } finally {
+      setIsSending(false);
+    }
+  }
+
   async function handleSendOrder() {
     if (isViewOnly || cartLines.length === 0 || isSending) return;
 
     const unsentLines = cartLines.filter(isSendableCartLine);
-    if (unsentLines.length === 0) {
+    const qrPendingLines = cartLines.filter(isKitchenPendingQrCartLine);
+
+    if (unsentLines.length === 0 && qrPendingLines.length === 0) {
       showDismissibleToast("Nothing new to send");
       return;
     }
 
-    await sendUnsentLinesToKitchen({ showSuccessToast: true });
+    if (unsentLines.length > 0) {
+      const sendResult = await sendUnsentLinesToKitchen({
+        showSuccessToast: qrPendingLines.length === 0,
+      });
+      if (!sendResult?.success) return;
+    }
+
+    if (qrPendingLines.length > 0) {
+      await sendQrCounterOrdersToKitchen({ showSuccessToast: true });
+    }
   }
 
   async function handlePrintReceipt(paymentSummary) {
@@ -1870,20 +2068,28 @@ export default function PosTerminal() {
       return { success: false, error: "Payment method is required" };
     }
 
-    let orderIdsToComplete =
-      checkOrderIds.length > 0
-        ? checkOrderIds
-        : activeOrderId
-          ? [activeOrderId]
-          : [];
-
-    const hasUnsentToSend = cartLines.some(isSendableCartLine);
     const isMongoOrderId = (id) =>
       /^[a-f0-9]{24}$/i.test(String(id || "").trim());
 
-    function collectLocalOrderIds() {
+    function collectPayableMongoOrderIds() {
+      const ids = new Set();
+      for (const id of checkOrderIds) {
+        if (isMongoOrderId(id)) ids.add(String(id));
+      }
+      if (activeOrderId && isMongoOrderId(activeOrderId)) {
+        ids.add(String(activeOrderId));
+      }
+      for (const line of cartLines) {
+        if (!isPayableCartLine(line)) continue;
+        const sourceId = String(line.sourceOrderId || "").trim();
+        if (sourceId && isMongoOrderId(sourceId)) ids.add(sourceId);
+      }
+      return [...ids];
+    }
+
+    function collectLocalOrderIds(seedIds = []) {
       const localIds = new Set();
-      for (const id of orderIdsToComplete) {
+      for (const id of seedIds) {
         if (id && !isMongoOrderId(id)) localIds.add(String(id));
       }
       if (activeOrderId && !isMongoOrderId(activeOrderId)) {
@@ -1897,11 +2103,28 @@ export default function PosTerminal() {
       return localIds;
     }
 
-    // Offline/second-test queues tenders for local POS fires. QR pay-at-counter
-    // tickets already exist on the server — complete them online so payment
-    // is not stuck in the outbox (complete-offline used to ignore non-POS).
-    if (isOfflineSendEnabled(menuConfig)) {
-      const localTicketIds = collectLocalOrderIds();
+    let orderIdsToComplete = collectPayableMongoOrderIds();
+    if (orderIdsToComplete.length === 0) {
+      orderIdsToComplete =
+        checkOrderIds.length > 0
+          ? [...checkOrderIds]
+          : activeOrderId
+            ? [activeOrderId]
+            : [];
+    }
+
+    const hasUnsentToSend = cartLines.some(isSendableCartLine);
+    const localTicketIds = collectLocalOrderIds(orderIdsToComplete);
+    const hasServerMongoTickets = orderIdsToComplete.some(isMongoOrderId);
+
+    // Mixed unpaid QR (server) + new/local POS: never park the QR tender in the
+    // offline outbox — settle everything online after syncing/sending POS.
+    const mustCompleteServerTicketsOnline =
+      isOfflineSendEnabled(menuConfig) &&
+      hasServerMongoTickets &&
+      (hasUnsentToSend || localTicketIds.size > 0);
+
+    if (isOfflineSendEnabled(menuConfig) && !mustCompleteServerTicketsOnline) {
       const serverOnlyCheck =
         !hasUnsentToSend &&
         localTicketIds.size === 0 &&
@@ -1916,9 +2139,32 @@ export default function PosTerminal() {
       }
     }
 
+    if (mustCompleteServerTicketsOnline && localTicketIds.size > 0) {
+      const syncResult = await syncLocalTicketsForInvoice([...localTicketIds], {
+        notify: true,
+      });
+      if (!syncResult?.success) {
+        return {
+          success: false,
+          error:
+            syncResult?.error ||
+            "Failed to sync local tickets before paying QR check",
+        };
+      }
+      const syncedIds = (syncResult.serverOrderIds || [])
+        .map((id) => String(id || "").trim())
+        .filter(isMongoOrderId);
+      orderIdsToComplete = [
+        ...new Set([...orderIdsToComplete.map(String), ...syncedIds]),
+      ];
+      const invoice = String(syncResult.taxInvoiceNo || "").trim();
+      if (invoice) setTaxInvoiceNo((prev) => prev || invoice);
+    }
+
     if (hasUnsentToSend || orderIdsToComplete.length === 0) {
       const sendResult = await sendUnsentLinesToKitchen({
         showSuccessToast: false,
+        forceOnline: mustCompleteServerTicketsOnline,
       });
       if (!sendResult?.success) {
         return {
@@ -1932,15 +2178,25 @@ export default function PosTerminal() {
           error: "Training mode does not save payments",
         };
       }
-      if (Array.isArray(sendResult.orderIds) && sendResult.orderIds.length > 0) {
+      const sentIds = [
+        ...(Array.isArray(sendResult.orderIds) ? sendResult.orderIds : []),
+        sendResult.order?._id,
+      ]
+        .map((id) => String(id || "").trim())
+        .filter(Boolean);
+      if (sentIds.length > 0) {
         orderIdsToComplete = [
           ...new Set([
             ...orderIdsToComplete.map(String).filter(Boolean),
-            ...sendResult.orderIds.map(String).filter(Boolean),
+            ...sentIds,
           ]),
         ];
       }
     }
+
+    orderIdsToComplete = orderIdsToComplete
+      .map((id) => String(id || "").trim())
+      .filter(isMongoOrderId);
 
     if (orderIdsToComplete.length === 0) {
       return {
@@ -2204,6 +2460,10 @@ export default function PosTerminal() {
         ? String(checkDiscount.discountAmount)
         : "";
   const hasUnsentLines = cartLines.some(isSendableCartLine);
+  const hasQrLinesReadyToKitchen = cartLines.some(isKitchenPendingQrCartLine);
+  // POS menu: Send for new POS fires and/or unpaid counter QR awaiting kitchen.
+  // Table-map drawer keeps pay-first exclusivity (Pay only) — do not mirror here.
+  const hasUnsentItems = hasUnsentLines || hasQrLinesReadyToKitchen;
   const hasSentLines = cartLines.some(isSentCartLine);
   const hasPayableLines = cartLines.some(isPayableCartLine);
 
@@ -2456,7 +2716,7 @@ export default function PosTerminal() {
               subtotal={cartSubtotal}
               discount={footerDiscount}
               taxPercentage={storeProfile.taxPercentage}
-              hasUnsentItems={hasUnsentLines}
+              hasUnsentItems={hasUnsentItems}
               viewOnly={isViewOnly}
               onClear={handleClearOrder}
               onHold={handleFooterHold}
