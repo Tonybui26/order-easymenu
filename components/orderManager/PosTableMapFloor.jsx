@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/helper";
-import { findPosHeldOrderForTable } from "@/lib/pos/posTableMapHeld";
+import { findHeldOrderForTableMap } from "@/lib/pos/posTableMapHeld";
 import {
   getPosTableMapStatusFill,
   getPosTableMapStatusTextColor,
@@ -38,6 +38,7 @@ export default function PosTableMapFloor({
   tableMap,
   heldOrders = [],
   selfOrderTableKeys = null,
+  unpaidQrPaymentTableKeys = null,
   floorColor = TABLE_MAP_FLOOR_COLOR,
   solidFloor = false,
   selectedTableNames = [],
@@ -108,7 +109,7 @@ export default function PosTableMapFloor({
               const tableName = getTableMapTableName(object);
               const isInteractive = isTable && Boolean(tableName);
               const heldOrder = isInteractive
-                ? findPosHeldOrderForTable(heldOrders, tableName)
+                ? findHeldOrderForTableMap(heldOrders, tableName)
                 : null;
               const status = resolvePosTableMapStatus(heldOrder);
               const statusFill = getPosTableMapStatusFill(status);
@@ -117,6 +118,9 @@ export default function PosTableMapFloor({
               const isNavigating = tableKey ? navigatingKeys.has(tableKey) : false;
               const hasSelfOrderDot =
                 Boolean(tableKey) && Boolean(selfOrderTableKeys?.has(tableKey));
+              const hasUnpaidQrPaymentDot =
+                Boolean(tableKey) &&
+                Boolean(unpaidQrPaymentTableKeys?.has(tableKey));
               const mergeStroke =
                 (tableKey && mergeColorByTableName?.get(tableKey)) || null;
               const fillColor = isSelected
@@ -143,6 +147,12 @@ export default function PosTableMapFloor({
                 : mergeStroke
                   ? POS_TABLE_MAP_MERGED_STROKE_WIDTH
                   : undefined;
+              const indicatorHints = [
+                hasSelfOrderDot ? "QR self-order" : null,
+                hasUnpaidQrPaymentDot ? "payment due" : null,
+              ]
+                .filter(Boolean)
+                .join(", ");
 
               return (
                 <div
@@ -174,7 +184,7 @@ export default function PosTableMapFloor({
                     )}
                     aria-label={
                       isInteractive
-                        ? `Table ${tableName}${statusLabel ? `, ${statusLabel}` : ""}${hasSelfOrderDot ? ", QR self-order" : ""}`
+                        ? `Table ${tableName}${statusLabel ? `, ${statusLabel}` : ""}${indicatorHints ? `, ${indicatorHints}` : ""}`
                         : undefined
                     }
                   >
@@ -184,11 +194,18 @@ export default function PosTableMapFloor({
                       strokeColor={tableStrokeColor}
                       strokeWidth={tableStrokeWidth}
                     />
-                    {hasSelfOrderDot ? (
+                    {hasSelfOrderDot || hasUnpaidQrPaymentDot ? (
                       <span
-                        className="pointer-events-none absolute right-1 top-1 z-10 size-2.5 rounded-full bg-violet-600 shadow-sm ring-2 ring-white"
+                        className="pointer-events-none absolute right-1 top-1 z-10 flex items-center gap-0.5"
                         aria-hidden
-                      />
+                      >
+                        {hasSelfOrderDot ? (
+                          <span className="size-2.5 rounded-full bg-violet-600 shadow-sm ring-2 ring-white" />
+                        ) : null}
+                        {hasUnpaidQrPaymentDot ? (
+                          <span className="size-2.5 rounded-full bg-red-600 shadow-sm ring-2 ring-white" />
+                        ) : null}
+                      </span>
                     ) : null}
                     {shouldShowObjectLabel(object) ? (
                       <ObjectLabel object={object} color={labelColor} />

@@ -3,9 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { App } from "@capacitor/app";
 import toast from "react-hot-toast";
-import { fetchOrders } from "@/lib/api/fetchApi";
+import { fetchOrders, updateOrderStatus } from "@/lib/api/fetchApi";
 import { filterOrdersForActiveList } from "@/lib/helper/payLater";
-import { isSelfOrderNotificationCandidate } from "@/lib/helper/liveOrderNotifications";
+import {
+  isSelfOrderAlertCandidate,
+  isPayFirstWaitForPaymentAlert,
+  isSelfOrderNotificationCandidate,
+} from "@/lib/helper/liveOrderNotifications";
 import {
   autoPrintAndPrepareOrder,
   isAutoPrintExcludedPayLaterOrder,
@@ -18,6 +22,7 @@ import {
 } from "@/lib/pos/selfOrderAlertDisplay";
 import { getAutoPrintingEnabled } from "@/lib/utils/autoPrinting";
 import { isSelfOrderAlertsEnabled } from "@/lib/pos/selfOrderAlertsConfig";
+import { resolvePosConfig } from "@/lib/pos/posConfig";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 
@@ -53,7 +58,11 @@ function sortCandidatesNewestFirst(orders) {
   );
 }
 
-function orderToAlert(order) {
+function orderToAlert(order, { payFirstMode = false } = {}) {
+  const waitForPayment = isPayFirstWaitForPaymentAlert(order, {
+    payFirstMode,
+  });
+
   return {
     kind: "order",
     id: order._id,
@@ -62,6 +71,8 @@ function orderToAlert(order) {
     customerName: order.customerName,
     createdAt: order.createdAt,
     paymentStatus: order.paymentStatus,
+    waitForPayment,
+    sendLabel: waitForPayment ? "Ok, wait for payment" : "Send",
   };
 }
 
@@ -79,10 +90,15 @@ function batchToAlert(orders) {
     title: formatSelfOrderBatchTitle(sorted.length),
     description: formatSelfOrderBatchDescription(sorted),
     sendLabel: "View orders",
+    waitForPayment: false,
   };
 }
 
-export function buildAlertsFromCandidates(candidates, returnSyncIds) {
+export function buildAlertsFromCandidates(
+  candidates,
+  returnSyncIds,
+  { payFirstMode = false } = {},
+) {
   const sorted = sortCandidatesNewestFirst(candidates);
   const backlog = sorted.filter((order) =>
     returnSyncIds.has(normalizeOrderId(order._id)),
@@ -91,12 +107,14 @@ export function buildAlertsFromCandidates(candidates, returnSyncIds) {
     (order) => !returnSyncIds.has(normalizeOrderId(order._id)),
   );
 
-  const alerts = liveArrivals.map(orderToAlert);
+  const alerts = liveArrivals.map((order) =>
+    orderToAlert(order, { payFirstMode }),
+  );
 
   if (backlog.length > 1) {
     alerts.push(batchToAlert(backlog));
   } else if (backlog.length === 1) {
-    alerts.push(orderToAlert(backlog[0]));
+    alerts.push(orderToAlert(backlog[0], { payFirstMode }));
   }
 
   return alerts;
@@ -133,6 +151,10 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
   const isNative = isNativeApp();
   const hasMenuConfig = Boolean(menuConfig);
   const selfOrderAlertsEnabled = isSelfOrderAlertsEnabled(menuConfig);
+
+  const isPayFirstMode = Boolean(
+    resolvePosConfig(menuConfig).payFirstModeEnabled,
+  );
 
   const setOrderAutoPrinting = useCallback((orderId, isPrinting) => {
     const id = normalizeOrderId(orderId);
@@ -205,6 +227,57 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
     ],
   );
 
+  /**
+   * Pay-first unpaid counter QR: staff acknowledges and waits for counter pay.
+   * Sets status → confirmed so self-order alerts stop re-notifying (Live unchanged).
+   */
+  const acknowledgeWaitForPaymentSelfOrderAlert = useCallback(
+    async (alertId) => {
+      if (!menuConfig || processingAlertIdsRef.current.has(alertId)) return;
+
+      processingAlertIdsRef.current.add(alertId);
+      setProcessingAlertIds(new Set(processingAlertIdsRef.current));
+
+      try {
+        const data = await fetchOrders();
+        const activeOrders = filterOrdersForActiveList(data, menuConfig);
+        const order = activeOrders.find((entry) => entry._id === alertId);
+
+        if (!order) {
+          toast.error("Order not found");
+          dismissSelfOrderAlert(alertId);
+          return;
+        }
+
+        if (
+          !isPayFirstWaitForPaymentAlert(order, {
+            payFirstMode: isPayFirstMode,
+          })
+        ) {
+          toast.error("This order is not waiting for counter payment");
+          return;
+        }
+
+        if (String(order.status || "").trim() === "pending") {
+          await updateOrderStatus(order._id, "confirmed");
+        }
+
+        dismissSelfOrderAlert(alertId);
+        toast.success("Waiting for payment at counter");
+      } catch (error) {
+        console.error(
+          "Failed to acknowledge wait-for-payment self-order:",
+          error,
+        );
+        toast.error(error?.message || "Failed to acknowledge order");
+      } finally {
+        processingAlertIdsRef.current.delete(alertId);
+        setProcessingAlertIds(new Set(processingAlertIdsRef.current));
+      }
+    },
+    [dismissSelfOrderAlert, isPayFirstMode, menuConfig],
+  );
+
   const alertsWithProcessing = useMemo(() => {
     const orderAlerts = alerts.map((alert) => {
       const isManualSending = processingAlertIds.has(alert.id);
@@ -219,7 +292,9 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
         ...alert,
         isSending: isManualSending || isAutoSending,
         isAutoSending,
-        sendLabel: isAutoSending ? "Auto sending…" : alert.sendLabel || "Send",
+        sendLabel: isAutoSending
+          ? "Auto sending…"
+          : alert.sendLabel || "Send",
       };
     });
 
@@ -247,8 +322,13 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
 
   const syncAlertsFromOrders = useCallback(
     (activeOrders) => {
+      const payFirstMode = Boolean(
+        resolvePosConfig(menuConfig).payFirstModeEnabled,
+      );
       const candidates = sortCandidatesNewestFirst(
-        activeOrders.filter(isSelfOrderNotificationCandidate),
+        activeOrders.filter((order) =>
+          isSelfOrderAlertCandidate(order, { payFirstMode }),
+        ),
       );
       const candidateIds = new Set(
         candidates.map((order) => normalizeOrderId(order._id)).filter(Boolean),
@@ -261,6 +341,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
           buildAlertsFromCandidates(
             candidates,
             returnSyncCandidateIdsRef.current,
+            { payFirstMode },
           ),
         );
         return;
@@ -271,12 +352,13 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
           buildAlertsFromCandidates(
             candidates,
             returnSyncCandidateIdsRef.current,
+            { payFirstMode },
           ),
           prev,
         ),
       );
     },
-    [mergePinnedMinVisibleAlerts],
+    [menuConfig, mergePinnedMinVisibleAlerts],
   );
 
   const dismissAutoPrintAlertForOrder = useCallback(
@@ -592,6 +674,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
     alerts: alertsWithProcessing,
     dismissSelfOrderAlert,
     prepareSelfOrderAlert,
+    acknowledgeWaitForPaymentSelfOrderAlert,
     pollSelfOrderAlerts,
   };
 }

@@ -9,6 +9,7 @@ import {
   Loader2,
   Printer,
   Trash2,
+  UtensilsCrossed,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/helper";
@@ -240,6 +241,7 @@ export default function PosTableMapTableDrawer({
   heldOrder,
   onLoadOrder,
   onPay,
+  onSendToKitchen,
   onPrintBill,
   onReprintOrder,
   onDelete,
@@ -253,6 +255,7 @@ export default function PosTableMapTableDrawer({
   showComplete = false,
   showLoadOrder: showLoadOrderProp,
   showPay: showPayProp,
+  showSendToKitchen: showSendToKitchenProp = false,
   totalLabel = "Table total",
   emptySubtitle = "Open check on this table",
 }) {
@@ -275,6 +278,7 @@ export default function PosTableMapTableDrawer({
       showComplete,
       showLoadOrder: showLoadOrderProp,
       showPay: showPayProp,
+      showSendToKitchen: showSendToKitchenProp,
       totalLabel,
       emptySubtitle,
     };
@@ -307,6 +311,7 @@ export default function PosTableMapTableDrawer({
   // Paid + undelivered: Complete. Open lives in the header.
   const showPay =
     typeof snap.showPay === "boolean" ? snap.showPay : !allPaid;
+  const showSendToKitchen = Boolean(snap.showSendToKitchen);
   const showLoadOrder =
     typeof snap.showLoadOrder === "boolean"
       ? snap.showLoadOrder
@@ -325,6 +330,7 @@ export default function PosTableMapTableDrawer({
   const hasTickets = Boolean(displayHeldOrder?.orderIds?.length);
   const actionsDisabled = isProcessing || !hasTickets;
   const footerPrimaryCount = [
+    showSendToKitchen,
     showPay,
     displayShowAllServed,
     displayShowComplete,
@@ -362,6 +368,16 @@ export default function PosTableMapTableDrawer({
             footerPrimaryCount >= 2 ? "grid-cols-2" : "grid-cols-1",
           )}
         >
+          {showSendToKitchen ? (
+            <PosActionButton
+              tone="blue"
+              icon={UtensilsCrossed}
+              disabled={actionsDisabled}
+              onClick={onSendToKitchen}
+            >
+              {isProcessing ? "Sending…" : "Send to kitchen"}
+            </PosActionButton>
+          ) : null}
           {displayShowAllServed ? (
             <PosActionButton
               tone="green"

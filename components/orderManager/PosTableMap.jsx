@@ -11,20 +11,32 @@ import {
   fetchPosResumeOrders,
   mergePosTables,
   unmergePosTables,
+  markOrderPayLater,
+  updateOrderStatus,
 } from "@/lib/api/fetchApi";
 import {
   markPosBillPrintedMixed,
   updateHeldCheckStatusMixed,
 } from "@/lib/localDb/localHeldActions";
 import { isNativeApp } from "@/lib/helper/platformDetection";
+import { isPayLaterAtCounterEnabled } from "@/lib/helper/payLater";
 import {
-  drawerEntryHasPosCheck,
   drawerEntryHasQrContext,
   findHeldOrderForTableMap,
   findPosHeldOrderForTable,
+  getDrawerPayableOrderIds,
   getDrawerPosOrderIds,
 } from "@/lib/pos/posTableMapHeld";
-import { buildSelfOrderTableIndicatorKeys } from "@/lib/pos/posTableMapSelfOrder";
+import {
+  canSendTableMapToKitchen,
+  getDrawerKitchenCandidateOrderIds,
+  hasTableMapKitchenInProgress,
+  resolveTableMapDrawerPaymentActions,
+} from "@/lib/pos/posTableMapKitchen";
+import {
+  buildSelfOrderTableIndicatorKeys,
+  buildUnpaidQrPaymentTableIndicatorKeys,
+} from "@/lib/pos/posTableMapSelfOrder";
 import {
   getAllTicketIds,
   getTicketIdsNotDelivered,
@@ -32,6 +44,7 @@ import {
 } from "@/lib/pos/posHeldOrder";
 import {
   printBillForHeldCheck,
+  printHeldCheckKitchenOnPrepare,
   reprintHeldCheckKitchen,
 } from "@/lib/pos/posHeldOrderPrint";
 import { buildHeldDrawerPreviewSections } from "@/lib/pos/posHeldDrawerPreview";
@@ -58,6 +71,7 @@ import {
   getTableMapTableName,
   normalizeTableMapTableName,
 } from "@/lib/pos/posTableMaps";
+import { resolvePosConfig } from "@/lib/pos/posConfig";
 import PosChromeHeader from "./PosChromeHeader";
 import PosTableMapFloor from "./PosTableMapFloor";
 import PosTableMapTableDrawer from "./PosTableMapTableDrawer";
@@ -125,6 +139,16 @@ export default function PosTableMap() {
   const selfOrderTableKeys = useMemo(
     () => buildSelfOrderTableIndicatorKeys(heldOrders),
     [heldOrders],
+  );
+  const isPayFirstMode = Boolean(
+    resolvePosConfig(menuConfig).payFirstModeEnabled,
+  );
+  const unpaidQrPaymentTableKeys = useMemo(
+    () =>
+      buildUnpaidQrPaymentTableIndicatorKeys(heldOrders, {
+        payFirstMode: isPayFirstMode,
+      }),
+    [heldOrders, isPayFirstMode],
   );
 
   const mergeColorByTableName = useMemo(() => {
@@ -570,23 +594,112 @@ export default function PosTableMap() {
   }
 
   function handlePay() {
-    const posOrderIds = getDrawerPosOrderIds(drawerHeldOrder);
-    if (posOrderIds.length === 0) {
-      showDismissibleToast(
-        "Pay for this QR order from Self Ordering or Live Orders",
-      );
-      return;
-    }
-    if (
-      drawerHeldOrder?.posAllPaid === true ||
-      (isPosSourceHeldOrder(drawerHeldOrder) && drawerHeldOrder.allPaid)
-    ) {
+    const payableOrderIds = getDrawerPayableOrderIds(drawerHeldOrder);
+    if (payableOrderIds.length === 0) {
       showDismissibleToast("This check is already paid");
       return;
     }
     navigate(
-      `/pos?resume=${encodeURIComponent(posOrderIds.join(","))}&pay=1`,
+      `/pos?resume=${encodeURIComponent(payableOrderIds.join(","))}&pay=1`,
     );
+  }
+
+  async function handleSendToKitchen() {
+    if (!drawerHeldOrder?.orderIds?.length || isProcessing) return;
+    if (!canSendTableMapToKitchen(drawerHeldOrder, menuConfig)) {
+      showDismissibleToast("Cannot send this order to kitchen yet");
+      return;
+    }
+
+    const candidateIds = getDrawerKitchenCandidateOrderIds(drawerHeldOrder);
+    if (candidateIds.length === 0) {
+      showDismissibleToast("No tickets to send to kitchen");
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const orders = await loadDrawerCheckOrders();
+      if (!orders) return;
+
+      const byId = new Map(
+        orders.map((order) => [String(order._id), order]),
+      );
+      const payLaterEnabled = isPayLaterAtCounterEnabled(menuConfig);
+
+      for (const orderId of candidateIds) {
+        const order = byId.get(String(orderId));
+        if (!order) continue;
+
+        const isPaid =
+          String(order.paymentStatus || "").trim() === "paid";
+        const status = String(order.status || "").trim();
+        const isPending = status === "pending";
+
+        // Serve-first / !payFirst: mark pay-later when the store supports it.
+        if (!isPaid && payLaterEnabled && !order.isPayLater) {
+          await markOrderPayLater(orderId, payLaterEnabled);
+        }
+
+        // Confirm pending before prepare (paid, or unpaid send-first from table map).
+        if (isPending) {
+          try {
+            const confirmed = await updateOrderStatus(orderId, "confirmed");
+            byId.set(String(orderId), confirmed);
+          } catch (statusError) {
+            console.error(
+              `Failed to confirm order ${orderId} before kitchen:`,
+              statusError,
+            );
+          }
+        }
+      }
+
+      const prepareIds = candidateIds.filter((orderId) => {
+        const order = byId.get(String(orderId));
+        if (!order) return false;
+        const status = String(order.status || "").trim();
+        return ["confirmed", "accepted", "pending"].includes(status);
+      });
+
+      if (prepareIds.length === 0) {
+        showDismissibleToast("No tickets to send to kitchen");
+        return;
+      }
+
+      const result = await updateHeldCheckStatusMixed({
+        orderIds: prepareIds,
+        status: "preparing",
+      });
+      if (!result?.success) {
+        showDismissibleToast(result?.error || "Failed to send to kitchen");
+        return;
+      }
+
+      toast.success("Sent to kitchen");
+      await loadHeldOrders();
+      handleCloseDrawer();
+
+      void (async () => {
+        try {
+          await printHeldCheckKitchenOnPrepare(
+            [...byId.values()],
+            prepareIds,
+            {
+              storeProfile,
+              itemGroups,
+              menuConfig,
+            },
+          );
+        } catch (error) {
+          console.error("[table-map] Kitchen print failed:", error);
+        }
+      })();
+    } catch (error) {
+      showDismissibleToast(error?.message || "Failed to send to kitchen");
+    } finally {
+      setIsProcessing(false);
+    }
   }
 
   async function loadDrawerCheckOrders() {
@@ -812,24 +925,18 @@ export default function PosTableMap() {
     return markUndeliveredTicketsServed("Order completed");
   }
 
-  const undeliveredTicketCount =
-    getTicketIdsNotDelivered(drawerHeldOrder).length;
-  const needsServe =
-    Boolean(drawerHeldOrder) && undeliveredTicketCount > 0;
+  const kitchenInProgress = hasTableMapKitchenInProgress(drawerHeldOrder);
+  // Pending/confirmed QR has not been sent to kitchen — All Served N/A.
   const showAllServed =
-    needsServe &&
-    drawerEntryHasPosCheck(drawerHeldOrder) &&
-    !Boolean(drawerHeldOrder?.posAllPaid ?? drawerHeldOrder?.allPaid);
+    kitchenInProgress && !Boolean(drawerHeldOrder?.allPaid);
   const showComplete =
-    needsServe &&
-    Boolean(drawerHeldOrder?.posAllPaid ?? drawerHeldOrder?.allPaid);
+    kitchenInProgress && Boolean(drawerHeldOrder?.allPaid);
   // Always allow Open so staff can add more on a paid-but-not-complete table.
   const showLoadOrder = Boolean(drawerHeldOrder?.orderIds?.length);
-  const showPay =
-    Boolean(drawerHeldOrder) &&
-    drawerEntryHasPosCheck(drawerHeldOrder) &&
-    !Boolean(drawerHeldOrder?.posAllPaid ?? false) &&
-    !(isPosSourceHeldOrder(drawerHeldOrder) && drawerHeldOrder.allPaid);
+  const { showPay, showSendToKitchen } = resolveTableMapDrawerPaymentActions(
+    drawerHeldOrder,
+    menuConfig,
+  );
   const mapFloorColor = isMergeMode
     ? TABLE_MAP_MERGE_FLOOR_COLOR
     : TABLE_MAP_FLOOR_COLOR;
@@ -929,12 +1036,22 @@ export default function PosTableMap() {
                   />
                   <span>QR order</span>
                 </div>
+                {isPayFirstMode ? (
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-white/90">
+                    <span
+                      className="size-2.5 shrink-0 rounded-full bg-red-600 ring-2 ring-white/80"
+                      aria-hidden
+                    />
+                    <span>Payment due</span>
+                  </div>
+                ) : null}
               </div>
             </div>
             <PosTableMapFloor
               tableMap={selectedMap}
               heldOrders={heldOrders}
               selfOrderTableKeys={selfOrderTableKeys}
+              unpaidQrPaymentTableKeys={unpaidQrPaymentTableKeys}
               floorColor={mapFloorColor}
               solidFloor={isMergeMode}
               selectedTableNames={isMergeMode ? mergeSelectedNames : []}
@@ -969,6 +1086,7 @@ export default function PosTableMap() {
         heldOrder={drawerHeldOrder}
         onLoadOrder={handleLoadOrder}
         onPay={handlePay}
+        onSendToKitchen={handleSendToKitchen}
         onPrintBill={handlePrintBill}
         onReprintOrder={handleReprintOrder}
         onDelete={handleDeleteOrder}
@@ -982,6 +1100,7 @@ export default function PosTableMap() {
         showComplete={showComplete}
         showLoadOrder={showLoadOrder}
         showPay={showPay}
+        showSendToKitchen={showSendToKitchen}
       />
 
       <DeleteOrderDrawer

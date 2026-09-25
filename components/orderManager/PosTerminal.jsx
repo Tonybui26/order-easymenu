@@ -14,7 +14,9 @@ import {
   fetchPosResumeOrders,
   sendPosOrder,
   cancelPosOrderItem,
+  editCounterQrOrderItem,
   applyPosCheckDiscount,
+  updateOrderStatus,
 } from "@/lib/api/fetchApi";
 import { hydrateResumeOrders } from "@/lib/localDb/posLiveSnapshot";
 import {
@@ -44,9 +46,13 @@ import {
 } from "@/lib/pos/itemCustomization";
 import {
   isExternalContextCartLine,
+  isUnpaidExternalPayableCartLine,
+  isQrCounterEditableCartLine,
   planPosResumeApply,
   posCartLineReactKey,
 } from "@/lib/pos/posResumeOrder";
+import { isCounterPayment } from "@/lib/helper/payLater";
+import { printHeldCheckKitchenOnPrepare } from "@/lib/pos/posHeldOrderPrint";
 import {
   buildCustomerDisplayCartSnapshot,
   updateCustomerDisplayCart,
@@ -168,11 +174,30 @@ function isCancelledCartLine(line) {
 }
 
 function isOpenCartLine(line) {
+  if (isQrCounterEditableCartLine(line) && !isCancelledCartLine(line)) {
+    return true;
+  }
   return !isSentCartLine(line) && !isCancelledCartLine(line);
 }
 
+/** Open lines that may be sent as a new POS kitchen fire (exclude editable QR). */
+function isSendableCartLine(line) {
+  return isOpenCartLine(line) && !isQrCounterEditableCartLine(line);
+}
+
 function isPayableCartLine(line) {
-  return !isCancelledCartLine(line) && !isExternalContextCartLine(line);
+  if (isCancelledCartLine(line)) return false;
+  if (isUnpaidExternalPayableCartLine(line)) return true;
+  if (isQrCounterEditableCartLine(line)) return true;
+  return !isExternalContextCartLine(line);
+}
+
+function shouldPrepareOrderAfterPosPay(order) {
+  if (!order) return false;
+  if (String(order?.source || "").trim() === "pos") return false;
+  if (!isCounterPayment(order?.paymentMethod)) return false;
+  const status = String(order?.status || "").trim();
+  return ["pending", "confirmed", "accepted"].includes(status);
 }
 
 const POS_TAB_CHECK_TRANSITION = {
@@ -698,7 +723,7 @@ export default function PosTerminal() {
         (line) =>
           line.itemId === item.id &&
           line.configKey === configKey &&
-          isOpenCartLine(line),
+          isSendableCartLine(line),
       );
       if (existingIndex >= 0) {
         return prev.map((line, index) =>
@@ -798,7 +823,13 @@ export default function PosTerminal() {
     const activeLine = cartLines.find(
       (line) => line.lineId === customizingLineId,
     );
-    if (isSentCartLine(activeLine) || isCancelledCartLine(activeLine)) return;
+    if (
+      isSentCartLine(activeLine) ||
+      isCancelledCartLine(activeLine) ||
+      isQrCounterEditableCartLine(activeLine)
+    ) {
+      return;
+    }
     const built = buildLineFromSelections(
       customizingItem,
       variantMap,
@@ -858,6 +889,11 @@ export default function PosTerminal() {
     setOptionsLineId(null);
     const line = cartLines.find((entry) => entry.lineId === lineId);
     if (!line || !isOpenCartLine(line)) return;
+    // QR counter lines: qty/remove only (variants stay as ordered).
+    if (isQrCounterEditableCartLine(line)) {
+      closeCustomization();
+      return;
+    }
 
     const item = itemsById.get(line.itemId);
     if (!item || !itemHasCustomizableOptions(item, globalModifiers || {})) {
@@ -956,13 +992,115 @@ export default function PosTerminal() {
     });
   }
 
-  function handleRemoveLine(lineId) {
-    const line = cartLines.find((entry) => entry.lineId === lineId);
-    if (isViewOnly || !isOpenCartLine(line)) return;
-    setCartLines((prev) => prev.filter((line) => line.lineId !== lineId));
+  function dropCartLineLocally(lineId) {
+    setCartLines((prev) => prev.filter((entry) => entry.lineId !== lineId));
     if (lineId === customizingLineId) closeCustomization();
     if (lineId === optionsLineId) setOptionsLineId(null);
     if (lineId === noteLineId) setNoteLineId(null);
+  }
+
+  function dropOrderFromCheck(orderId) {
+    const id = String(orderId || "").trim();
+    if (!id) return;
+    setCartLines((prev) =>
+      prev.filter((entry) => String(entry.sourceOrderId || "").trim() !== id),
+    );
+    setCheckOrderIds((prev) =>
+      prev.filter((entry) => String(entry || "").trim() !== id),
+    );
+    setActiveOrderId((current) =>
+      String(current || "").trim() === id ? null : current,
+    );
+  }
+
+  async function persistCounterQrLineEdit(line, payload) {
+    const orderId = String(line?.sourceOrderId || "").trim();
+    if (!orderId) {
+      return { success: false, error: "Missing order reference" };
+    }
+    if (isTrainingMode) {
+      return {
+        success: false,
+        error: "QR order edits are not available in training mode",
+      };
+    }
+
+    const sourceLineId = String(line.sourceLineId || "").trim();
+    const body = {
+      orderId,
+      ...payload,
+    };
+    // Always include itemIndex — QR storefront lines often have no stored lineId
+    // (resume uses a synthetic sourceLineId). Server prefers a real lineId match.
+    if (line.sourceItemIndex != null) {
+      body.itemIndex = line.sourceItemIndex;
+    }
+    if (sourceLineId) {
+      body.lineId = sourceLineId;
+    }
+
+    return editCounterQrOrderItem(body);
+  }
+
+  function reindexQrCartLinesForOrder(orderId, removedLineId) {
+    const id = String(orderId || "").trim();
+    if (!id) return;
+    setCartLines((prev) => {
+      const remainingForOrder = prev
+        .filter(
+          (entry) =>
+            String(entry.sourceOrderId || "").trim() === id &&
+            entry.lineId !== removedLineId,
+        )
+        .sort(
+          (a, b) =>
+            Number(a.sourceItemIndex || 0) - Number(b.sourceItemIndex || 0),
+        );
+      const nextIndexByLineId = new Map(
+        remainingForOrder.map((entry, index) => [entry.lineId, index]),
+      );
+      return prev
+        .filter((entry) => entry.lineId !== removedLineId)
+        .map((entry) => {
+          if (String(entry.sourceOrderId || "").trim() !== id) return entry;
+          const nextIndex = nextIndexByLineId.get(entry.lineId);
+          return nextIndex == null
+            ? entry
+            : { ...entry, sourceItemIndex: nextIndex };
+        });
+    });
+    if (removedLineId === customizingLineId) closeCustomization();
+    if (removedLineId === optionsLineId) setOptionsLineId(null);
+    if (removedLineId === noteLineId) setNoteLineId(null);
+  }
+
+  async function handleRemoveLine(lineId) {
+    const line = cartLines.find((entry) => entry.lineId === lineId);
+    if (isViewOnly || !isOpenCartLine(line)) return;
+
+    if (isQrCounterEditableCartLine(line)) {
+      try {
+        const result = await persistCounterQrLineEdit(line, {
+          action: "remove",
+        });
+        if (!result?.success) {
+          showDismissibleToast(result?.error || "Failed to remove item");
+          return;
+        }
+        if (result.cancelledOrder) {
+          dropOrderFromCheck(line.sourceOrderId);
+          toast.success("Order cancelled — all items removed");
+          return;
+        }
+        reindexQrCartLinesForOrder(line.sourceOrderId, lineId);
+        toast.success("Item removed");
+      } catch (error) {
+        showDismissibleToast(error?.message || "Failed to remove item");
+      }
+      return;
+    }
+
+    dropCartLineLocally(lineId);
   }
 
   function refreshLinePricing(line, selectedVariants, selectedModifiers) {
@@ -985,7 +1123,7 @@ export default function PosTerminal() {
 
   function handleRemoveVariant(lineId, optionId) {
     const line = cartLines.find((entry) => entry.lineId === lineId);
-    if (!isOpenCartLine(line)) return;
+    if (!isOpenCartLine(line) || isQrCounterEditableCartLine(line)) return;
     setCartLines((prev) =>
       prev.map((line) => {
         if (line.lineId !== lineId) return line;
@@ -1013,7 +1151,7 @@ export default function PosTerminal() {
 
   function handleRemoveModifier(lineId, optionId) {
     const line = cartLines.find((entry) => entry.lineId === lineId);
-    if (!isOpenCartLine(line)) return;
+    if (!isOpenCartLine(line) || isQrCounterEditableCartLine(line)) return;
     setCartLines((prev) =>
       prev.map((line) => {
         if (line.lineId !== lineId) return line;
@@ -1089,28 +1227,53 @@ export default function PosTerminal() {
     setTableFieldShakeKey((key) => key + 1);
   }
 
-  function handleQuantityConfirm({ quantity }) {
+  async function handleQuantityConfirm({ quantity }) {
     const lineId = keypadDrawer?.lineId;
     if (!lineId) return;
 
     const line = cartLines.find((entry) => entry.lineId === lineId);
     if (!isOpenCartLine(line)) return;
 
+    if (isQrCounterEditableCartLine(line)) {
+      if (!quantity || quantity <= 0) {
+        await handleRemoveLine(lineId);
+        return;
+      }
+      try {
+        const result = await persistCounterQrLineEdit(line, {
+          action: "setQuantity",
+          quantity,
+        });
+        if (!result?.success) {
+          showDismissibleToast(result?.error || "Failed to update quantity");
+          return;
+        }
+        setCartLines((prev) =>
+          prev.map((entry) =>
+            entry.lineId === lineId ? { ...entry, quantity } : entry,
+          ),
+        );
+      } catch (error) {
+        showDismissibleToast(error?.message || "Failed to update quantity");
+      }
+      return;
+    }
+
     if (!quantity || quantity <= 0) {
-      setCartLines((prev) => prev.filter((line) => line.lineId !== lineId));
+      dropCartLineLocally(lineId);
       return;
     }
 
     setCartLines((prev) =>
-      prev.map((line) =>
-        line.lineId === lineId ? { ...line, quantity } : line,
+      prev.map((entry) =>
+        entry.lineId === lineId ? { ...entry, quantity } : entry,
       ),
     );
   }
 
   function handleKeypadConfirm(payload) {
     if (keypadDrawer?.mode === "quantity") {
-      handleQuantityConfirm(payload);
+      void handleQuantityConfirm(payload);
       return;
     }
     handleTableConfirm(payload);
@@ -1256,7 +1419,7 @@ export default function PosTerminal() {
       return { success: false, error: "Send already in progress" };
     }
 
-    const unsentLines = cartLines.filter(isOpenCartLine);
+    const unsentLines = cartLines.filter(isSendableCartLine);
     if (unsentLines.length === 0) {
       const existingOrderIds =
         checkOrderIds.length > 0
@@ -1467,7 +1630,7 @@ export default function PosTerminal() {
   async function handleSendOrder() {
     if (isViewOnly || cartLines.length === 0 || isSending) return;
 
-    const unsentLines = cartLines.filter(isOpenCartLine);
+    const unsentLines = cartLines.filter(isSendableCartLine);
     if (unsentLines.length === 0) {
       showDismissibleToast("Nothing new to send");
       return;
@@ -1494,7 +1657,7 @@ export default function PosTerminal() {
 
       // secondTest: local outbox has no taxInvoiceNo until this check is uploaded.
       if (isStoreSecondTest(menuConfig) && !invoiceForPrint) {
-        if (printableLines.some(isOpenCartLine)) {
+        if (printableLines.some(isSendableCartLine)) {
           const sendResult = await sendUnsentLinesToKitchen({
             showSuccessToast: false,
           });
@@ -1506,7 +1669,7 @@ export default function PosTerminal() {
           }
           if (sendResult.localId) {
             linesForPrint = printableLines.map((line) =>
-              isOpenCartLine(line)
+              isSendableCartLine(line)
                 ? { ...line, sourceOrderId: sendResult.localId }
                 : line,
             );
@@ -1670,6 +1833,38 @@ export default function PosTerminal() {
     return { success: true, pendingSync: true };
   }
 
+  async function prepareQrCounterOrdersAfterPay(orders) {
+    if (!isPayFirstMode) return;
+
+    const toPrepare = (orders || []).filter(shouldPrepareOrderAfterPosPay);
+    if (toPrepare.length === 0) return;
+
+    const preparedIds = [];
+    for (const order of toPrepare) {
+      try {
+        const updated = await updateOrderStatus(order._id, "preparing");
+        preparedIds.push(String(updated?._id || order._id));
+      } catch (error) {
+        console.error(
+          `[pos pay] Failed to prepare QR order ${order._id}:`,
+          error,
+        );
+      }
+    }
+
+    if (preparedIds.length === 0 || !storeProfile) return;
+
+    try {
+      await printHeldCheckKitchenOnPrepare(orders, preparedIds, {
+        storeProfile,
+        itemGroups,
+        menuConfig,
+      });
+    } catch (error) {
+      console.error("[pos pay] Kitchen print after QR pay failed:", error);
+    }
+  }
+
   async function persistPosSale(paymentSummary) {
     if (!paymentSummary?.method) {
       return { success: false, error: "Payment method is required" };
@@ -1682,12 +1877,43 @@ export default function PosTerminal() {
           ? [activeOrderId]
           : [];
 
-    const hasUnsentToSend = cartLines.some(isOpenCartLine);
+    const hasUnsentToSend = cartLines.some(isSendableCartLine);
+    const isMongoOrderId = (id) =>
+      /^[a-f0-9]{24}$/i.test(String(id || "").trim());
+
+    function collectLocalOrderIds() {
+      const localIds = new Set();
+      for (const id of orderIdsToComplete) {
+        if (id && !isMongoOrderId(id)) localIds.add(String(id));
+      }
+      if (activeOrderId && !isMongoOrderId(activeOrderId)) {
+        localIds.add(String(activeOrderId));
+      }
+      for (const line of cartLines) {
+        if (isCancelledCartLine(line)) continue;
+        const sourceId = String(line.sourceOrderId || "").trim();
+        if (sourceId && !isMongoOrderId(sourceId)) localIds.add(sourceId);
+      }
+      return localIds;
+    }
+
+    // Offline/second-test queues tenders for local POS fires. QR pay-at-counter
+    // tickets already exist on the server — complete them online so payment
+    // is not stuck in the outbox (complete-offline used to ignore non-POS).
     if (isOfflineSendEnabled(menuConfig)) {
-      return persistOfflineSale(paymentSummary, {
-        orderIdsToComplete,
-        hasUnsentToSend,
-      });
+      const localTicketIds = collectLocalOrderIds();
+      const serverOnlyCheck =
+        !hasUnsentToSend &&
+        localTicketIds.size === 0 &&
+        orderIdsToComplete.length > 0 &&
+        orderIdsToComplete.every(isMongoOrderId);
+
+      if (!serverOnlyCheck) {
+        return persistOfflineSale(paymentSummary, {
+          orderIdsToComplete,
+          hasUnsentToSend,
+        });
+      }
     }
 
     if (hasUnsentToSend || orderIdsToComplete.length === 0) {
@@ -1707,7 +1933,12 @@ export default function PosTerminal() {
         };
       }
       if (Array.isArray(sendResult.orderIds) && sendResult.orderIds.length > 0) {
-        orderIdsToComplete = sendResult.orderIds;
+        orderIdsToComplete = [
+          ...new Set([
+            ...orderIdsToComplete.map(String).filter(Boolean),
+            ...sendResult.orderIds.map(String).filter(Boolean),
+          ]),
+        ];
       }
     }
 
@@ -1785,6 +2016,7 @@ export default function PosTerminal() {
         showDismissibleToast(result?.error || "Failed to complete sale");
         return { success: false };
       }
+      await prepareQrCounterOrdersAfterPay(result.orders);
       toast.success("Sale completed");
       return { success: true };
     } catch (error) {
@@ -1812,6 +2044,7 @@ export default function PosTerminal() {
         return;
       }
 
+      await prepareQrCounterOrdersAfterPay(result.orders);
       resetAfterSale();
       toast.success("Sale completed");
     } catch (error) {
@@ -1970,7 +2203,7 @@ export default function PosTerminal() {
           checkDiscount?.discountAmount != null
         ? String(checkDiscount.discountAmount)
         : "";
-  const hasUnsentLines = cartLines.some(isOpenCartLine);
+  const hasUnsentLines = cartLines.some(isSendableCartLine);
   const hasSentLines = cartLines.some(isSentCartLine);
   const hasPayableLines = cartLines.some(isPayableCartLine);
 
@@ -2193,6 +2426,7 @@ export default function PosTerminal() {
                           }
                           isActive={line.lineId === customizingLineId}
                           readOnly={isViewOnly}
+                          lockOptionEdits={isQrCounterEditableCartLine(line)}
                           allowVoidSentLine={
                             !isViewOnly &&
                             !isTrainingMode &&
@@ -2331,7 +2565,9 @@ export default function PosTerminal() {
                 disabled={isViewOnly || awaitingOrderType}
               />
               <AnimatePresence mode="wait" initial={false}>
-                {customizingItem && isOpenCartLine(activeCartLine) ? (
+                {customizingItem &&
+                isOpenCartLine(activeCartLine) &&
+                !isQrCounterEditableCartLine(activeCartLine) ? (
                   <motion.div
                     key={`customize-${customizingLineId}`}
                     {...getPosPanelMotionProps(panelTransitionDirection)}

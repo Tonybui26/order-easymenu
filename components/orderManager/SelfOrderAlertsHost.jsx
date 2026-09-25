@@ -28,6 +28,7 @@ function SelfOrderAlertsHostActive() {
     alerts,
     dismissSelfOrderAlert,
     prepareSelfOrderAlert,
+    acknowledgeWaitForPaymentSelfOrderAlert,
   } = useSelfOrderAlerts();
 
   const handleSend = useCallback(
@@ -37,9 +38,21 @@ function SelfOrderAlertsHostActive() {
         navigate(`/pos/held?tab=${POS_HELD_ORDERS_TAB_SELF_ORDERING}`);
         return;
       }
+
+      const alert = alerts.find((entry) => entry.id === alertId);
+      if (alert?.waitForPayment) {
+        void acknowledgeWaitForPaymentSelfOrderAlert(alertId);
+        return;
+      }
+
       void prepareSelfOrderAlert(alertId);
     },
-    [navigate, prepareSelfOrderAlert],
+    [
+      acknowledgeWaitForPaymentSelfOrderAlert,
+      alerts,
+      navigate,
+      prepareSelfOrderAlert,
+    ],
   );
 
   const handleReload = useCallback(() => {

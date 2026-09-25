@@ -57,6 +57,8 @@ export default function PosCartLine({
   onEnterAnimationComplete,
   isActive = false,
   readOnly = false,
+  /** Hide variant/modifier remove controls while keeping qty/line remove. */
+  lockOptionEdits = false,
   allowVoidSentLine = false,
   useKitchenPrintAliases = false,
   isOptionsOpen = false,
@@ -81,6 +83,7 @@ export default function PosCartLine({
   const showVoidSentButton =
     allowVoidSentLine && isSentToKitchen && !isCancelled;
   const showRemoveUnsentButton = !readOnly && !isSentToKitchen && !isCancelled;
+  const showRemoveOptionButton = showRemoveUnsentButton && !lockOptionEdits;
   const canSwipeOptions =
     !readOnly &&
     !isCancelled &&
@@ -442,7 +445,7 @@ export default function PosCartLine({
                     {optionLabel}
                   </p>
                   <span className="w-12 shrink-0" aria-hidden />
-                  {showRemoveUnsentButton ? (
+                  {showRemoveOptionButton ? (
                     <button
                       type="button"
                       onClick={() =>
@@ -488,7 +491,7 @@ export default function PosCartLine({
                   ) : (
                     <span className="min-w-[3rem] shrink-0" aria-hidden />
                   )}
-                  {showRemoveUnsentButton ? (
+                  {showRemoveOptionButton ? (
                     <button
                       type="button"
                       onClick={() =>
