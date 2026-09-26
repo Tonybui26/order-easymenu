@@ -199,6 +199,20 @@ function isPayableCartLine(line) {
   return !isExternalContextCartLine(line);
 }
 
+function pickTaxInvoiceNoFromSaleResult(result) {
+  const fromField = String(result?.taxInvoiceNo || "").trim();
+  if (fromField) return fromField;
+  for (const order of result?.orders || []) {
+    const no = String(order?.taxInvoiceNo || "").trim();
+    if (no) return no;
+  }
+  if (result?.order) {
+    const no = String(result.order.taxInvoiceNo || "").trim();
+    if (no) return no;
+  }
+  return "";
+}
+
 function shouldPrepareOrderAfterPosPay(order) {
   if (!order) return false;
   if (String(order?.source || "").trim() === "pos") return false;
@@ -2219,7 +2233,15 @@ export default function PosTerminal() {
       payload.discountType = checkDiscount.discountType;
     }
 
-    return completePosSaleBatch(payload);
+    const result = await completePosSaleBatch(payload);
+    if (result?.success) {
+      const invoice = pickTaxInvoiceNoFromSaleResult(result);
+      if (invoice) {
+        setTaxInvoiceNo((prev) => prev || invoice);
+        result.taxInvoiceNo = invoice;
+      }
+    }
+    return result;
   }
 
   function clearTableMergeAfterPayment() {
@@ -2272,9 +2294,11 @@ export default function PosTerminal() {
         showDismissibleToast(result?.error || "Failed to complete sale");
         return { success: false };
       }
+      const invoice = pickTaxInvoiceNoFromSaleResult(result);
+      if (invoice) setTaxInvoiceNo((prev) => prev || invoice);
       await prepareQrCounterOrdersAfterPay(result.orders);
       toast.success("Sale completed");
-      return { success: true };
+      return { success: true, taxInvoiceNo: invoice || null };
     } catch (error) {
       showDismissibleToast(error?.message || "Failed to complete sale");
       return { success: false };
@@ -2300,6 +2324,8 @@ export default function PosTerminal() {
         return;
       }
 
+      const invoice = pickTaxInvoiceNoFromSaleResult(result);
+      if (invoice) setTaxInvoiceNo((prev) => prev || invoice);
       await prepareQrCounterOrdersAfterPay(result.orders);
       resetAfterSale();
       toast.success("Sale completed");
