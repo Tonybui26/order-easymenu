@@ -292,9 +292,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
         ...alert,
         isSending: isManualSending || isAutoSending,
         isAutoSending,
-        sendLabel: isAutoSending
-          ? "Auto sending…"
-          : alert.sendLabel || "Send",
+        sendLabel: isAutoSending ? "Auto sending…" : alert.sendLabel || "Send",
       };
     });
 
@@ -511,7 +509,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
       consecutiveErrorsRef.current = 0;
       if (failedPolls >= CONNECTION_LOST_AFTER_FAILURES) {
         connectionLostDismissedForOutageRef.current = false;
-        // setConnectionLostAlert(null);
+        setConnectionLostAlert(null);
         toast.success("Connection restored!", { duration: 2000 });
       }
 
