@@ -13,13 +13,15 @@ import {
   completePosSaleBatch,
   fetchPosResumeOrders,
   sendPosOrder,
-  cancelPosOrderItem,
   editCounterQrOrderItem,
   applyPosCheckDiscount,
   updateOrderStatus,
   markOrderPayLater,
 } from "@/lib/api/fetchApi";
-import { updateHeldCheckStatusMixed } from "@/lib/localDb/localHeldActions";
+import {
+  cancelPosOrderItemMixed,
+  updateHeldCheckStatusMixed,
+} from "@/lib/localDb/localHeldActions";
 import { hydrateResumeOrders } from "@/lib/localDb/posLiveSnapshot";
 import {
   flushOfflineSendOutbox,
@@ -90,6 +92,7 @@ import LinklyFailedSaleBanner from "@/components/orderManager/LinklyFailedSaleBa
 import { clearLinklyLastTxnOutcome } from "@/lib/linkly/lastTxnOutcome";
 import { printLinklyTxnReceipt } from "@/lib/printers/printLinklyTxnReceipt";
 import { buildTrainingKitchenOrder } from "@/lib/pos/buildTrainingKitchenOrder";
+import { buildKitchenVoidOrder } from "@/lib/pos/buildKitchenVoidOrder";
 import { clearPosTableMergeGroupsForTables } from "@/lib/pos/posTableMapMerge";
 import { formatPosItemDisplayName } from "@/lib/helper/printNameAlias";
 import { textMatchesAvailabilityQuery } from "@/lib/helper/availabilitySearchHelpers";
@@ -2373,7 +2376,7 @@ export default function PosTerminal() {
 
     setIsVoidingLine(true);
     try {
-      const result = await cancelPosOrderItem({
+      const result = await cancelPosOrderItemMixed({
         orderId,
         lineId: line.sourceLineId || line.lineId,
         reason,
@@ -2401,6 +2404,27 @@ export default function PosTerminal() {
       }
       setCancelSentLineDrawer(POS_CANCEL_SENT_LINE_DRAWER_CLOSED);
       toast.success("Item voided");
+
+      const voidOrder = buildKitchenVoidOrder({
+        line,
+        orderId,
+        orderType: resolvedOrderType,
+        tableNumber: resolvedTableNumber,
+        cancelReason: reason,
+        customerName,
+        customerPhone,
+        customerEmail,
+      });
+      void printKitchenOrder(voidOrder, {
+        storeProfile,
+        itemGroups,
+        menuConfig,
+        source: "pos_void",
+        notify: true,
+        notifySuccess: false,
+      }).catch((printError) => {
+        console.error("POS void kitchen print error:", printError);
+      });
     } catch (error) {
       showDismissibleToast(error?.message || "Failed to void item");
     } finally {
