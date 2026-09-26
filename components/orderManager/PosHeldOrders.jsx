@@ -533,12 +533,17 @@ export default function PosHeldOrders() {
   }
 
   async function handleReprintHeldOrder(heldEntry) {
-    if (processingCheckId) return;
+    // Don't hold processingCheckId — kitchen print monitors success/failure
+    // itself and should not block other actions while printing.
+    if (processingCheckId || !heldEntry?.id) return;
 
-    setProcessingCheckId(heldEntry.id);
+    const toastId = toast.loading("Reprinting order…");
     try {
       const orders = await loadHeldCheckOrders(heldEntry);
-      if (!orders) return;
+      if (!orders) {
+        toast.dismiss(toastId);
+        return;
+      }
 
       const result = await reprintHeldCheckKitchen(orders, {
         storeProfile,
@@ -547,12 +552,16 @@ export default function PosHeldOrders() {
       });
 
       if (result.success) {
-        toast.success(result.message || "Kitchen ticket reprinted");
+        toast.success(result.message || "Kitchen ticket reprinted", {
+          id: toastId,
+        });
+      } else {
+        toast.dismiss(toastId);
+        showDismissibleToast(result.message || "Failed to reprint order");
       }
     } catch (error) {
+      toast.dismiss(toastId);
       showDismissibleToast(error?.message || "Failed to reprint order");
-    } finally {
-      setProcessingCheckId(null);
     }
   }
 

@@ -777,12 +777,17 @@ export default function PosTableMap() {
   }
 
   async function handleReprintOrder() {
+    // Don't hold isProcessing — kitchen print monitors success/failure itself
+    // and should not block drawer close or other status actions.
     if (!drawerHeldOrder?.orderIds?.length || isProcessing) return;
 
-    setIsProcessing(true);
+    const toastId = toast.loading("Reprinting order…");
     try {
       const orders = await loadDrawerCheckOrders();
-      if (!orders) return;
+      if (!orders) {
+        toast.dismiss(toastId);
+        return;
+      }
 
       const result = await reprintHeldCheckKitchen(orders, {
         storeProfile,
@@ -791,14 +796,16 @@ export default function PosTableMap() {
       });
 
       if (result.success) {
-        toast.success(result.message || "Kitchen ticket reprinted");
+        toast.success(result.message || "Kitchen ticket reprinted", {
+          id: toastId,
+        });
       } else {
+        toast.dismiss(toastId);
         showDismissibleToast(result.message || "Failed to reprint order");
       }
     } catch (error) {
+      toast.dismiss(toastId);
       showDismissibleToast(error?.message || "Failed to reprint order");
-    } finally {
-      setIsProcessing(false);
     }
   }
 
