@@ -178,6 +178,7 @@ export default function LiveOrderTerminal() {
     // itemGroups powers per-printer routing in handlePrintingOrder. Read-only
     // here — edits live in the admin app at /admin/menu/groups.
     itemGroups,
+    menuContent,
   } = useMenuContext();
   const { data: session } = useSession();
   const { userData } = useGlobalAppContext();
@@ -311,6 +312,7 @@ export default function LiveOrderTerminal() {
                   storeProfile,
                   menuConfig,
                   itemGroups,
+                  menuContent,
                 });
 
                 if (result.printed) {
@@ -992,6 +994,7 @@ export default function LiveOrderTerminal() {
       storeProfile,
       itemGroups,
       menuConfig,
+      menuContent,
       selectedPrinters,
       retryCount,
       ...(posEnabled ? {} : { showCustomToast }),
@@ -1631,6 +1634,7 @@ export default function LiveOrderTerminal() {
         storeProfile,
         itemGroups,
         menuConfig,
+        menuContent,
         selectedPrinters: retry.failedPrinters?.length
           ? retry.failedPrinters
           : null,

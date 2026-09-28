@@ -99,7 +99,7 @@ function ticketsStatusKey(heldOrder) {
 export default function PosTableMap() {
   const { navigate, isPending } = usePosNavigate();
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
-  const { posTableMaps, storeProfile, menuConfig, itemGroups } =
+  const { posTableMaps, storeProfile, menuConfig, itemGroups, menuContent } =
     useMenuContext();
   const legendStatuses = useMemo(() => getPosTableMapLegendStatuses(), []);
   const mergeStoreKey = storeProfile?.menuLink || "default";
@@ -689,6 +689,7 @@ export default function PosTableMap() {
               storeProfile,
               itemGroups,
               menuConfig,
+              menuContent,
             },
           );
         } catch (error) {
@@ -793,6 +794,7 @@ export default function PosTableMap() {
         storeProfile,
         itemGroups,
         menuConfig,
+        menuContent,
       });
 
       if (result.success) {

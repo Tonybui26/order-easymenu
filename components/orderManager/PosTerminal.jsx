@@ -92,6 +92,7 @@ import LinklyFailedSaleBanner from "@/components/orderManager/LinklyFailedSaleBa
 import { clearLinklyLastTxnOutcome } from "@/lib/linkly/lastTxnOutcome";
 import { printLinklyTxnReceipt } from "@/lib/printers/printLinklyTxnReceipt";
 import { buildTrainingKitchenOrder } from "@/lib/pos/buildTrainingKitchenOrder";
+import { resolveKitchenCourseFromMenu } from "@/lib/constants/kitchenCourses";
 import { buildKitchenVoidOrder } from "@/lib/pos/buildKitchenVoidOrder";
 import { clearPosTableMergeGroupsForTables } from "@/lib/pos/posTableMapMerge";
 import { formatPosItemDisplayName } from "@/lib/helper/printNameAlias";
@@ -149,18 +150,25 @@ function mapPosOrderType(orderType) {
   return null;
 }
 
-function buildPosSendItems(cartLines) {
-  return (cartLines || []).map((line) => ({
-    lineId: line.lineId,
-    menuItemId: line.itemId,
-    name: line.title,
-    price: Number(line.price || 0),
-    quantity: Number(line.quantity || 1),
-    notes: line.notes || undefined,
-    isTakeaway: line.isTakeaway === true ? true : undefined,
-    selectedVariants: line.selectedVariants || [],
-    selectedModifiers: line.selectedModifiers || [],
-  }));
+function buildPosSendItems(cartLines, menuContent) {
+  return (cartLines || []).map((line) => {
+    const kitchenCourse = resolveKitchenCourseFromMenu(
+      menuContent,
+      line.itemId,
+    );
+    return {
+      lineId: line.lineId,
+      menuItemId: line.itemId,
+      name: line.title,
+      price: Number(line.price || 0),
+      quantity: Number(line.quantity || 1),
+      notes: line.notes || undefined,
+      isTakeaway: line.isTakeaway === true ? true : undefined,
+      selectedVariants: line.selectedVariants || [],
+      selectedModifiers: line.selectedModifiers || [],
+      ...(kitchenCourse ? { kitchenCourse } : null),
+    };
+  });
 }
 
 function appendCheckOrderId(existingIds, orderId) {
@@ -1495,6 +1503,7 @@ export default function PosTerminal() {
           lines: unsentLines,
           orderType: resolvedOrderType,
           tableNumber: resolvedTableNumber,
+          menuContent,
         });
 
         try {
@@ -1502,6 +1511,7 @@ export default function PosTerminal() {
             storeProfile,
             itemGroups,
             menuConfig,
+            menuContent,
             source: "pos_training",
             notify: true,
             notifySuccess: false,
@@ -1526,7 +1536,7 @@ export default function PosTerminal() {
 
       const payload = {
         orderType: mappedOrderType,
-        items: buildPosSendItems(unsentLines),
+        items: buildPosSendItems(unsentLines, menuContent),
       };
       if (resolvedPrimaryTable) payload.table = resolvedPrimaryTable;
       if (resolvedTableNames.length >= 2) payload.tables = resolvedTableNames;
@@ -1568,6 +1578,7 @@ export default function PosTerminal() {
           storeProfile,
           itemGroups,
           menuConfig,
+          menuContent,
           source: "pos_send",
           notify: true,
           notifySuccess: false,
@@ -1654,6 +1665,7 @@ export default function PosTerminal() {
         storeProfile,
         itemGroups,
         menuConfig,
+        menuContent,
         source: "pos_send",
         notify: true,
         notifySuccess: false,
@@ -2419,6 +2431,7 @@ export default function PosTerminal() {
         storeProfile,
         itemGroups,
         menuConfig,
+        menuContent,
         source: "pos_void",
         notify: true,
         notifySuccess: false,

@@ -126,7 +126,7 @@ export function buildAlertsFromCandidates(
  * (e.g. table map shared with held-orders refresh). Use `pollSelfOrderAlerts`.
  */
 export function useSelfOrderAlerts({ externalPolling = false } = {}) {
-  const { menuConfig, storeProfile, itemGroups } = useMenuContext();
+  const { menuConfig, storeProfile, itemGroups, menuContent } = useMenuContext();
   const { userData } = useGlobalAppContext();
   const [alerts, setAlerts] = useState([]);
   const [connectionLostAlert, setConnectionLostAlert] = useState(null);
@@ -200,6 +200,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
           storeProfile,
           menuConfig,
           itemGroups,
+          menuContent,
           ownerEmail: userData?.ownerEmail,
         });
 
@@ -222,6 +223,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
       dismissSelfOrderAlert,
       itemGroups,
       menuConfig,
+      menuContent,
       storeProfile,
       userData?.ownerEmail,
     ],
@@ -456,6 +458,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
             storeProfile,
             menuConfig,
             itemGroups,
+            menuContent,
           });
 
           // Only skip future retries once prepare succeeded.
@@ -489,6 +492,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
     [
       itemGroups,
       menuConfig,
+      menuContent,
       setOrderAutoPrinting,
       storeProfile,
       userData?.ownerEmail,

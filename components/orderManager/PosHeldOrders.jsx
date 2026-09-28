@@ -84,7 +84,7 @@ export default function PosHeldOrders() {
     hideToast: hideDismissibleToast,
   } = useDismissibleToast();
   const { handleOpenCashDrawer } = usePosOpenCashDrawer(showDismissibleToast);
-  const { storeProfile, itemGroups, menuConfig } = useMenuContext();
+  const { storeProfile, itemGroups, menuConfig, menuContent } = useMenuContext();
   const [heldOrders, setHeldOrders] = useState([]);
   const [activeTab, setActiveTab] = useState(() => {
     if (tabParam === POS_HELD_ORDERS_TAB_SELF_ORDERING) {
@@ -408,6 +408,7 @@ export default function PosHeldOrders() {
               storeProfile,
               itemGroups,
               menuConfig,
+              menuContent,
             },
           );
         } catch (error) {
@@ -549,6 +550,7 @@ export default function PosHeldOrders() {
         storeProfile,
         itemGroups,
         menuConfig,
+        menuContent,
       });
 
       if (result.success) {

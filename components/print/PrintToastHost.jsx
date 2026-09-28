@@ -8,7 +8,7 @@ import { registerPrintToastHandler } from "@/lib/print/printToastBridge";
 import { DismissibleToastStack, useDismissibleToastQueue } from "@/components/orderManager/DismissibleToast";
 
 export default function PrintToastHost() {
-  const { storeProfile, itemGroups, menuConfig } = useMenuContext();
+  const { storeProfile, itemGroups, menuConfig, menuContent } = useMenuContext();
   const posEnabled = Boolean(menuConfig?.posEnabled);
   const { toasts, showToast, dismissToast } = useDismissibleToastQueue();
   const [retryingToastId, setRetryingToastId] = useState(null);
@@ -50,6 +50,7 @@ export default function PrintToastHost() {
           storeProfile,
           itemGroups,
           menuConfig,
+          menuContent,
           selectedPrinters: retry.failedPrinters?.length
             ? retry.failedPrinters
             : null,
@@ -69,6 +70,7 @@ export default function PrintToastHost() {
       handleDismiss,
       itemGroups,
       menuConfig,
+      menuContent,
       retryingToastId,
       storeProfile,
       toasts,
