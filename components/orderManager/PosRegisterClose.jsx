@@ -14,12 +14,14 @@ import {
 import { registerOperatorPayload } from "@/lib/pos/registerOperatorPayload";
 import { getPosHomePath } from "@/lib/pos/posConfig";
 import { isStoreSecondTest } from "@/lib/store/isSecondTest";
+import { isStoreStorageOptimizer } from "@/lib/store/isStorageOptimizer";
 import {
   clearLocalRegisterFinalise,
   patchLocalRegisterFinalise,
   saveLocalRegisterFinalise,
 } from "@/lib/localDb/registerFinaliseStore";
 import {
+  runStorageOptimizer,
   sumPendingOutboxCardSalesSince,
   sumPendingOutboxCashSalesSince,
 } from "@/lib/localDb/offlineSendStore";
@@ -125,6 +127,7 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
   const { setRegisterClosed, setRegisterOpen } = usePosRegisterSession();
   const posHomePath = getPosHomePath(menuConfig);
   const secondTestOn = isStoreSecondTest(menuConfig);
+  const storageOptimizerOn = isStoreStorageOptimizer(menuConfig);
   const pinLockEnabled = isStaffPinLockEnabled(menuConfig);
   const [counts, setCounts] = useState(() => countsFromSession(session));
   const [selectedId, setSelectedId] = useState(null);
@@ -487,6 +490,18 @@ export default function PosRegisterClose({ session, onSessionUpdated }) {
         toast.error(result.error || "Failed to close register");
         return;
       }
+
+      // Report totals already covered local tenders — free SQLite space.
+      if (storageOptimizerOn) {
+        const optimised = await runStorageOptimizer();
+        if (!optimised?.success) {
+          console.error(
+            "storageOptimizer:",
+            optimised?.error || "optimise failed",
+          );
+        }
+      }
+
       afterRegisterClosed();
     } finally {
       setIsPrintingReport(false);

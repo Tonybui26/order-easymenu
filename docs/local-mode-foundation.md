@@ -15,6 +15,7 @@ network except under `secondTest` (local finalise + `close-second-test`).
 | `menu.config.isOffline` | easymenu Menu document | Power admin → Stores drawer → **Offline mode** |
 | `menu.config.localDatabase` | easymenu Menu document | Power admin → Stores drawer → **Local database** |
 | `menu.config.secondTest` | easymenu Menu document | Power admin → Stores drawer → **Second test** |
+| `menu.config.storageOptimizer` | easymenu Menu document | Power admin → Stores drawer → **Storage optimiser** |
 
 `enableAutoOfflineBackup` is for selected stores only (default off). Today it turns on **live-first snapshots**: after a successful live menu / printers / held / resume fetch, Order Manager writes SQLite. Send and Pay stay live. Later the same flag will also enable automatic offline capability. Stores with it off stay unchanged.
 
@@ -23,6 +24,8 @@ network except under `secondTest` (local finalise + `close-second-test`).
 `localDatabase` is testing-only. When on (with Testing store + native), Send and Pay write to the on-device outbox and **do not** auto-sync. Turn it off (then Sync / open POS) to let queued rows upload. Offline mode can still auto-sync when `localDatabase` is off.
 
 `secondTest` is a debug lane with the same local Send/Pay + no auto-sync behaviour as `localDatabase`, but **does not** require Testing store. Default off. Print Receipt (Finalise Sale or Order History) uploads only that check’s outbox rows so Mongo can assign `taxInvoiceNo` before the thermal Tax Invoice prints. Card Complete Sale also uploads that check immediately (invoice without printing).
+
+`storageOptimizer` is independent. When on, after Close Register → **Print** sales report succeeds (totals already include local outbox cash/card), Order Manager frees that on-device SQLite space. Skipping the print leaves local data as-is. Default off.
 
 **Register under `secondTest`:** Finalise saves staff tender counts **on-device only** (Preferences) for later report printing — it does **not** call `/finalise`. Local expected = synced server cash **plus** unsynced outbox cash pays (so drawer variance can match on-device). Cash sales and Cash Pay In/Out stay locked after that local finalise (same UX as normal). Close uses `POST /api/pos/register/session/close-second-test`, which auto-finalises with `actual = expected` from **already-synced** counter-cash sales only, then closes. Staff counts and any local variance reason stay on-device; the server never stores them. Unsynced Send/Pay outbox rows remain in the outbox.
 
