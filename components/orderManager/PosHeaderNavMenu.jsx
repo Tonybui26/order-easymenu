@@ -8,6 +8,7 @@ import {
   Check,
   ChevronDown,
   Folder,
+  CalendarCheck,
   History,
   Map,
   MonitorSmartphone,
@@ -63,6 +64,13 @@ const NAV_ITEMS = [
     Icon: QrCode,
   },
   {
+    id: "booking",
+    label: "Booking",
+    description: "Table requests to confirm",
+    href: "/booking",
+    Icon: CalendarCheck,
+  },
+  {
     id: "order-history",
     label: "Order History",
     description: "Completed orders by date",
@@ -113,6 +121,9 @@ function resolveActiveItem(pathname, items) {
   }
   if (pathname === "/") {
     return list.find((item) => item.id === "live-orders") || list[0];
+  }
+  if (pathname === "/booking" || pathname?.startsWith("/booking/")) {
+    return list.find((item) => item.id === "booking") || list[0];
   }
   if (
     pathname === "/order-history" ||
