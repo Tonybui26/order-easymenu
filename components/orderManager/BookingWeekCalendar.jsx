@@ -216,44 +216,47 @@ function HourRow({ hour, weekDays, bookings, onSelectBooking }) {
         return (
           <div
             key={`${day.toISOString()}-${hour}`}
-            className="min-h-[4.75rem] border-b border-l border-neutral-200 p-1"
+            className="min-h-[4.75rem] min-w-0 overflow-hidden border-b border-l border-neutral-200 p-1"
           >
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1">
               {events.map((booking) => (
-                <button
+                <BookingEvent
                   key={booking.id}
-                  type="button"
-                  onClick={() => onSelectBooking(booking)}
-                  className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-left shadow-sm transition-colors hover:border-brand_accent/50"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <span
-                      className="size-1.5 shrink-0 rounded-full bg-brand_accent"
-                      aria-hidden
-                    />
-                    <span className="truncate text-xs font-semibold text-neutral-900">
-                      {booking.name}
-                    </span>
-                  </span>
-                  <span className="mt-0.5 block truncate pl-3 text-[11px] text-neutral-500">
-                    {booking.timeLabel}
-                  </span>
-                  <span className="block truncate pl-3 text-[11px] text-neutral-400">
-                    {booking.guests}{" "}
-                    {booking.guests === 1 ? "guest" : "guests"}
-                    {booking.assignedTables?.length
-                      ? ` · ${
-                          booking.assignedTables.length === 1 ? "Table" : "Tables"
-                        } ${booking.assignedTables.join(", ")}`
-                      : ""}
-                  </span>
-                </button>
+                  booking={booking}
+                  onSelect={onSelectBooking}
+                />
               ))}
             </div>
           </div>
         );
       })}
     </>
+  );
+}
+
+function BookingEvent({ booking, onSelect }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(booking)}
+      className="w-full min-w-0 max-w-full overflow-hidden rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-left shadow-sm transition-colors hover:border-brand_accent/50"
+    >
+      <span className="flex min-w-0 items-start gap-1.5">
+        <span
+          className="mt-1 size-1.5 shrink-0 rounded-full bg-brand_accent"
+          aria-hidden
+        />
+        <span className="min-w-0 flex-1 break-words text-xs font-semibold leading-snug text-neutral-900">
+          {booking.name}
+        </span>
+      </span>
+      <span className="mt-0.5 block break-words pl-3 text-[11px] leading-snug text-neutral-500">
+        {booking.timeLabel}
+      </span>
+      <span className="block break-words pl-3 text-[11px] leading-snug text-neutral-400">
+        {booking.guests} {booking.guests === 1 ? "guest" : "guests"}
+      </span>
+    </button>
   );
 }
 
@@ -276,8 +279,10 @@ function bookingsForCell(bookings, day, hour) {
       const start = new Date(booking.startsAt);
       return isSameDay(start, day) && start.getHours() === hour;
     })
-    .sort(
-      (left, right) =>
-        new Date(left.startsAt).getMinutes() - new Date(right.startsAt).getMinutes(),
-    );
+    .sort((left, right) => {
+      const delta = new Date(left.startsAt) - new Date(right.startsAt);
+      if (delta !== 0) return delta;
+      return left.name.localeCompare(right.name);
+    });
 }
+
