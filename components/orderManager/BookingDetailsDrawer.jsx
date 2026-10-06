@@ -28,6 +28,7 @@ function DetailRow({ label, value }) {
 export default function BookingDetailsDrawer({
   booking,
   tables,
+  isAssigning = false,
   onClose,
   onAssign,
 }) {
@@ -41,8 +42,11 @@ export default function BookingDetailsDrawer({
   );
 
   useEffect(() => {
-    setSelectedTableIds([]);
-  }, [booking?.id]);
+    const labels = new Set(booking?.assignedTables || []);
+    setSelectedTableIds(
+      tables.filter((table) => labels.has(table.label)).map((table) => table.id),
+    );
+  }, [booking?.id, booking?.assignedTables, tables]);
 
   function toggleTable(tableId) {
     setSelectedTableIds((current) =>
@@ -69,12 +73,14 @@ export default function BookingDetailsDrawer({
         booking ? (
           <PosActionButton
             tone="green"
-            disabled={selectedTables.length === 0}
+            disabled={selectedTables.length === 0 || isAssigning}
             onClick={() =>
-              selectedTables.length > 0 && onAssign(booking, selectedTables)
+              selectedTables.length > 0 &&
+              !isAssigning &&
+              onAssign(booking, selectedTables)
             }
           >
-            {assignButtonLabel(selectedTables)}
+            {isAssigning ? "Assigning…" : assignButtonLabel(selectedTables)}
           </PosActionButton>
         ) : null
       }
@@ -104,7 +110,9 @@ export default function BookingDetailsDrawer({
               Available tables
             </p>
             <p className="mt-1 text-xs text-neutral-500">
-              Select one or more. Availability is not checked yet.
+              {tables.length === 0
+                ? "Name the tables on the floor plan to assign them."
+                : "Select one or more tables from the floor plan."}
               {selectedTables.length > 0
                 ? ` ${selectedSeats} seats selected.`
                 : ""}

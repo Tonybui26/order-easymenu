@@ -24,7 +24,11 @@ const HOURS = Array.from(
 );
 const WEEKDAY_LABELS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
-export default function BookingWeekCalendar({ bookings, onSelectBooking }) {
+export default function BookingWeekCalendar({
+  bookings,
+  onSelectBooking,
+  onVisibleWeekChange,
+}) {
   const [selectedDate, setSelectedDate] = useState(null);
   const [visibleMonth, setVisibleMonth] = useState(null);
 
@@ -37,6 +41,15 @@ export default function BookingWeekCalendar({ bookings, onSelectBooking }) {
   useEffect(() => {
     if (selectedDate) setVisibleMonth(startOfMonth(selectedDate));
   }, [selectedDate]);
+
+  useEffect(() => {
+    if (!selectedDate || !onVisibleWeekChange) return;
+    const start = startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
+    onVisibleWeekChange({
+      from: start.toISOString(),
+      to: addDays(start, 7).toISOString(),
+    });
+  }, [selectedDate, onVisibleWeekChange]);
 
   if (!selectedDate || !visibleMonth) {
     return <div className="h-full rounded-xl border border-neutral-200 bg-white" />;
