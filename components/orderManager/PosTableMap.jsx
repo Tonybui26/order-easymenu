@@ -258,7 +258,13 @@ export default function PosTableMap() {
     return () => clearInterval(timerId);
   }, []);
 
+  const bookingEnabled = Boolean(menuConfig?.bookingEnabled);
+
   const loadTodayBookings = useCallback(async () => {
+    if (!bookingEnabled) {
+      setTodayBookings([]);
+      return;
+    }
     try {
       const start = startOfDay(new Date());
       const result = await fetchBookings({
@@ -270,7 +276,7 @@ export default function PosTableMap() {
     } catch {
       // Floor status still works if bookings cannot be loaded.
     }
-  }, []);
+  }, [bookingEnabled]);
 
   // Held-order dots only — self-order alerts/auto-print come from SelfOrderAlertsHost.
   useEffect(() => {

@@ -10,6 +10,8 @@ import PosActionButton from "./PosActionButton";
 import BookingDetailsDrawer from "./BookingDetailsDrawer";
 import BookingWeekCalendar from "./BookingWeekCalendar";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
+import { useMenuContext } from "@/components/context/MenuContext";
+import { usePosNavigate } from "@/components/context/PosNavigateContext";
 
 const TABS = [
   { id: "new", label: "New" },
@@ -27,6 +29,9 @@ const TABLE_COLUMNS = [
 
 export default function BookingList() {
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
+  const { menuConfig, dataLoaded } = useMenuContext();
+  const { navigate } = usePosNavigate();
+  const bookingEnabled = Boolean(menuConfig?.bookingEnabled);
   const [activeTab, setActiveTab] = useState("new");
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [newBookings, setNewBookings] = useState([]);
@@ -57,7 +62,11 @@ export default function BookingList() {
   }, [handleVisibleWeekChange]);
 
   useEffect(() => {
-    if (!weekRange) return undefined;
+    if (dataLoaded && !bookingEnabled) navigate("/");
+  }, [bookingEnabled, dataLoaded, navigate]);
+
+  useEffect(() => {
+    if (!weekRange || !bookingEnabled) return undefined;
     let cancelled = false;
 
     async function load() {
@@ -89,7 +98,7 @@ export default function BookingList() {
     return () => {
       cancelled = true;
     };
-  }, [weekRange, reloadKey]);
+  }, [bookingEnabled, weekRange, reloadKey]);
 
   async function handleAssign(booking, selectedTables) {
     if (isAssigning) return;
@@ -108,6 +117,8 @@ export default function BookingList() {
       setIsAssigning(false);
     }
   }
+
+  if (!dataLoaded || !bookingEnabled) return null;
 
   return (
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
