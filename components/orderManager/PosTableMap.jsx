@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { addDays, format, startOfDay } from "date-fns";
 import { App } from "@capacitor/app";
 import { usePosNavigate } from "@/components/context/PosNavigateContext";
 import { Combine, Map as MapIcon, ShoppingBag, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
 import {
+  fetchBookings,
   fetchPosHeldOrders,
   fetchPosResumeOrders,
   mergePosTables,
@@ -51,7 +53,6 @@ import { buildHeldDrawerPreviewSections } from "@/lib/pos/posHeldDrawerPreview";
 import {
   getPosTableMapLegendStatuses,
   getPosTableMapStatusFill,
-  POS_TABLE_MAP_STATUS,
   POS_TABLE_MAP_STATUS_LABEL,
 } from "@/lib/pos/posTableMapStatus";
 import {
@@ -66,7 +67,6 @@ import {
   savePosTableMergeGroups,
 } from "@/lib/pos/posTableMapMerge";
 import {
-  TABLE_MAP_DEFAULT_TABLE_BACKGROUND,
   TABLE_MAP_FLOOR_COLOR,
   getTableMapTableName,
   normalizeTableMapTableName,
@@ -115,6 +115,7 @@ export default function PosTableMap() {
   }, [posTableMaps]);
   const [selectedMapId, setSelectedMapId] = useState(null);
   const [heldOrders, setHeldOrders] = useState([]);
+  const [todayBookings, setTodayBookings] = useState([]);
   const [drawerTableName, setDrawerTableName] = useState(null);
   const [drawerHeldOrder, setDrawerHeldOrder] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -150,6 +151,41 @@ export default function PosTableMap() {
       }),
     [heldOrders, isPayFirstMode],
   );
+  const bookingsByTableKey = useMemo(() => {
+    const map = new Map();
+    const sorted = [...todayBookings].sort(
+      (left, right) =>
+        new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime(),
+    );
+    for (const booking of sorted) {
+      const startsAt = new Date(booking.startsAt);
+      if (Number.isNaN(startsAt.getTime())) continue;
+      const timeLabel = format(startsAt, "h:mm a");
+      for (const label of booking.assignedTables || []) {
+        const key = normalizeTableMapTableName(label);
+        if (!key) continue;
+        const list = map.get(key) || [];
+        if (list.some((item) => item.id === booking.id)) continue;
+        list.push({ id: booking.id, timeLabel });
+        map.set(key, list);
+      }
+    }
+    return map;
+  }, [todayBookings]);
+  const drawerBookings = useMemo(() => {
+    const key = normalizeTableMapTableName(drawerTableName);
+    if (!key) return [];
+    return todayBookings
+      .filter((booking) =>
+        (booking.assignedTables || []).some(
+          (label) => normalizeTableMapTableName(label) === key,
+        ),
+      )
+      .sort(
+        (left, right) =>
+          new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime(),
+      );
+  }, [todayBookings, drawerTableName]);
 
   const mergeColorByTableName = useMemo(() => {
     const map = getMergeGroupColorMap(mergeGroups);
@@ -206,6 +242,20 @@ export default function PosTableMap() {
     }
   }, []);
 
+  const loadTodayBookings = useCallback(async () => {
+    try {
+      const start = startOfDay(new Date());
+      const result = await fetchBookings({
+        status: "confirmed",
+        from: start.toISOString(),
+        to: addDays(start, 1).toISOString(),
+      });
+      setTodayBookings(result?.bookings || []);
+    } catch {
+      // Floor status still works if bookings cannot be loaded.
+    }
+  }, []);
+
   // Held-order dots only — self-order alerts/auto-print come from SelfOrderAlertsHost.
   useEffect(() => {
     let intervalId = null;
@@ -221,13 +271,17 @@ export default function PosTableMap() {
     const startPollInterval = () => {
       clearPollInterval();
       intervalId = setInterval(() => {
-        if (!cancelled) void loadHeldOrders();
+        if (!cancelled) {
+          void loadHeldOrders();
+          void loadTodayBookings();
+        }
       }, TABLE_MAP_POLL_MS);
     };
 
     const resumePolling = () => {
       if (cancelled) return;
       void loadHeldOrders({ paintLocalFirst: true });
+      void loadTodayBookings();
       startPollInterval();
     };
 
@@ -267,7 +321,7 @@ export default function PosTableMap() {
       clearPollInterval();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [loadHeldOrders]);
+  }, [loadHeldOrders, loadTodayBookings]);
 
   useEffect(() => {
     if (!isPending) {
@@ -1020,10 +1074,7 @@ export default function PosTableMap() {
             <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2">
               <div className="pointer-events-auto flex items-center gap-3 rounded-xl bg-[#402e22]/95 px-3 py-2 shadow-sm ring-1 ring-white/10">
                 {legendStatuses.map((status) => {
-                  const fill =
-                    status === POS_TABLE_MAP_STATUS.available
-                      ? TABLE_MAP_DEFAULT_TABLE_BACKGROUND
-                      : getPosTableMapStatusFill(status);
+                  const fill = getPosTableMapStatusFill(status);
                   return (
                     <div
                       key={status}
@@ -1061,6 +1112,7 @@ export default function PosTableMap() {
               heldOrders={heldOrders}
               selfOrderTableKeys={selfOrderTableKeys}
               unpaidQrPaymentTableKeys={unpaidQrPaymentTableKeys}
+              bookingsByTableKey={bookingsByTableKey}
               floorColor={mapFloorColor}
               solidFloor={isMergeMode}
               selectedTableNames={isMergeMode ? mergeSelectedNames : []}
@@ -1092,6 +1144,7 @@ export default function PosTableMap() {
         isOpen={Boolean(drawerTableName)}
         onClose={handleCloseDrawer}
         tableName={drawerTableName}
+        bookings={drawerBookings}
         heldOrder={drawerHeldOrder}
         onLoadOrder={handleLoadOrder}
         onPay={handlePay}
