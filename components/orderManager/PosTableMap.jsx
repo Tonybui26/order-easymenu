@@ -84,7 +84,14 @@ import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 import { hydrateHeldOrders, hydrateResumeOrders } from "@/lib/localDb/posLiveSnapshot";
 
 const TABLE_MAP_POLL_MS = 10000;
+const BOOKING_INDICATOR_WINDOW_MS = 60 * 60 * 1000;
 const TABLE_MAP_MERGE_FLOOR_COLOR = "#1e293b";
+
+function isBookingIndicatorCurrent(startsAt, now) {
+  const start = new Date(startsAt).getTime();
+  if (Number.isNaN(start)) return false;
+  return now <= start + BOOKING_INDICATOR_WINDOW_MS;
+}
 
 function orderIdsCacheKey(orderIds) {
   return (orderIds || []).map(String).join(",");
@@ -116,6 +123,7 @@ export default function PosTableMap() {
   const [selectedMapId, setSelectedMapId] = useState(null);
   const [heldOrders, setHeldOrders] = useState([]);
   const [todayBookings, setTodayBookings] = useState([]);
+  const [now, setNow] = useState(() => Date.now());
   const [drawerTableName, setDrawerTableName] = useState(null);
   const [drawerHeldOrder, setDrawerHeldOrder] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -153,13 +161,14 @@ export default function PosTableMap() {
   );
   const bookingsByTableKey = useMemo(() => {
     const map = new Map();
-    const sorted = [...todayBookings].sort(
-      (left, right) =>
-        new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime(),
-    );
+    const sorted = todayBookings
+      .filter((booking) => isBookingIndicatorCurrent(booking.startsAt, now))
+      .sort(
+        (left, right) =>
+          new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime(),
+      );
     for (const booking of sorted) {
       const startsAt = new Date(booking.startsAt);
-      if (Number.isNaN(startsAt.getTime())) continue;
       const timeLabel = format(startsAt, "h:mm a");
       for (const label of booking.assignedTables || []) {
         const key = normalizeTableMapTableName(label);
@@ -171,21 +180,23 @@ export default function PosTableMap() {
       }
     }
     return map;
-  }, [todayBookings]);
+  }, [todayBookings, now]);
   const drawerBookings = useMemo(() => {
     const key = normalizeTableMapTableName(drawerTableName);
     if (!key) return [];
     return todayBookings
-      .filter((booking) =>
-        (booking.assignedTables || []).some(
-          (label) => normalizeTableMapTableName(label) === key,
-        ),
+      .filter(
+        (booking) =>
+          isBookingIndicatorCurrent(booking.startsAt, now) &&
+          (booking.assignedTables || []).some(
+            (label) => normalizeTableMapTableName(label) === key,
+          ),
       )
       .sort(
         (left, right) =>
           new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime(),
       );
-  }, [todayBookings, drawerTableName]);
+  }, [todayBookings, drawerTableName, now]);
 
   const mergeColorByTableName = useMemo(() => {
     const map = getMergeGroupColorMap(mergeGroups);
@@ -240,6 +251,11 @@ export default function PosTableMap() {
     } catch {
       // Silent refresh; table map still works for new orders.
     }
+  }, []);
+
+  useEffect(() => {
+    const timerId = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timerId);
   }, []);
 
   const loadTodayBookings = useCallback(async () => {
