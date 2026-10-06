@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { format } from "date-fns";
 import {
   ChevronDown,
   CircleDollarSign,
@@ -17,6 +18,12 @@ import { isKitchenPrintingEnabled } from "@/lib/pos/kitchenPrintingConfig";
 import { useMenuContext } from "@/components/context/MenuContext";
 import PosActionButton from "./PosActionButton";
 import SideDrawer from "./SideDrawer";
+
+function formatBookingTime(startsAt) {
+  const date = new Date(startsAt);
+  if (Number.isNaN(date.getTime())) return "";
+  return format(date, "h:mm a");
+}
 
 function formatMoney(amount) {
   return `$${Number(amount || 0).toFixed(2)}`;
@@ -238,6 +245,7 @@ export default function PosTableMapTableDrawer({
   onClose,
   tableName,
   title,
+  bookings = [],
   heldOrder,
   onLoadOrder,
   onPay,
@@ -270,6 +278,7 @@ export default function PosTableMapTableDrawer({
   if (isOpen && resolvedTitle) {
     openSnapshotRef.current = {
       title: resolvedTitle,
+      bookings,
       heldOrder,
       previewSections,
       isPreviewLoading,
@@ -292,6 +301,7 @@ export default function PosTableMapTableDrawer({
   if (!snap?.title) return null;
 
   const displayTitle = snap.title;
+  const displayBookings = snap.bookings || [];
   const displayHeldOrder = snap.heldOrder;
   const displayPreviewSections = snap.previewSections || [];
   const displayPreviewLoading = Boolean(snap.isPreviewLoading);
@@ -498,6 +508,27 @@ export default function PosTableMapTableDrawer({
       bottomSlidePanel={moreActionsPanel}
     >
       <div className="space-y-3">
+        {displayBookings.length > 0 ? (
+          <div className="rounded-xl border border-brand_accent/30 bg-brand_accent/10 px-3 py-2.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand_accent">
+              Booked today
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {displayBookings.map((booking) => (
+                <li key={booking.id} className="text-sm text-neutral-900">
+                  <span className="font-medium">{booking.name}</span>
+                  <span className="text-neutral-600">
+                    {" · "}
+                    {formatBookingTime(booking.startsAt)}
+                    {" · "}
+                    {booking.guests}{" "}
+                    {booking.guests === 1 ? "guest" : "guests"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
           Order items
         </div>

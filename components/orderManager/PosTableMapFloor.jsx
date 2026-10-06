@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { CalendarCheck } from "lucide-react";
 import { cn } from "@/lib/helper";
 import { findHeldOrderForTableMap } from "@/lib/pos/posTableMapHeld";
 import {
@@ -39,6 +40,7 @@ export default function PosTableMapFloor({
   heldOrders = [],
   selfOrderTableKeys = null,
   unpaidQrPaymentTableKeys = null,
+  bookingsByTableKey = null,
   floorColor = TABLE_MAP_FLOOR_COLOR,
   solidFloor = false,
   selectedTableNames = [],
@@ -121,6 +123,9 @@ export default function PosTableMapFloor({
               const hasUnpaidQrPaymentDot =
                 Boolean(tableKey) &&
                 Boolean(unpaidQrPaymentTableKeys?.has(tableKey));
+              const tableBookings = tableKey
+                ? bookingsByTableKey?.get(tableKey) || []
+                : [];
               const mergeStroke =
                 (tableKey && mergeColorByTableName?.get(tableKey)) || null;
               const fillColor = isSelected
@@ -148,6 +153,9 @@ export default function PosTableMapFloor({
                   ? POS_TABLE_MAP_MERGED_STROKE_WIDTH
                   : undefined;
               const indicatorHints = [
+                tableBookings.length
+                  ? `booked ${tableBookings.map((booking) => booking.timeLabel).join(", ")}`
+                  : null,
                 hasSelfOrderDot ? "QR self-order" : null,
                 hasUnpaidQrPaymentDot ? "payment due" : null,
               ]
@@ -208,7 +216,11 @@ export default function PosTableMapFloor({
                       </span>
                     ) : null}
                     {shouldShowObjectLabel(object) ? (
-                      <ObjectLabel object={object} color={labelColor} />
+                      <ObjectLabel
+                        object={object}
+                        color={labelColor}
+                        bookings={tableBookings}
+                      />
                     ) : null}
                   </button>
                 </div>
@@ -226,21 +238,49 @@ function shouldShowObjectLabel(object) {
   return isTableMapTable(object) || isTableMapPartition(object);
 }
 
-function ObjectLabel({ object, color }) {
+function ObjectLabel({ object, color, bookings = [] }) {
   const isVerticalPartition = object.type === "partition-v";
+  const labelColor = color || object.fontColor || TABLE_MAP_DEFAULT_FONT_COLOR;
+  const nameSize = object.fontSize || TABLE_MAP_DEFAULT_FONT_SIZE;
+  const showBookings = !isVerticalPartition && bookings.length > 0;
 
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-visible px-1">
-      <span
-        className="whitespace-nowrap text-center font-semibold leading-none"
+      <div
+        className="flex max-w-full flex-col items-center"
         style={{
-          color: color || object.fontColor || TABLE_MAP_DEFAULT_FONT_COLOR,
-          fontSize: object.fontSize || TABLE_MAP_DEFAULT_FONT_SIZE,
           transform: isVerticalPartition ? "rotate(-90deg)" : undefined,
         }}
       >
-        {object.name.trim()}
-      </span>
+        <span
+          className="whitespace-nowrap text-center font-semibold leading-none"
+          style={{
+            color: labelColor,
+            fontSize: nameSize,
+          }}
+        >
+          {object.name.trim()}
+        </span>
+        {showBookings ? (
+          <span className="mt-1 flex max-w-full flex-col items-center gap-0.5">
+            {bookings.map((booking) => (
+              <span
+                key={booking.id}
+                className="inline-flex max-w-full items-center gap-0.5 rounded-full bg-brand_accent px-1 py-px leading-none text-white shadow-sm"
+                style={{ fontSize: 9 }}
+              >
+                <CalendarCheck
+                  aria-hidden
+                  className="shrink-0"
+                  size={9}
+                  strokeWidth={2.5}
+                />
+                <span className="truncate font-semibold">{booking.timeLabel}</span>
+              </span>
+            ))}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }

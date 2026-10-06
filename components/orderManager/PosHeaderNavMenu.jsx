@@ -8,6 +8,7 @@ import {
   Check,
   ChevronDown,
   Folder,
+  CalendarCheck,
   History,
   Map,
   MonitorSmartphone,
@@ -63,6 +64,14 @@ const NAV_ITEMS = [
     Icon: QrCode,
   },
   {
+    id: "booking",
+    label: "Booking",
+    description: "Table requests to confirm",
+    href: "/booking",
+    Icon: CalendarCheck,
+    requiresBooking: true,
+  },
+  {
     id: "order-history",
     label: "Order History",
     description: "Completed orders by date",
@@ -114,6 +123,9 @@ function resolveActiveItem(pathname, items) {
   if (pathname === "/") {
     return list.find((item) => item.id === "live-orders") || list[0];
   }
+  if (pathname === "/booking" || pathname?.startsWith("/booking/")) {
+    return list.find((item) => item.id === "booking") || list[0];
+  }
   if (
     pathname === "/order-history" ||
     pathname?.startsWith("/order-history/")
@@ -135,9 +147,11 @@ export default function PosHeaderNavMenu({ className }) {
   const rootRef = useRef(null);
 
   const posEnabled = Boolean(menuConfig?.posEnabled);
+  const bookingEnabled = Boolean(menuConfig?.bookingEnabled);
   const restaurantMode = isRestaurantModeEnabled(menuConfig);
   const navItems = NAV_ITEMS.filter((item) => {
     if (item.requiresPos && !posEnabled) return false;
+    if (item.requiresBooking && !bookingEnabled) return false;
     if (item.requiresRestaurantMode && !restaurantMode) return false;
     if (item.hideInRestaurantMode && restaurantMode) return false;
     return true;
