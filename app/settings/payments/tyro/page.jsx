@@ -31,9 +31,6 @@ import {
   TYRO_POS_PRODUCT_DATA,
 } from "@/lib/tyro/iclient";
 
-const DEFAULT_MID = "2187";
-const DEFAULT_TID = "1";
-
 function formatPairedAt(iso) {
   if (!iso) return null;
   const date = new Date(iso);
@@ -127,8 +124,8 @@ export default function TyroPaymentSettingsPage() {
 
   const [scriptStatus, setScriptStatus] = useState("loading");
   const [scriptError, setScriptError] = useState("");
-  const [mid, setMid] = useState(DEFAULT_MID);
-  const [tid, setTid] = useState(DEFAULT_TID);
+  const [mid, setMid] = useState("");
+  const [tid, setTid] = useState("");
   const [isAuthorising, setIsAuthorising] = useState(false);
   const [authStatus, setAuthStatus] = useState("");
   const [authMessage, setAuthMessage] = useState("");
@@ -153,10 +150,8 @@ export default function TyroPaymentSettingsPage() {
   useEffect(() => {
     if (!dataLoaded) return;
 
-    const storedMid = String(savedTyro.mid ?? "").trim();
-    const storedTid = String(savedTyro.tid ?? "").trim();
-    setMid(storedMid || DEFAULT_MID);
-    setTid(storedTid || DEFAULT_TID);
+    setMid(String(savedTyro.mid ?? "").trim());
+    setTid(String(savedTyro.tid ?? "").trim());
   }, [dataLoaded, savedTyro.mid, savedTyro.tid]);
 
   useEffect(() => {
@@ -343,9 +338,9 @@ export default function TyroPaymentSettingsPage() {
                 <section className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
                   <p className="font-medium">Tyro is not enabled for this store</p>
                   <p className="mt-1">
-                    You can still configure and authorise a terminal here during
-                    development. Card payments will only use Tyro once Tyro is
-                    enabled for this menu in the admin backoffice.
+                    Enable Tyro for this menu in the admin backoffice before
+                    card payments will use Tyro. You can still authorise a
+                    terminal here.
                   </p>
                 </section>
               ) : null}
@@ -483,10 +478,8 @@ export default function TyroPaymentSettingsPage() {
                     Authorise terminal
                   </h2>
                   <p className="mt-0.5 text-sm text-neutral-500">
-                    Enter the MID and TID shown on your EFTPOS machine, then
-                    tap Authorise. During development use simulator MID{" "}
-                    <strong>2187</strong> or <strong>2188</strong> and TID{" "}
-                    <strong>1</strong>.
+                    Enter the MID and TID shown on your EFTPOS machine, then tap
+                    Authorise.
                   </p>
                 </div>
                 <div className="space-y-4 px-6 py-4">
