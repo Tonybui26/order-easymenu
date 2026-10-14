@@ -308,11 +308,14 @@ export default function LiveOrderTerminal() {
 
             for (const order of autoPrintCandidates) {
               try {
+                // Same toast surface as manual Prepare when POS is off
+                // (PrintToastHost / bridge is POS-only).
                 const result = await autoPrintAndPrepareOrder(order, {
                   storeProfile,
                   menuConfig,
                   itemGroups,
                   menuContent,
+                  ...(posEnabled ? {} : { showCustomToast }),
                 });
 
                 if (result.printed) {
