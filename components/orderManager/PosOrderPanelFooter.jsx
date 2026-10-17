@@ -34,6 +34,8 @@ function formatDiscountLabel(discount) {
 export default function PosOrderPanelFooter({
   subtotal = 0,
   discount = null,
+  surchargeTotal = 0,
+  surchargeLabel = "Surcharge",
   taxPercentage = DEFAULT_TAX_PERCENTAGE,
   hasUnsentItems = false,
   viewOnly = false,
@@ -44,11 +46,15 @@ export default function PosOrderPanelFooter({
   className,
 }) {
   const safeSubtotal = Math.max(0, Number(subtotal) || 0);
+  const safeSurcharge = Math.max(0, Number(surchargeTotal) || 0);
   const discountAmount =
     discount?.amount == null || Number(discount.amount) <= 0
       ? null
       : Number(discount.amount);
-  const total = Math.max(0, safeSubtotal - (discountAmount || 0));
+  const total = Math.max(
+    0,
+    safeSubtotal + safeSurcharge - (discountAmount || 0),
+  );
   const taxAmount = computeIncludedTaxFromInclusiveTotal(total, taxPercentage);
   const showSend = Boolean(hasUnsentItems) && !viewOnly;
 
@@ -74,6 +80,14 @@ export default function PosOrderPanelFooter({
                 {formatMoney(safeSubtotal)}
               </span>
             </div>
+            {safeSurcharge > 0 && (
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-neutral-400">{surchargeLabel}</span>
+                <span className="tabular-nums text-neutral-600">
+                  {formatMoney(safeSurcharge)}
+                </span>
+              </div>
+            )}
             <div className="flex items-baseline justify-between gap-2">
               <span className="text-neutral-400">Tax (GST)</span>
               <span className="tabular-nums text-neutral-600">

@@ -56,6 +56,7 @@ import {
   posCartLineReactKey,
 } from "@/lib/pos/posResumeOrder";
 import { isCounterPayment, isPayLaterAtCounterEnabled } from "@/lib/helper/payLater";
+import { calculatePosSurcharge } from "@/lib/pos/posSurcharges";
 import { printHeldCheckKitchenOnPrepare } from "@/lib/pos/posHeldOrderPrint";
 import {
   buildCustomerDisplayCartSnapshot,
@@ -210,6 +211,22 @@ function isPayableCartLine(line) {
   return !isExternalContextCartLine(line);
 }
 
+/** POS register lines. QR and other external tickets keep their own fees. */
+function isPosPricedCartLine(line) {
+  if (isCancelledCartLine(line)) return false;
+  if (isQrCounterEditableCartLine(line)) return false;
+  if (isUnpaidExternalPayableCartLine(line)) return false;
+  if (isExternalContextCartLine(line)) return false;
+  return true;
+}
+
+function sumCartLinePrices(lines) {
+  return lines.reduce(
+    (sum, line) => sum + Number(line.price || 0) * (line.quantity || 1),
+    0,
+  );
+}
+
 function pickTaxInvoiceNoFromSaleResult(result) {
   const fromField = String(result?.taxInvoiceNo || "").trim();
   if (fromField) return fromField;
@@ -332,6 +349,7 @@ export default function PosTerminal() {
     storeProfile,
     itemGroups,
     menuConfig,
+    posSurcharges,
   } = useMenuContext();
   const tableNamesFromUrl = resumeParam
     ? []
@@ -1548,7 +1566,17 @@ export default function PosTerminal() {
       // Pay-with-server-QR must create a real Mongo fire so batch complete can
       // settle QR + POS together (offline outbox would leave QR unpaid).
       if (isOfflineSendEnabled(menuConfig) && !forceOnline) {
-        const result = await queueOfflinePosSend(payload);
+        const fireSurcharge = calculatePosSurcharge({
+          posSurcharges,
+          orderType: mappedOrderType,
+          subtotal: sumCartLinePrices(unsentLines),
+          timeZone: storeProfile?.timezone,
+        });
+        const result = await queueOfflinePosSend({
+          ...payload,
+          surchargeTotal: fireSurcharge.totalSurchargeAmount,
+          surcharges: fireSurcharge.surcharges,
+        });
         if (!result?.success) {
           const error = result?.error || "Failed to save order on this device";
           showDismissibleToast(error);
@@ -1945,6 +1973,7 @@ export default function PosTerminal() {
         paymentSummary,
         taxInvoiceNo: invoiceForPrint,
         discount: footerDiscount,
+        surchargeTotal: posSurchargeTotal,
       });
 
       const result = await printTaxInvoiceReceipt(payload);
@@ -2490,10 +2519,23 @@ export default function PosTerminal() {
     ? selectionMapsFromLine(activeCartLine, customizingItem)
     : { selectedVariants, selectedModifiers };
 
-  const cartSubtotal = cartLines.reduce((sum, line) => {
-    if (!isPayableCartLine(line)) return sum;
-    return sum + Number(line.price || 0) * (line.quantity || 1);
-  }, 0);
+  const cartSubtotal = sumCartLinePrices(
+    cartLines.filter((line) => isPayableCartLine(line)),
+  );
+  const posPricedSubtotal = sumCartLinePrices(
+    cartLines.filter((line) => isPosPricedCartLine(line)),
+  );
+  const posSurcharge = calculatePosSurcharge({
+    posSurcharges,
+    orderType: resolvedOrderType,
+    subtotal: posPricedSubtotal,
+    timeZone: storeProfile?.timezone,
+  });
+  const posSurchargeTotal = posSurcharge.totalSurchargeAmount;
+  const posSurchargeLabel =
+    posSurcharge.surcharges.length === 1
+      ? posSurcharge.surcharges[0].description
+      : "Surcharge";
   const discountAmount =
     checkDiscount?.discountAmount != null &&
     Number(checkDiscount.discountAmount) > 0
@@ -2512,7 +2554,7 @@ export default function PosTerminal() {
       : null;
   const cartTotalAfterDiscount = Math.max(
     0,
-    cartSubtotal - (discountAmount || 0),
+    cartSubtotal + posSurchargeTotal - (discountAmount || 0),
   );
   const discountInitialDigits =
     checkDiscount?.discountType === "percent" &&
@@ -2778,6 +2820,8 @@ export default function PosTerminal() {
             <PosOrderPanelFooter
               subtotal={cartSubtotal}
               discount={footerDiscount}
+              surchargeTotal={posSurchargeTotal}
+              surchargeLabel={posSurchargeLabel}
               taxPercentage={storeProfile.taxPercentage}
               hasUnsentItems={hasUnsentItems}
               viewOnly={isViewOnly}

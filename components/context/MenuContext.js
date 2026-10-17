@@ -90,6 +90,9 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   const [posTableMaps, setPosTableMaps] = useState(
     (menuData && menuData.posTableMaps) || [],
   );
+  const [posSurcharges, setPosSurcharges] = useState(
+    (menuData && menuData.posSurcharges) || [],
+  );
   const [storeProfile, setStoreProfile] = useState(buildStoreProfile(menuData));
   const [menuId, setMenuId] = useState(menuData?._id || null);
 
@@ -106,6 +109,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
       setItemGroups(data.itemGroups || []);
       setPosLayouts(data.posLayouts || []);
       setPosTableMaps(data.posTableMaps || []);
+      setPosSurcharges(data.posSurcharges || []);
       setStoreProfile(buildStoreProfile(data));
       setMenuId(data._id || null);
 
@@ -519,6 +523,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         itemGroups,
         posLayouts,
         posTableMaps,
+        posSurcharges,
         menuId,
         storeProfile,
         setStoreProfile,
