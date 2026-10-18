@@ -1028,8 +1028,11 @@ export default function PosTableMap() {
     kitchenInProgress && !Boolean(drawerHeldOrder?.allPaid);
   const showComplete =
     kitchenInProgress && Boolean(drawerHeldOrder?.allPaid);
-  // Always allow Open so staff can add more on a paid-but-not-complete table.
-  const showLoadOrder = Boolean(drawerHeldOrder?.orderIds?.length);
+  // A paid check is finished at the table with Complete. Reopening it would
+  // let staff add more after the bill is already settled.
+  const showLoadOrder =
+    Boolean(drawerHeldOrder?.orderIds?.length) &&
+    !Boolean(drawerHeldOrder?.allPaid);
   const { showPay, showSendToKitchen } = resolveTableMapDrawerPaymentActions(
     drawerHeldOrder,
     menuConfig,
