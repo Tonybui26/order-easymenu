@@ -10,6 +10,7 @@ import {
   pickOrderGroupProcessingFee,
   sumOrderGroupSubtotal,
   computeOrderGroupCheckTotal,
+  collectOrderGroupSurchargeLines,
 } from "@/lib/helper/orderHistoryDisplay";
 import { pickCheckDiscountFromOrders } from "@/lib/pos/posResumeOrder";
 
@@ -143,6 +144,7 @@ export default function OrderHistoryCheckDetails({ row }) {
   const refundSummary = row?.refundSummary;
   const hasRefund = Boolean(refundSummary?.hasRefund);
   const combinedSubtotal = sumOrderGroupSubtotal(tickets);
+  const surchargeLines = collectOrderGroupSurchargeLines(tickets);
   const checkDiscount = pickCheckDiscountFromOrders(tickets);
   const discountLabel = formatOrderHistoryDiscountLabel(checkDiscount);
   const processingFee = pickOrderGroupProcessingFee(tickets);
@@ -164,6 +166,15 @@ export default function OrderHistoryCheckDetails({ row }) {
             <span>Subtotal</span>
             <span>{formatCurrency(combinedSubtotal)}</span>
           </div>
+          {surchargeLines.map((line) => (
+            <div
+              key={line.label}
+              className="flex justify-between font-medium text-gray-600"
+            >
+              <span>{line.label}</span>
+              <span>{formatCurrency(line.amount)}</span>
+            </div>
+          ))}
           {discountLabel ? (
             <div className="flex justify-between font-medium text-gray-600">
               <span>Discount</span>

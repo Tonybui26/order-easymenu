@@ -95,12 +95,18 @@ function OrderHistorySyncIcon({ pending }) {
   );
 }
 
-function localSendTotal(payload) {
+function localSendItemTotal(payload) {
   return (payload?.items || []).reduce(
     (sum, item) =>
       sum + Number(item?.price || 0) * Number(item?.quantity || 0),
     0,
   );
+}
+
+function localSendTotal(payload) {
+  const items = localSendItemTotal(payload);
+  const surcharge = Number(payload?.surchargeTotal || 0);
+  return Math.round((items + surcharge) * 100) / 100;
 }
 
 function pendingHistoryOrder(record, paymentMethod) {
@@ -112,6 +118,9 @@ function pendingHistoryOrder(record, paymentMethod) {
   const isPaid =
     Boolean(method) ||
     String(payload.paymentStatus || "").trim() === "paid";
+  const itemTotal = Math.round(localSendItemTotal(payload) * 100) / 100;
+  const surchargeTotal =
+    Math.round(Number(payload.surchargeTotal || 0) * 100) / 100;
   return {
     _id: record.localId,
     clientLocalId: record.localId,
@@ -124,7 +133,10 @@ function pendingHistoryOrder(record, paymentMethod) {
     table: payload.table,
     tables: payload.tables,
     items: payload.items || [],
-    total: localSendTotal(payload),
+    subtotal: itemTotal,
+    surchargeTotal,
+    surcharges: Array.isArray(payload.surcharges) ? payload.surcharges : [],
+    total: Math.round((itemTotal + surchargeTotal) * 100) / 100,
     paymentStatus: isPaid ? "paid" : "pending",
     ...(method ? { paymentMethod: method } : {}),
     status: payload.kitchenStatus || "preparing",
