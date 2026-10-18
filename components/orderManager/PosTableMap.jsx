@@ -49,7 +49,10 @@ import {
   printHeldCheckKitchenOnPrepare,
   reprintHeldCheckKitchen,
 } from "@/lib/pos/posHeldOrderPrint";
-import { buildHeldDrawerPreviewSections } from "@/lib/pos/posHeldDrawerPreview";
+import {
+  buildHeldDrawerPreviewSections,
+  buildHeldDrawerSurchargeLines,
+} from "@/lib/pos/posHeldDrawerPreview";
 import {
   getPosTableMapLegendStatuses,
   getPosTableMapStatusFill,
@@ -128,6 +131,7 @@ export default function PosTableMap() {
   const [drawerHeldOrder, setDrawerHeldOrder] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [previewSections, setPreviewSections] = useState([]);
+  const [previewSurchargeLines, setPreviewSurchargeLines] = useState([]);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(null);
   const [deleteDrawerOpen, setDeleteDrawerOpen] = useState(false);
@@ -399,6 +403,7 @@ export default function PosTableMap() {
   useEffect(() => {
     if (!drawerTableName || !drawerOrderIdsKey) {
       setPreviewSections([]);
+      setPreviewSurchargeLines([]);
       setPreviewError(null);
       setIsPreviewLoading(false);
       return;
@@ -409,6 +414,7 @@ export default function PosTableMap() {
     const applyPreview = (orders) => {
       resumeOrdersCacheRef.current.set(drawerOrderIdsKey, orders);
       setPreviewSections(buildHeldDrawerPreviewSections(orders));
+      setPreviewSurchargeLines(buildHeldDrawerSurchargeLines(orders));
       setPreviewError(null);
       setIsPreviewLoading(false);
     };
@@ -435,12 +441,14 @@ export default function PosTableMap() {
         if (cancelled) return;
         if (!cached && (!result?.success || !result.orders?.length) && !result?.fromCache) {
           setPreviewSections([]);
+          setPreviewSurchargeLines([]);
           setPreviewError(result?.error || "Could not load items");
           setIsPreviewLoading(false);
         }
       } catch (error) {
         if (cancelled || cached) return;
         setPreviewSections([]);
+        setPreviewSurchargeLines([]);
         setPreviewError(error?.message || "Could not load items");
         setIsPreviewLoading(false);
       }
@@ -456,6 +464,7 @@ export default function PosTableMap() {
     setDrawerTableName(null);
     setDrawerHeldOrder(null);
     setPreviewSections([]);
+    setPreviewSurchargeLines([]);
     setPreviewError(null);
     setIsPreviewLoading(false);
   }
@@ -653,10 +662,12 @@ export default function PosTableMap() {
     const cached = resumeOrdersCacheRef.current.get(cacheKey);
     if (cached) {
       setPreviewSections(buildHeldDrawerPreviewSections(cached));
+      setPreviewSurchargeLines(buildHeldDrawerSurchargeLines(cached));
       setPreviewError(null);
       setIsPreviewLoading(false);
     } else {
       setPreviewSections([]);
+      setPreviewSurchargeLines([]);
       setPreviewError(null);
       setIsPreviewLoading(true);
     }
@@ -801,6 +812,7 @@ export default function PosTableMap() {
       }
     }
     setPreviewSections(buildHeldDrawerPreviewSections(orders));
+    setPreviewSurchargeLines(buildHeldDrawerSurchargeLines(orders));
     setPreviewError(null);
     return orders;
   }
@@ -1178,6 +1190,7 @@ export default function PosTableMap() {
         onComplete={handleComplete}
         isProcessing={isProcessing || isDeleting}
         previewSections={previewSections}
+        surchargeLines={previewSurchargeLines}
         isPreviewLoading={isPreviewLoading}
         previewError={previewError}
         showAllServed={showAllServed}

@@ -1973,7 +1973,7 @@ export default function PosTerminal() {
         paymentSummary,
         taxInvoiceNo: invoiceForPrint,
         discount: footerDiscount,
-        surchargeTotal: posSurchargeTotal,
+        surcharges: posSurcharge.surcharges,
       });
 
       const result = await printTaxInvoiceReceipt(payload);

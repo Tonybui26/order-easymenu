@@ -257,6 +257,7 @@ export default function PosTableMapTableDrawer({
   onComplete,
   isProcessing = false,
   previewSections = [],
+  surchargeLines = [],
   isPreviewLoading = false,
   previewError = null,
   showAllServed = false,
@@ -281,6 +282,7 @@ export default function PosTableMapTableDrawer({
       bookings,
       heldOrder,
       previewSections,
+      surchargeLines,
       isPreviewLoading,
       previewError,
       showAllServed,
@@ -304,6 +306,7 @@ export default function PosTableMapTableDrawer({
   const displayBookings = snap.bookings || [];
   const displayHeldOrder = snap.heldOrder;
   const displayPreviewSections = snap.previewSections || [];
+  const displaySurchargeLines = snap.surchargeLines || [];
   const displayPreviewLoading = Boolean(snap.isPreviewLoading);
   const displayPreviewError = snap.previewError;
   const displayShowAllServed = Boolean(snap.showAllServed);
@@ -552,6 +555,17 @@ export default function PosTableMapTableDrawer({
         !displayPreviewLoading &&
         !displayPreviewError ? (
           <div className="space-y-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5">
+            {displaySurchargeLines.map((line) => (
+              <div
+                key={line.label}
+                className="flex items-center justify-between gap-2"
+              >
+                <span className="text-sm text-neutral-600">{line.label}</span>
+                <span className="text-sm font-semibold tabular-nums text-neutral-900">
+                  {formatMoney(line.amount)}
+                </span>
+              </div>
+            ))}
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-semibold text-neutral-700">
                 {displayTotalLabel}

@@ -18,7 +18,10 @@ import {
   printHeldCheckKitchenOnPrepare,
   reprintHeldCheckKitchen,
 } from "@/lib/pos/posHeldOrderPrint";
-import { buildHeldDrawerPreviewSections } from "@/lib/pos/posHeldDrawerPreview";
+import {
+  buildHeldDrawerPreviewSections,
+  buildHeldDrawerSurchargeLines,
+} from "@/lib/pos/posHeldDrawerPreview";
 import { buildCartLinesFromResumeOrders } from "@/lib/pos/posResumeOrder";
 import {
   getAllTicketIds,
@@ -103,6 +106,7 @@ export default function PosHeldOrders() {
   const [drawerHeldOrder, setDrawerHeldOrder] = useState(null);
   const [previewLines, setPreviewLines] = useState([]);
   const [previewSections, setPreviewSections] = useState([]);
+  const [previewSurchargeLines, setPreviewSurchargeLines] = useState([]);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(null);
   const resumeOrdersCacheRef = useRef(new Map());
@@ -202,6 +206,7 @@ export default function PosHeldOrders() {
     if (!drawerHeldOrder || !drawerOrderIdsKey) {
       setPreviewLines([]);
       setPreviewSections([]);
+      setPreviewSurchargeLines([]);
       setPreviewError(null);
       setIsPreviewLoading(false);
       return;
@@ -212,10 +217,12 @@ export default function PosHeldOrders() {
     const applyPreview = (orders) => {
       if (isPosSourceHeldOrder(drawerHeldOrder)) {
         setPreviewSections(buildHeldDrawerPreviewSections(orders));
+        setPreviewSurchargeLines(buildHeldDrawerSurchargeLines(orders));
         setPreviewLines([]);
       } else {
         setPreviewLines(previewLinesFromResumeOrders(orders));
         setPreviewSections([]);
+        setPreviewSurchargeLines([]);
       }
       setPreviewError(null);
       setIsPreviewLoading(false);
@@ -250,6 +257,7 @@ export default function PosHeldOrders() {
         ) {
           setPreviewLines([]);
           setPreviewSections([]);
+          setPreviewSurchargeLines([]);
           setPreviewError(result?.error || "Could not load items");
           setIsPreviewLoading(false);
         }
@@ -257,6 +265,7 @@ export default function PosHeldOrders() {
         if (cancelled || cached) return;
         setPreviewLines([]);
         setPreviewSections([]);
+        setPreviewSurchargeLines([]);
         setPreviewError(error?.message || "Could not load items");
         setIsPreviewLoading(false);
       }
@@ -282,6 +291,7 @@ export default function PosHeldOrders() {
     setDrawerHeldOrder(null);
     setPreviewLines([]);
     setPreviewSections([]);
+    setPreviewSurchargeLines([]);
     setPreviewError(null);
     setIsPreviewLoading(false);
   }
@@ -301,9 +311,11 @@ export default function PosHeldOrders() {
       setPreviewLines([]);
       if (cached) {
         setPreviewSections(buildHeldDrawerPreviewSections(cached));
+        setPreviewSurchargeLines(buildHeldDrawerSurchargeLines(cached));
         setIsPreviewLoading(false);
       } else {
         setPreviewSections([]);
+        setPreviewSurchargeLines([]);
         setIsPreviewLoading(true);
       }
       return;
@@ -842,6 +854,7 @@ export default function PosHeldOrders() {
         onComplete={() => handleCompleteHeldOrder(drawerHeldOrder)}
         isProcessing={isDrawerProcessing}
         previewSections={previewSections}
+        surchargeLines={previewSurchargeLines}
         isPreviewLoading={isPreviewLoading}
         previewError={previewError}
         showAllServed={showPosDrawerAllServed}
