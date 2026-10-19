@@ -673,10 +673,40 @@ export default function PosTableMap() {
     }
   }
 
+  function navigateDineInTables(seatNames) {
+    const names = (seatNames || [])
+      .map((name) => String(name || "").trim())
+      .filter(Boolean);
+    if (names.length === 0) return;
+    const params = new URLSearchParams({ orderType: "dine-in" });
+    if (names.length >= 2) {
+      params.set("tables", names.join(","));
+    } else {
+      params.set("table", names[0]);
+    }
+    setNavigatingTableNames(names);
+    navigate(`/pos?${params.toString()}`);
+  }
+
   function handleLoadOrder() {
     if (!drawerHeldOrder?.orderIds?.length) return;
+
+    // Paid tickets stay on the table drawer. Open only loads what is still unpaid.
+    const payableOrderIds = getDrawerPayableOrderIds(drawerHeldOrder);
+    if (payableOrderIds.length === 0) {
+      const seatNames = heldEntryTableNames(drawerHeldOrder);
+      navigateDineInTables(
+        seatNames.length > 0
+          ? seatNames
+          : drawerTableName
+            ? [drawerTableName]
+            : [],
+      );
+      return;
+    }
+
     navigate(
-      `/pos?resume=${encodeURIComponent(drawerHeldOrder.orderIds.join(","))}`,
+      `/pos?resume=${encodeURIComponent(payableOrderIds.join(","))}`,
     );
   }
 
@@ -1028,11 +1058,8 @@ export default function PosTableMap() {
     kitchenInProgress && !Boolean(drawerHeldOrder?.allPaid);
   const showComplete =
     kitchenInProgress && Boolean(drawerHeldOrder?.allPaid);
-  // A paid check is finished at the table with Complete. Reopening it would
-  // let staff add more after the bill is already settled.
-  const showLoadOrder =
-    Boolean(drawerHeldOrder?.orderIds?.length) &&
-    !Boolean(drawerHeldOrder?.allPaid);
+  // Always allow Open so staff can add more on a paid-but-not-complete table.
+  const showLoadOrder = Boolean(drawerHeldOrder?.orderIds?.length);
   const { showPay, showSendToKitchen } = resolveTableMapDrawerPaymentActions(
     drawerHeldOrder,
     menuConfig,
