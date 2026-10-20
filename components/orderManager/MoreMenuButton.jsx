@@ -161,13 +161,13 @@ export default function MoreMenuButton({
 
     if (isNative) {
       // Navigate to printer management page
-      router.push("/printer-management");
+      router.push("/settings?section=printers");
     } else {
       // Show web alert - printer management only available on mobile apps
       // alert(
       //   "Printer Management is currently only available for Android or iOS app. Please download our mobile app to configure your printers.",
       // );
-      router.push("/printer-management");
+      router.push("/settings?section=printers");
     }
 
     setShowModal(false);

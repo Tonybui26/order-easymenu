@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import { format } from "date-fns";
 import { ChevronRight } from "lucide-react";
 import toast from "react-hot-toast";
+import { DatePicker } from "@/components/DatePicker";
 import PosChromeHeader from "./PosChromeHeader";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 import { useMenuContext } from "@/components/context/MenuContext";
@@ -33,30 +35,19 @@ function formatMoney(amount) {
   return `$${Number(amount || 0).toFixed(2)}`;
 }
 
-function pad(value) {
-  return String(value).padStart(2, "0");
+function todayKey() {
+  return format(new Date(), "yyyy-MM-dd");
 }
 
-function toDatetimeLocalValue(date) {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function startOfToday() {
-  const date = new Date();
+function startOfDay(dateKey) {
+  const date = new Date(`${dateKey}T00:00:00`);
   date.setHours(0, 0, 0, 0);
   return date;
 }
 
-function endOfToday() {
-  const date = new Date();
-  date.setHours(23, 59, 0, 0);
-  return date;
-}
-
-function parseRangeEnd(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  date.setSeconds(59, 999);
+function endOfDay(dateKey) {
+  const date = new Date(`${dateKey}T00:00:00`);
+  date.setHours(23, 59, 59, 999);
   return date;
 }
 
@@ -91,16 +82,12 @@ export default function SalesSummary() {
   const { storeProfile, menuConfig } = useMenuContext();
   const storageOptimizerOn = isStoreStorageOptimizer(menuConfig);
   const [activeReport, setActiveReport] = useState(REPORTS[0].id);
-  const [draftFrom, setDraftFrom] = useState(() =>
-    toDatetimeLocalValue(startOfToday()),
-  );
-  const [draftTo, setDraftTo] = useState(() =>
-    toDatetimeLocalValue(endOfToday()),
-  );
-  const [appliedFrom, setAppliedFrom] = useState(startOfToday);
-  const [appliedTo, setAppliedTo] = useState(() =>
-    parseRangeEnd(toDatetimeLocalValue(endOfToday())),
-  );
+  const [draftRange, setDraftRange] = useState(() => {
+    const today = todayKey();
+    return { from: today, to: today };
+  });
+  const [appliedFrom, setAppliedFrom] = useState(() => startOfDay(todayKey()));
+  const [appliedTo, setAppliedTo] = useState(() => endOfDay(todayKey()));
   const [orders, setOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPrinting, setIsPrinting] = useState(false);
@@ -196,9 +183,13 @@ export default function SalesSummary() {
   }
 
   function handleFilter() {
-    const from = new Date(draftFrom);
-    const to = parseRangeEnd(draftTo);
-    if (Number.isNaN(from.getTime()) || !to) {
+    if (!draftRange?.from || !draftRange?.to) {
+      setError("Choose a from and to date.");
+      return;
+    }
+    const from = startOfDay(draftRange.from);
+    const to = endOfDay(draftRange.to);
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
       setError("Choose a valid from and to date.");
       return;
     }
@@ -206,6 +197,7 @@ export default function SalesSummary() {
       setError("From must be before to.");
       return;
     }
+    setError("");
     setAppliedFrom(from);
     setAppliedTo(to);
   }
@@ -254,28 +246,12 @@ export default function SalesSummary() {
               {isPrinting ? "Printing…" : "Print"}
             </button>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <label className="sr-only" htmlFor="report-from">
-              From
-            </label>
-            <input
-              id="report-from"
-              type="datetime-local"
-              value={draftFrom}
-              onChange={(event) => setDraftFrom(event.target.value)}
-              className="h-10 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-800"
-            />
-            <span className="hidden text-gray-400 sm:inline" aria-hidden>
-              –
-            </span>
-            <label className="sr-only" htmlFor="report-to">
-              To
-            </label>
-            <input
-              id="report-to"
-              type="datetime-local"
-              value={draftTo}
-              onChange={(event) => setDraftTo(event.target.value)}
-              className="h-10 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-800"
+            <DatePicker
+              value={draftRange}
+              enableDateRange
+              onChange={setDraftRange}
+              placeholder="Select date"
+              className="w-full min-w-56 sm:w-auto"
             />
             <button
               type="button"

@@ -13,7 +13,6 @@ import {
   BarChart3,
   Map,
   MonitorSmartphone,
-  Printer,
   QrCode,
   Settings,
 } from "lucide-react";
@@ -87,13 +86,6 @@ const NAV_ITEMS = [
     Icon: BarChart3,
   },
   {
-    id: "printers",
-    label: "Printers",
-    description: "Receipt printer setup",
-    href: "/printer-management",
-    Icon: Printer,
-  },
-  {
     id: "settings",
     label: "Settings",
     description: "App preferences",
@@ -121,9 +113,6 @@ function resolveActiveItem(pathname, items) {
   }
   if (pathname === "/pos" || pathname?.startsWith("/pos/")) {
     return list.find((item) => item.id === "pos") || list[0];
-  }
-  if (pathname === "/printer-management") {
-    return list.find((item) => item.id === "printers") || list[0];
   }
   if (pathname === "/settings" || pathname?.startsWith("/settings/")) {
     return list.find((item) => item.id === "settings") || list[0];
