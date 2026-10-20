@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { usePosNavigate } from "@/components/context/PosNavigateContext";
 import {
   Folder,
@@ -46,7 +46,7 @@ const POS_HEADER_ACTIONS = [
     id: "print",
     label: "Printer",
     Icon: Printer,
-    href: "/printer-management",
+    href: "/settings?section=printers",
   },
 ];
 
@@ -59,6 +59,7 @@ const POS_TABLE_MAP_PATH = "/pos/table-map";
 export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
   const { navigate } = usePosNavigate();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { menuConfig } = useMenuContext();
   const posEnabled = Boolean(menuConfig?.posEnabled);
   const homePath = posEnabled ? getPosHomePath(menuConfig) : "/";
@@ -99,8 +100,12 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
       <div className="flex items-center gap-3 sm:gap-6">
         {headerActions.map(({ id, label, Icon, href }) => {
           const isActive =
-            href &&
-            (pathname === href || (href !== "/" && pathname?.startsWith(href)));
+            id === "print"
+              ? pathname === "/settings" &&
+                searchParams.get("section") === "printers"
+              : href &&
+                (pathname === href ||
+                  (href !== "/" && pathname?.startsWith(href)));
 
           return (
             <button

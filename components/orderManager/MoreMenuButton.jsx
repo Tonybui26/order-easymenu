@@ -2,7 +2,6 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Menu,
-  Printer,
   CheckCheck,
   X,
   LogOut,
@@ -19,7 +18,6 @@ import {
   Package2,
   Settings,
 } from "lucide-react";
-import { isNativeApp, getPlatform } from "../../lib/helper/platformDetection";
 import { useRouter } from "next/navigation";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
@@ -155,23 +153,10 @@ export default function MoreMenuButton({
     return () => window.removeEventListener("resize", checkScreenSize);
   }, []);
 
-  const handlePrinterManagement = async () => {
-    const platform = getPlatform();
-    const isNative = isNativeApp();
-
-    if (isNative) {
-      // Navigate to printer management page
-      router.push("/printer-management");
-    } else {
-      // Show web alert - printer management only available on mobile apps
-      // alert(
-      //   "Printer Management is currently only available for Android or iOS app. Please download our mobile app to configure your printers.",
-      // );
-      router.push("/printer-management");
-    }
-
+  function handleOpenSettings() {
+    router.push("/settings");
     setShowModal(false);
-  };
+  }
 
   const moreFeatures = [
     // View Mode Tabs for Small Screens Only
@@ -271,10 +256,9 @@ export default function MoreMenuButton({
       isActive: viewMode === "productAvailability",
     },
     {
-      icon: Printer,
-      title: "Printer Management",
-      // description: "Set up and manage your receipt printers",
-      action: handlePrinterManagement,
+      icon: Settings,
+      title: "Settings",
+      action: handleOpenSettings,
     },
     {
       id: "mute-new-order-alerts",

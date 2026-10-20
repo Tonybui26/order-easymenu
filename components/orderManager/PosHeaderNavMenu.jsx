@@ -10,9 +10,9 @@ import {
   Folder,
   CalendarCheck,
   History,
+  BarChart3,
   Map,
   MonitorSmartphone,
-  Printer,
   QrCode,
   Settings,
 } from "lucide-react";
@@ -79,11 +79,11 @@ const NAV_ITEMS = [
     Icon: History,
   },
   {
-    id: "printers",
-    label: "Printers",
-    description: "Receipt printer setup",
-    href: "/printer-management",
-    Icon: Printer,
+    id: "report",
+    label: "Report",
+    description: "Sales summary",
+    href: "/report",
+    Icon: BarChart3,
   },
   {
     id: "settings",
@@ -114,9 +114,6 @@ function resolveActiveItem(pathname, items) {
   if (pathname === "/pos" || pathname?.startsWith("/pos/")) {
     return list.find((item) => item.id === "pos") || list[0];
   }
-  if (pathname === "/printer-management") {
-    return list.find((item) => item.id === "printers") || list[0];
-  }
   if (pathname === "/settings" || pathname?.startsWith("/settings/")) {
     return list.find((item) => item.id === "settings") || list[0];
   }
@@ -131,6 +128,9 @@ function resolveActiveItem(pathname, items) {
     pathname?.startsWith("/order-history/")
   ) {
     return list.find((item) => item.id === "order-history") || list[0];
+  }
+  if (pathname === "/report" || pathname?.startsWith("/report/")) {
+    return list.find((item) => item.id === "report") || list[0];
   }
   return list[0];
 }
