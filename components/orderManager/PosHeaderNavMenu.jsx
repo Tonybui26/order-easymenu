@@ -10,6 +10,7 @@ import {
   Folder,
   CalendarCheck,
   History,
+  BarChart3,
   Map,
   MonitorSmartphone,
   Printer,
@@ -79,6 +80,13 @@ const NAV_ITEMS = [
     Icon: History,
   },
   {
+    id: "report",
+    label: "Report",
+    description: "Sales summary",
+    href: "/report",
+    Icon: BarChart3,
+  },
+  {
     id: "printers",
     label: "Printers",
     description: "Receipt printer setup",
@@ -131,6 +139,9 @@ function resolveActiveItem(pathname, items) {
     pathname?.startsWith("/order-history/")
   ) {
     return list.find((item) => item.id === "order-history") || list[0];
+  }
+  if (pathname === "/report" || pathname?.startsWith("/report/")) {
+    return list.find((item) => item.id === "report") || list[0];
   }
   return list[0];
 }
