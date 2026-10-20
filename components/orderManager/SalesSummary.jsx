@@ -8,7 +8,11 @@ import PosChromeHeader from "./PosChromeHeader";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { fetchCompletedOrders } from "@/lib/api/fetchApi";
-import { formatReceiptDate } from "@/lib/printers/receipt/receiptLayoutHelpers";
+import {
+  formatReceiptDate,
+  formatReceiptDayMonth,
+} from "@/lib/printers/receipt/receiptLayoutHelpers";
+import { isStoreStorageOptimizer } from "@/lib/store/isStorageOptimizer";
 import { printSalesReportReceipt } from "@/lib/printers/printSalesReportReceipt";
 import { buildSalesTrend, summarizeSales } from "@/lib/helper/salesSummary";
 import { pendingLocalSalesOrders } from "@/lib/helper/salesSummaryLocal";
@@ -84,7 +88,8 @@ const ROWS = [
 
 export default function SalesSummary() {
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
-  const { storeProfile } = useMenuContext();
+  const { storeProfile, menuConfig } = useMenuContext();
+  const storageOptimizerOn = isStoreStorageOptimizer(menuConfig);
   const [activeReport, setActiveReport] = useState(REPORTS[0].id);
   const [draftFrom, setDraftFrom] = useState(() =>
     toDatetimeLocalValue(startOfToday()),
@@ -170,8 +175,12 @@ export default function SalesSummary() {
     try {
       const result = await printSalesReportReceipt({
         storeName: storeProfile?.storeName || "",
-        dateFromLabel: formatReceiptDate(appliedFrom),
-        dateToLabel: formatReceiptDate(appliedTo),
+        dateFromLabel: storageOptimizerOn
+          ? formatReceiptDayMonth(appliedFrom)
+          : formatReceiptDate(appliedFrom),
+        dateToLabel: storageOptimizerOn
+          ? formatReceiptDayMonth(appliedTo)
+          : formatReceiptDate(appliedTo),
         summary,
       });
       if (result.success) {
