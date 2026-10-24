@@ -482,9 +482,7 @@ export default function PrinterSetupModal({
                       </label>
                     </div>
                     <p className="text-xs text-gray-500">
-                      Prints Khmer with Noto Sans Khmer. English lines stay on
-                      this printer&apos;s built-in font. Other printers are
-                      unchanged.
+                      Use a custom font for text other than Latin or English.
                     </p>
                     {formData.useCustomFont ? (
                       <div className="form-control">
