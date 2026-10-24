@@ -31,6 +31,7 @@ import { printBillReceiptTest } from "@/lib/printers/printBillReceiptTest";
 import { printPrinterFontTest } from "@/lib/printers/printPrinterFontTest";
 import { isUsbPrinter } from "@/lib/printers/transport/isUsbPrinter";
 import { getPrinterEndpointLabel } from "@/lib/printers/transport/isPrinterReady";
+import { getPrinterCustomFontLabel } from "@/lib/printers/customFont/printerCustomFonts";
 
 /** Card enable toggle is on if any print role is still active. */
 function isPrinterCardEnabled(printer) {
@@ -510,12 +511,18 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
 
             {(printer.forReceipt ||
               (Array.isArray(printer.groupIds) &&
-                printer.groupIds.length > 0)) && (
+                printer.groupIds.length > 0) ||
+              getPrinterCustomFontLabel(printer)) && (
               <div className="flex flex-wrap items-center justify-center gap-1.5">
                 {printer.forReceipt ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2.5 py-1 text-xs font-medium text-teal-800">
                     <CheckCircle className="h-3 w-3" />
                     Receipt
+                  </span>
+                ) : null}
+                {getPrinterCustomFontLabel(printer) ? (
+                  <span className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-medium text-violet-800">
+                    {getPrinterCustomFontLabel(printer)}
                   </span>
                 ) : null}
                 {(printer.groupIds || []).map((gid) => {

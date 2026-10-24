@@ -18,6 +18,7 @@ import {
   PRINTER_COMMAND_LANGUAGES,
   DEFAULT_PRINTER_COMMAND_LANGUAGE,
 } from "@/lib/constants/printerLanguages";
+import { PRINTER_CUSTOM_FONTS } from "@/lib/printers/customFont/printerCustomFonts";
 
 const EMPTY_FORM = {
   name: "",
@@ -33,6 +34,8 @@ const EMPTY_FORM = {
   // items without a group (or in a different group) are dropped at print time.
   groupIds: [],
   commandLanguage: DEFAULT_PRINTER_COMMAND_LANGUAGE,
+  useCustomFont: false,
+  customFontId: "",
 };
 
 const DEFAULT_PRINTER_PORT = 9100;
@@ -75,6 +78,8 @@ export default function PrinterSetupModal({
         groupIds: Array.isArray(printer.groupIds) ? printer.groupIds : [],
         commandLanguage:
           printer.commandLanguage || DEFAULT_PRINTER_COMMAND_LANGUAGE,
+        useCustomFont: Boolean(printer.useCustomFont),
+        customFontId: printer.customFontId || "",
       });
       setShowManualForm(true);
     } else {
@@ -123,6 +128,14 @@ export default function PrinterSetupModal({
       }
     }
 
+    if (
+      formData.commandLanguage === PRINTER_COMMAND_LANGUAGES.ESCPOS &&
+      formData.useCustomFont &&
+      !PRINTER_CUSTOM_FONTS.some((font) => font.id === formData.customFontId)
+    ) {
+      newErrors.customFontId = "Select a font";
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -136,8 +149,20 @@ export default function PrinterSetupModal({
       ) {
         next.forReceipt = false;
       }
+      if (
+        field === "commandLanguage" &&
+        value !== PRINTER_COMMAND_LANGUAGES.ESCPOS
+      ) {
+        next.useCustomFont = false;
+        next.customFontId = "";
+      }
       if (field === "connectionType" && value === "usb") {
         next.commandLanguage = PRINTER_COMMAND_LANGUAGES.ESCPOS;
+      }
+      if (field === "useCustomFont") {
+        next.customFontId = value
+          ? prev.customFontId || PRINTER_CUSTOM_FONTS[0].id
+          : "";
       }
       return next;
     });
@@ -166,6 +191,10 @@ export default function PrinterSetupModal({
       const portStr = String(formData.port ?? "").trim();
       const port =
         portStr === "" ? DEFAULT_PRINTER_PORT : parseInt(portStr, 10);
+      const allowCustomFont =
+        (isUsb ||
+          formData.commandLanguage === PRINTER_COMMAND_LANGUAGES.ESCPOS) &&
+        Boolean(formData.useCustomFont);
 
       const printerData = {
         ...formData,
@@ -175,6 +204,8 @@ export default function PrinterSetupModal({
         commandLanguage: isUsb
           ? PRINTER_COMMAND_LANGUAGES.ESCPOS
           : formData.commandLanguage,
+        useCustomFont: allowCustomFont,
+        customFontId: allowCustomFont ? formData.customFontId : "",
         status: "unknown",
       };
 
@@ -433,6 +464,63 @@ export default function PrinterSetupModal({
                     </label>
                   )}
                 </div>
+
+                {formData.commandLanguage ===
+                PRINTER_COMMAND_LANGUAGES.ESCPOS ? (
+                  <div className="space-y-2">
+                    <div className="form-control">
+                      <label className="label cursor-pointer justify-between">
+                        <span className="label-text">Custom font</span>
+                        <input
+                          type="checkbox"
+                          checked={formData.useCustomFont}
+                          onChange={(e) =>
+                            handleInputChange("useCustomFont", e.target.checked)
+                          }
+                          className="toggle toggle-primary"
+                        />
+                      </label>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Prints Khmer with Noto Sans Khmer. English lines stay on
+                      this printer&apos;s built-in font. Other printers are
+                      unchanged.
+                    </p>
+                    {formData.useCustomFont ? (
+                      <div className="form-control">
+                        <label className="label">
+                          <span className="label-text">Font</span>
+                        </label>
+                        <select
+                          value={formData.customFontId}
+                          onChange={(e) =>
+                            handleInputChange("customFontId", e.target.value)
+                          }
+                          className={`select select-bordered w-full ${
+                            errors.customFontId ? "select-error" : ""
+                          }`}
+                        >
+                          {PRINTER_CUSTOM_FONTS.map((font) => (
+                            <option key={font.id} value={font.id}>
+                              {font.label}
+                            </option>
+                          ))}
+                        </select>
+                        {errors.customFontId ? (
+                          <label className="label">
+                            <span className="label-text-alt text-error">
+                              {errors.customFontId}
+                            </span>
+                          </label>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500">
+                    Custom fonts are available for Receipt (ESC/POS) printers.
+                  </p>
+                )}
 
                 <div className="space-y-3">
                   <h3 className="text-sm font-medium text-neutral-800">
