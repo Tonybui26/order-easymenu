@@ -40,6 +40,20 @@ const EMPTY_FORM = {
 
 const DEFAULT_PRINTER_PORT = 9100;
 
+function isLocalPrinterConnection(connectionType) {
+  return connectionType === "usb" || connectionType === "imin";
+}
+
+function connectionHelpText(connectionType) {
+  if (connectionType === "usb") {
+    return "USB auto-detects the printer plugged into this tablet. On first print Android may ask for USB permission. Printing only works in the Android app.";
+  }
+  if (connectionType === "imin") {
+    return "Built-in printer on an iMin terminal (Swan 2). ESC/POS only. Printing works in the Android app on that terminal.";
+  }
+  return "Network sends raw ESC/POS over TCP (usually port 9100).";
+}
+
 /**
  * Add / edit printer drawer (uses shared SideDrawer shell).
  */
@@ -98,7 +112,7 @@ export default function PrinterSetupModal({
 
   const validateForm = () => {
     const newErrors = {};
-    const isUsb = formData.connectionType === "usb";
+    const isLocal = isLocalPrinterConnection(formData.connectionType);
 
     if (!formData.name.trim()) {
       newErrors.name = "Printer name is required";
@@ -108,9 +122,12 @@ export default function PrinterSetupModal({
       newErrors.name = "Printer name must be less than 50 characters";
     }
 
-    if (isUsb) {
+    if (isLocal) {
       if (formData.commandLanguage !== PRINTER_COMMAND_LANGUAGES.ESCPOS) {
-        newErrors.commandLanguage = "USB supports ESC/POS only";
+        newErrors.commandLanguage =
+          formData.connectionType === "imin"
+            ? "Built-in printer supports ESC/POS only"
+            : "USB supports ESC/POS only";
       }
     } else {
       if (!formData.localIp.trim()) {
@@ -156,7 +173,17 @@ export default function PrinterSetupModal({
         next.useCustomFont = false;
         next.customFontId = "";
       }
-      if (field === "connectionType" && value === "usb") {
+      if (
+        field === "connectionType" &&
+        value === "network" &&
+        (prev.localIp === "usb" || prev.localIp === "imin")
+      ) {
+        next.localIp = "";
+      }
+      if (
+        field === "connectionType" &&
+        isLocalPrinterConnection(value)
+      ) {
         next.commandLanguage = PRINTER_COMMAND_LANGUAGES.ESCPOS;
       }
       if (field === "useCustomFont") {
@@ -188,20 +215,26 @@ export default function PrinterSetupModal({
     setIsSaving(true);
     try {
       const isUsb = formData.connectionType === "usb";
+      const isImin = formData.connectionType === "imin";
+      const isLocal = isUsb || isImin;
       const portStr = String(formData.port ?? "").trim();
       const port =
         portStr === "" ? DEFAULT_PRINTER_PORT : parseInt(portStr, 10);
       const allowCustomFont =
-        (isUsb ||
+        (isLocal ||
           formData.commandLanguage === PRINTER_COMMAND_LANGUAGES.ESCPOS) &&
         Boolean(formData.useCustomFont);
 
       const printerData = {
         ...formData,
-        connectionType: isUsb ? "usb" : "network",
-        port: isUsb ? DEFAULT_PRINTER_PORT : port,
-        localIp: isUsb ? formData.localIp || "usb" : formData.localIp,
-        commandLanguage: isUsb
+        connectionType: isImin ? "imin" : isUsb ? "usb" : "network",
+        port: isLocal ? DEFAULT_PRINTER_PORT : port,
+        localIp: isImin
+          ? "imin"
+          : isUsb
+            ? formData.localIp || "usb"
+            : formData.localIp,
+        commandLanguage: isLocal
           ? PRINTER_COMMAND_LANGUAGES.ESCPOS
           : formData.commandLanguage,
         useCustomFont: allowCustomFont,
@@ -345,17 +378,16 @@ export default function PrinterSetupModal({
                   >
                     <option value="network">Network</option>
                     <option value="usb">USB</option>
+                    <option value="imin">Built-in (iMin)</option>
                   </select>
                   <label className="label">
                     <span className="label-text-alt text-gray-500">
-                      {formData.connectionType === "usb"
-                        ? "USB auto-detects the printer plugged into this tablet. On first print Android may ask for USB permission. Printing only works in the Android app."
-                        : "Network sends raw ESC/POS over TCP (usually port 9100)."}
+                      {connectionHelpText(formData.connectionType)}
                     </span>
                   </label>
                 </div>
 
-                {formData.connectionType === "usb" ? null : (
+                {isLocalPrinterConnection(formData.connectionType) ? null : (
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="form-control">
                       <label className="label">
@@ -425,7 +457,7 @@ export default function PrinterSetupModal({
                       handleInputChange("commandLanguage", e.target.value)
                     }
                     className="select select-bordered w-full"
-                    disabled={formData.connectionType === "usb"}
+                    disabled={isLocalPrinterConnection(formData.connectionType)}
                   >
                     <option value={PRINTER_COMMAND_LANGUAGES.ESCPOS}>
                       Receipt (ESC/POS)

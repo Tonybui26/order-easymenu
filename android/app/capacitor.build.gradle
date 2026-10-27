@@ -16,6 +16,7 @@ dependencies {
     implementation project(':capacitor-splash-screen')
     implementation project(':customer-display')
     implementation project(':immersive-mode')
+    implementation project(':printer-imin')
     implementation project(':printer-tcp-socket')
     implementation project(':printer-usb')
 

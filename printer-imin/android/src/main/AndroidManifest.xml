@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.yourapp.printerimin">
+
+    <!-- Android 13 hides other apps unless this package is declared. The print service is explicit, and this keeps it visible. -->
+    <queries>
+        <package android:name="com.imin.printerservice" />
+    </queries>
+</manifest>
