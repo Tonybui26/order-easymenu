@@ -42,12 +42,17 @@ export default function SettingsPage() {
   );
   const savedKitchenPrintingEnabled =
     menuConfig?.kitchenPrintingEnabled !== false;
+  const savedCashDrawerUseDevicePort = Boolean(
+    menuConfig?.cashDrawerUseDevicePort,
+  );
   const savedStaffPinLockEnabled = Boolean(menuConfig?.staffPinLockEnabled);
   const [draftPosConfig, setDraftPosConfig] = useState(savedPosConfig);
   const [draftSkipKitchenDocketGroupHeaders, setDraftSkipKitchenDocketGroupHeaders] =
     useState(savedSkipKitchenDocketGroupHeaders);
   const [draftKitchenPrintingEnabled, setDraftKitchenPrintingEnabled] =
     useState(savedKitchenPrintingEnabled);
+  const [draftCashDrawerUseDevicePort, setDraftCashDrawerUseDevicePort] =
+    useState(savedCashDrawerUseDevicePort);
   const [draftStaffPinLockEnabled, setDraftStaffPinLockEnabled] = useState(
     savedStaffPinLockEnabled,
   );
@@ -77,6 +82,7 @@ export default function SettingsPage() {
       draftSkipKitchenDocketGroupHeaders !==
         savedSkipKitchenDocketGroupHeaders ||
       draftKitchenPrintingEnabled !== savedKitchenPrintingEnabled ||
+      draftCashDrawerUseDevicePort !== savedCashDrawerUseDevicePort ||
       draftStaffPinLockEnabled !== savedStaffPinLockEnabled,
     [
       draftPosConfig,
@@ -85,6 +91,8 @@ export default function SettingsPage() {
       savedSkipKitchenDocketGroupHeaders,
       draftKitchenPrintingEnabled,
       savedKitchenPrintingEnabled,
+      draftCashDrawerUseDevicePort,
+      savedCashDrawerUseDevicePort,
       draftStaffPinLockEnabled,
       savedStaffPinLockEnabled,
     ],
@@ -97,12 +105,14 @@ export default function SettingsPage() {
         savedSkipKitchenDocketGroupHeaders,
       );
       setDraftKitchenPrintingEnabled(savedKitchenPrintingEnabled);
+      setDraftCashDrawerUseDevicePort(savedCashDrawerUseDevicePort);
       setDraftStaffPinLockEnabled(savedStaffPinLockEnabled);
     }
   }, [
     savedPosConfig,
     savedSkipKitchenDocketGroupHeaders,
     savedKitchenPrintingEnabled,
+    savedCashDrawerUseDevicePort,
     savedStaffPinLockEnabled,
     isDirty,
   ]);
@@ -117,6 +127,7 @@ export default function SettingsPage() {
       const configToSave = {
         ...freshConfig,
         kitchenPrintingEnabled: draftKitchenPrintingEnabled,
+        cashDrawerUseDevicePort: draftCashDrawerUseDevicePort,
         skipKitchenDocketGroupHeaders: draftSkipKitchenDocketGroupHeaders,
         staffPinLockEnabled: draftStaffPinLockEnabled,
         pos: {
@@ -188,6 +199,10 @@ export default function SettingsPage() {
                 }
                 onDraftSkipKitchenDocketGroupHeadersChange={
                   setDraftSkipKitchenDocketGroupHeaders
+                }
+                draftCashDrawerUseDevicePort={draftCashDrawerUseDevicePort}
+                onDraftCashDrawerUseDevicePortChange={
+                  setDraftCashDrawerUseDevicePort
                 }
               />
             ) : !dataLoaded ? (

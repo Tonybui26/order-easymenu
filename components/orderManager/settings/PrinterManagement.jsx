@@ -19,6 +19,8 @@ export default function PrinterManagement({
   onDraftKitchenPrintingEnabledChange,
   draftSkipKitchenDocketGroupHeaders = false,
   onDraftSkipKitchenDocketGroupHeadersChange,
+  draftCashDrawerUseDevicePort = false,
+  onDraftCashDrawerUseDevicePortChange,
 }) {
   const [loading, setLoading] = useState(true);
   const [printers, setPrinters] = useState([]);
@@ -157,6 +159,22 @@ export default function PrinterManagement({
               onDraftSkipKitchenDocketGroupHeadersChange?.(checked)
             }
             disabled={!kitchenPrintingOn}
+          />
+        </div>
+      </section>
+
+      <section className="mt-8 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-100 px-6 py-3">
+          <h2 className="text-sm font-semibold text-neutral-900">Cash drawer</h2>
+        </div>
+        <div className="divide-y divide-gray-100/80">
+          <SettingsToggleRow
+            title="Use terminal cash drawer"
+            description="When on, cash sales open the drawer plugged into this terminal's RJ12 jack. When off, the kick goes to receipt printers."
+            checked={Boolean(draftCashDrawerUseDevicePort)}
+            onChange={(checked) =>
+              onDraftCashDrawerUseDevicePortChange?.(checked)
+            }
           />
         </div>
       </section>
