@@ -1,0 +1,29 @@
+{
+  "name": "cashbox-imin",
+  "version": "0.0.1",
+  "description": "Capacitor plugin for the iMin terminal RJ12 cash drawer",
+  "main": "src/index.js",
+  "module": "src/index.js",
+  "files": [
+    "android/src/main/",
+    "android/build.gradle",
+    "src/"
+  ],
+  "author": "GoEasyMenu",
+  "license": "MIT",
+  "keywords": [
+    "capacitor",
+    "plugin",
+    "native",
+    "imin",
+    "cashbox"
+  ],
+  "peerDependencies": {
+    "@capacitor/core": ">=8.0.0"
+  },
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  }
+}

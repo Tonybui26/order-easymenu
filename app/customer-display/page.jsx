@@ -87,7 +87,9 @@ export default function CustomerDisplayPage() {
   const [payload, setPayload] = useState(
     USE_SAMPLE_CART ? SAMPLE_CART_PAYLOAD : IDLE_PAYLOAD,
   );
-  const [greeting, setGreeting] = useState(getTimeGreeting);
+  // Empty until mount. The server (UTC on Vercel) and the terminal clock
+  // disagree, and a server-rendered greeting becomes a hydration error.
+  const [greeting, setGreeting] = useState("");
 
   useEffect(() => {
     if (USE_SAMPLE_CART) return undefined;
@@ -138,7 +140,7 @@ export default function CustomerDisplayPage() {
       <main className="flex min-h-[100dvh] flex-col bg-[#301C0F] text-center text-white">
         <div className="flex flex-1 items-center justify-center px-8">
           <h1 className="text-5xl font-bold tracking-tight sm:text-6xl">
-            {greeting}
+            {greeting || "\u00a0"}
           </h1>
         </div>
         <CustomerDisplayPoweredByFooter />

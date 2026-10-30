@@ -1,0 +1,60 @@
+/**
+ * Android build for IminCashbox Capacitor plugin.
+ * IminDeviceLibrary is the hardware SDK (RJ12 cash box), not the printer library.
+ */
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.2.1'
+    }
+}
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace "com.yourapp.imincashbox"
+    compileSdk project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 34
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    defaultConfig {
+        minSdk project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 22
+        targetSdk project.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 34
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.ext.junit.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    lintOptions {
+        abortOnError false
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+    maven { url 'https://jitpack.io' }
+}
+
+dependencies {
+    implementation project(':capacitor-android')
+    implementation 'com.github.iminsoftware:IminDeviceLibrary:3.0.0'
+    implementation 'com.google.code.gson:gson:2.8.5'
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+}

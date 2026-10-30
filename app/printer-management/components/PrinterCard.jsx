@@ -29,6 +29,7 @@ import { printTsplTestLabel } from "@/lib/printers/printTsplTestLabel";
 import { printTaxInvoiceReceiptTest } from "@/lib/printers/printTaxInvoiceReceiptTest";
 import { printBillReceiptTest } from "@/lib/printers/printBillReceiptTest";
 import { printPrinterFontTest } from "@/lib/printers/printPrinterFontTest";
+import { isIminPrinter } from "@/lib/printers/transport/isIminPrinter";
 import { isUsbPrinter } from "@/lib/printers/transport/isUsbPrinter";
 import { getPrinterEndpointLabel } from "@/lib/printers/transport/isPrinterReady";
 import { getPrinterCustomFontLabel } from "@/lib/printers/customFont/printerCustomFonts";
@@ -143,7 +144,7 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
       }
 
       addLog(
-        `Starting ${isTspl ? "TSPL label" : isStarPrnt ? "StarPRNT receipt" : "receipt"} test for ${printer.name} (${getPrinterEndpointLabel(printer)})${isUsbPrinter(printer) ? " via USB" : ""}`,
+        `Starting ${isTspl ? "TSPL label" : isStarPrnt ? "StarPRNT receipt" : "receipt"} test for ${printer.name} (${getPrinterEndpointLabel(printer)})${isIminPrinter(printer) ? " via built-in printer" : isUsbPrinter(printer) ? " via USB" : ""}`,
         "info",
       );
       if (!isTspl && includeLogo && storeProfile?.storeLogo) {
@@ -491,14 +492,30 @@ export default function PrinterCard({ printer, onDelete, onUpdate }) {
           <div className="mt-3 flex w-full flex-col items-center gap-2.5">
             <span
               className={`inline-flex size-9 items-center justify-center rounded-full ${
-                isUsbPrinter(printer)
-                  ? "bg-amber-100 text-amber-800"
-                  : "bg-sky-100 text-sky-700"
+                isIminPrinter(printer)
+                  ? "bg-emerald-100 text-emerald-800"
+                  : isUsbPrinter(printer)
+                    ? "bg-amber-100 text-amber-800"
+                    : "bg-sky-100 text-sky-700"
               }`}
-              title={isUsbPrinter(printer) ? "USB" : "Network"}
-              aria-label={isUsbPrinter(printer) ? "USB connection" : "Network connection"}
+              title={
+                isIminPrinter(printer)
+                  ? "Built-in"
+                  : isUsbPrinter(printer)
+                    ? "USB"
+                    : "Network"
+              }
+              aria-label={
+                isIminPrinter(printer)
+                  ? "Built-in printer"
+                  : isUsbPrinter(printer)
+                    ? "USB connection"
+                    : "Network connection"
+              }
             >
-              {isUsbPrinter(printer) ? (
+              {isIminPrinter(printer) ? (
+                <Printer className="size-4" strokeWidth={2} />
+              ) : isUsbPrinter(printer) ? (
                 <Usb className="size-4" strokeWidth={2} />
               ) : (
                 <Wifi className="size-4" strokeWidth={2} />

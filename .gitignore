@@ -17,6 +17,8 @@ node_modules/
 /build
 
 # Local Capacitor plugin Android build outputs
+cashbox-imin/android/build/
+printer-imin/android/build/
 printer-tcp-socket/android/build/
 printer-usb/android/build/
 immersive-mode/android/build/

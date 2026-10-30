@@ -41,6 +41,8 @@
     "next-video": "^2.0.4",
     "prettier": "^3.3.3",
     "prettier-plugin-tailwindcss": "^0.6.9",
+    "cashbox-imin": "file:cashbox-imin",
+    "printer-imin": "file:printer-imin",
     "printer-tcp-socket": "file:printer-tcp-socket",
     "printer-usb": "file:printer-usb",
     "react": "^18",

@@ -23,6 +23,12 @@ project(':customer-display').projectDir = new File('../customer-display/android'
 include ':immersive-mode'
 project(':immersive-mode').projectDir = new File('../immersive-mode/android')
 
+include ':cashbox-imin'
+project(':cashbox-imin').projectDir = new File('../cashbox-imin/android')
+
+include ':printer-imin'
+project(':printer-imin').projectDir = new File('../printer-imin/android')
+
 include ':printer-tcp-socket'
 project(':printer-tcp-socket').projectDir = new File('../printer-tcp-socket/android')
 

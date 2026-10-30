@@ -2,6 +2,8 @@
 
 import { useCallback, useState } from "react";
 import toast from "react-hot-toast";
+import { useMenuContext } from "@/components/context/MenuContext";
+import { isCashDrawerDevicePortEnabled } from "@/lib/pos/cashDrawerConfig";
 import { openCashDrawer } from "@/lib/printers/openCashDrawer";
 
 /**
@@ -9,6 +11,8 @@ import { openCashDrawer } from "@/lib/printers/openCashDrawer";
  * @param {(message: string) => void} [onError] - defaults to toast.error
  */
 export function usePosOpenCashDrawer(onError) {
+  const { menuConfig } = useMenuContext();
+  const useDevicePort = isCashDrawerDevicePortEnabled(menuConfig);
   const [isOpeningDrawer, setIsOpeningDrawer] = useState(false);
   const showError = onError || toast.error;
 
@@ -17,7 +21,7 @@ export function usePosOpenCashDrawer(onError) {
 
     setIsOpeningDrawer(true);
     try {
-      const result = await openCashDrawer();
+      const result = await openCashDrawer({ useDevicePort });
       if (result.success) {
         toast.success(result.message);
       } else {
@@ -28,7 +32,7 @@ export function usePosOpenCashDrawer(onError) {
     } finally {
       setIsOpeningDrawer(false);
     }
-  }, [isOpeningDrawer, showError]);
+  }, [isOpeningDrawer, showError, useDevicePort]);
 
   return { handleOpenCashDrawer, isOpeningDrawer };
 }
