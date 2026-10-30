@@ -18,7 +18,7 @@ else
 
 The shared cut constant stays `1D 56 41 03`. Only the iMin send path rewrites a trailing Epson feed-and-cut into the partial cut Swan 2 documents (`1D 56 01`).
 
-Cash drawer kick is not implemented for this connection. Opening the drawer on an iMin printer returns “not supported on this printer yet”.
+Cash drawer kick is skipped for this connection. A built-in receipt printer is left out of the kick, and network or USB receipt printers are still kicked.
 
 ## What was added
 
@@ -52,4 +52,4 @@ Confirm `android/capacitor.settings.gradle` and `android/app/capacitor.build.gra
 - Android Order Manager on an iMin terminal with SDK 2.0 (Swan 2)
 - ESC/POS only (not StarPRNT, not TSPL)
 - Same kitchen / receipt payloads as network, with the cut suffix rewritten on send
-- Cash drawer not included
+- Cash drawer kick is skipped for this printer
