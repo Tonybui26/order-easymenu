@@ -1020,96 +1020,125 @@ export default function OrderCard({
                 </div>
               )}
 
-              <div className="space-y-0 xl:space-y-1">
-                {order.items.map((item, index) => (
-                  <div
-                    key={index}
-                    className={`flex items-start justify-between py-1 transition-all duration-200 xl:py-2 ${
-                      isItemCompleted(index) && order.status === "preparing"
-                        ? "opacity-60"
-                        : ""
-                    }`}
-                  >
+              <div className="space-y-1">
+                {order.items.map((item, index) => {
+                  const canMarkItemDone = order.status === "preparing";
+                  const itemDone = isItemCompleted(index);
+                  return (
                     <div
-                      className={`flex flex-1 items-start ${order.status !== "preparing" ? "space-x-5" : "space-x-2"}`}
+                      key={index}
+                      role={canMarkItemDone ? "button" : undefined}
+                      tabIndex={canMarkItemDone ? 0 : undefined}
+                      aria-pressed={canMarkItemDone ? itemDone : undefined}
+                      aria-label={
+                        canMarkItemDone
+                          ? `${itemDone ? "Undo" : "Mark"} ${getCustomerDisplayName(item.name)} done`
+                          : undefined
+                      }
+                      onClick={
+                        canMarkItemDone
+                          ? () => toggleItemCompletion(index)
+                          : undefined
+                      }
+                      onKeyDown={
+                        canMarkItemDone
+                          ? (event) => {
+                              if (event.key !== "Enter" && event.key !== " ") {
+                                return;
+                              }
+                              event.preventDefault();
+                              toggleItemCompletion(index);
+                            }
+                          : undefined
+                      }
+                      className={`flex items-start justify-between py-1.5 transition-all duration-200 xl:py-2 ${
+                        itemDone && canMarkItemDone ? "opacity-60" : ""
+                      } ${
+                        canMarkItemDone
+                          ? "-mx-2 cursor-pointer rounded-lg px-2 hover:bg-gray-50 active:bg-gray-100"
+                          : ""
+                      }`}
                     >
-                      {/* Completion checkbox - only show when order is preparing */}
-                      {order.status === "preparing" && (
-                        <button
-                          onClick={() => toggleItemCompletion(index)}
-                          className={`mt-0.5 flex size-5 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors xl:size-6 ${
-                            isItemCompleted(index)
-                              ? "border-green-500 bg-green-500 text-white"
-                              : "border-gray-300 hover:border-green-400"
-                          }`}
-                        >
-                          {isItemCompleted(index) && (
-                            <Check className="h-3 w-3" strokeWidth={2} />
-                          )}
-                        </button>
-                      )}
-
-                      {/* Quantity badge - always show, gray out if completed */}
-                      <span
-                        className={`text-base font-bold ${
-                          isItemCompleted(index) && order.status === "preparing"
-                            ? "text-gray-400"
-                            : "text-gray-800"
-                        }`}
+                      <div
+                        className={`flex flex-1 items-start ${order.status !== "preparing" ? "space-x-5" : "space-x-2"}`}
                       >
-                        {item.quantity}
-                      </span>
+                        {/* Completion checkbox - only show when order is preparing */}
+                        {canMarkItemDone && (
+                          <span
+                            aria-hidden
+                            className={`mt-0.5 flex size-5 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors xl:size-6 ${
+                              itemDone
+                                ? "border-green-500 bg-green-500 text-white"
+                                : "border-gray-300"
+                            }`}
+                          >
+                            {itemDone && (
+                              <Check className="h-3 w-3" strokeWidth={2} />
+                            )}
+                          </span>
+                        )}
 
-                      <div className="min-w-0 flex-1">
-                        <p
-                          className={`text-base font-bold xl:text-base ${
-                            isItemCompleted(index) &&
-                            order.status === "preparing"
-                              ? "text-gray-500 line-through"
+                        {/* Quantity badge - always show, gray out if completed */}
+                        <span
+                          className={`text-base font-bold ${
+                            itemDone && canMarkItemDone
+                              ? "text-gray-400"
                               : "text-gray-800"
                           }`}
                         >
-                          {getCustomerDisplayName(item.name)}
-                        </p>
-                        {item.selectedVariants &&
-                          item.selectedVariants.length > 0 && (
-                            <p className="text-sm font-medium text-gray-700">
-                              {item.selectedVariants
-                                .map(
-                                  (variant) =>
-                                    `${getCustomerDisplayName(variant.groupName)}: ${getCustomerDisplayName(variant.optionName)}`,
-                                )
-                                .join(", ")}
-                            </p>
+                          {item.quantity}
+                        </span>
+
+                        <div className="min-w-0 flex-1">
+                          <p
+                            className={`text-base font-bold xl:text-base ${
+                              itemDone && canMarkItemDone
+                                ? "text-gray-500 line-through"
+                                : "text-gray-800"
+                            }`}
+                          >
+                            {getCustomerDisplayName(item.name)}
+                          </p>
+                          {item.selectedVariants &&
+                            item.selectedVariants.length > 0 && (
+                              <p className="text-sm font-medium text-gray-700">
+                                {item.selectedVariants
+                                  .map(
+                                    (variant) =>
+                                      `${getCustomerDisplayName(variant.groupName)}: ${getCustomerDisplayName(variant.optionName)}`,
+                                  )
+                                  .join(", ")}
+                              </p>
+                            )}
+                          <ModifierChoicesGrouped
+                            modifiers={item.selectedModifiers}
+                            className="text-sm text-gray-700"
+                          />
+                          {item.notes && (
+                            <div className="mt-2 rounded-lg border border-yellow-100 bg-yellow-50 p-2">
+                              <p className="mb-1 text-xs font-medium text-yellow-800">
+                                Note
+                              </p>
+                              <p className="text-xs text-yellow-700">
+                                {item.notes}
+                              </p>
+                            </div>
                           )}
-                        <ModifierChoicesGrouped
-                          modifiers={item.selectedModifiers}
-                          className="text-sm text-gray-700"
-                        />
-                        {item.notes && (
-                          <div className="mt-2 rounded-lg border border-yellow-100 bg-yellow-50 p-2">
-                            <p className="mb-1 text-xs font-medium text-yellow-800">
-                              Note
-                            </p>
-                            <p className="text-xs text-yellow-700">
-                              {item.notes}
-                            </p>
-                          </div>
-                        )}
+                        </div>
                       </div>
+                      {/* Line total: visible on all view modes (unpaid tab used separate markup with price always shown). */}
+                      <p
+                        className={`ml-4 shrink-0 text-sm font-semibold xl:text-base ${
+                          itemDone && canMarkItemDone
+                            ? "text-gray-500 line-through"
+                            : "text-gray-800"
+                        }`}
+                      >
+                        ${(item.price * item.quantity).toFixed(2)}
+                      </p>
                     </div>
-                    {/* Line total: visible on all view modes (unpaid tab used separate markup with price always shown). */}
-                    <p
-                      className={`ml-4 shrink-0 text-sm font-semibold xl:text-base ${
-                        isItemCompleted(index) && order.status === "preparing"
-                          ? "text-gray-500 line-through"
-                          : "text-gray-800"
-                      }`}
-                    >
-                      ${(item.price * item.quantity).toFixed(2)}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Special Instructions */}
