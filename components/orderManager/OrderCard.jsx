@@ -1126,16 +1126,17 @@ export default function OrderCard({
                           )}
                         </div>
                       </div>
-                      {/* Line total: visible on all view modes (unpaid tab used separate markup with price always shown). */}
-                      <p
-                        className={`ml-4 shrink-0 text-sm font-semibold xl:text-base ${
-                          itemDone && canMarkItemDone
-                            ? "text-gray-500 line-through"
-                            : "text-gray-800"
-                        }`}
-                      >
-                        ${(item.price * item.quantity).toFixed(2)}
-                      </p>
+                      {kitchenDisplayEnabled ? null : (
+                        <p
+                          className={`ml-4 shrink-0 text-sm font-semibold xl:text-base ${
+                            itemDone && canMarkItemDone
+                              ? "text-gray-500 line-through"
+                              : "text-gray-800"
+                          }`}
+                        >
+                          ${(item.price * item.quantity).toFixed(2)}
+                        </p>
+                      )}
                     </div>
                   );
                 })}
