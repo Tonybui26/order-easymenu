@@ -77,7 +77,7 @@ function heldCardTypeLabel(order) {
 
 function customerLabel(order) {
   const name = String(order?.customerName || "").trim();
-  return name || "N/A";
+  return name || "Guest";
 }
 
 function formatOrderIdLabel(orderId) {

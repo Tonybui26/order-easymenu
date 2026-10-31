@@ -1,6 +1,6 @@
 "use client";
 
-import { Folder, Percent, SquareX, Printer } from "lucide-react";
+import { Folder, Percent, Printer, UserRoundPen } from "lucide-react";
 import { cn } from "@/lib/helper";
 import {
   computeIncludedTaxFromInclusiveTotal,
@@ -28,7 +28,7 @@ function formatDiscountLabel(discount) {
 }
 
 /**
- * Fixed footer for the POS order panel: totals + Clear / Hold|Send / Discount.
+ * Fixed footer for the POS order panel: totals + Customer / Hold|Send / Discount.
  * Middle action is Send when there are cart lines not yet sent to kitchen.
  */
 export default function PosOrderPanelFooter({
@@ -38,8 +38,9 @@ export default function PosOrderPanelFooter({
   surchargeLabel = "Surcharge",
   taxPercentage = DEFAULT_TAX_PERCENTAGE,
   hasUnsentItems = false,
+  hasCustomerInfo = false,
   viewOnly = false,
-  onClear,
+  onCustomerInfo,
   onHold,
   onSend,
   onDiscount,
@@ -108,11 +109,12 @@ export default function PosOrderPanelFooter({
 
         <div className="flex bg-[#f8f9fb]">
           <FooterAction
-            icon={SquareX}
+            icon={UserRoundPen}
             label=""
-            onClick={onClear}
-            disabled={viewOnly}
+            ariaLabel="Customer info"
+            onClick={onCustomerInfo}
             className="border-neutral-[#e1e1e1] border-r px-6"
+            iconClassName={hasCustomerInfo ? "text-[#984B28]" : undefined}
           />
           <FooterAction
             icon={showSend ? Printer : Folder}
@@ -136,15 +138,18 @@ export default function PosOrderPanelFooter({
 function FooterAction({
   icon: Icon,
   label,
+  ariaLabel,
   onClick,
   disabled = false,
   className,
+  iconClassName,
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
+      aria-label={ariaLabel || undefined}
       className={cn(
         "flex min-h-[4.25rem] items-center justify-center gap-2 px-2 text-sm font-semibold uppercase tracking-wide text-neutral-900 transition-colors",
         disabled
@@ -153,7 +158,11 @@ function FooterAction({
         className,
       )}
     >
-      <Icon size={22} strokeWidth={1.5} className="shrink-0" />
+      <Icon
+        size={22}
+        strokeWidth={1.5}
+        className={cn("shrink-0", iconClassName)}
+      />
       {label}
     </button>
   );

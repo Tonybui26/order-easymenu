@@ -10,16 +10,14 @@ function Field({
   value,
   onChange,
   type = "text",
-  required = false,
-  error = "",
   autoComplete,
   inputMode,
+  placeholder,
 }) {
   return (
     <label className="block">
       <span className="mb-1.5 block text-sm font-medium text-neutral-700">
         {label}
-        {required ? <span className="text-red-600"> *</span> : null}
       </span>
       <InputText
         id={id}
@@ -28,24 +26,15 @@ function Field({
         onChange={(event) => onChange(event.target.value)}
         autoComplete={autoComplete}
         inputMode={inputMode}
-        className={
-          error
-            ? "border-red-400 focus:ring-red-200"
-            : undefined
-        }
+        placeholder={placeholder}
       />
-      {error ? (
-        <span className="mt-1 block text-xs font-medium text-red-600">
-          {error}
-        </span>
-      ) : null}
     </label>
   );
 }
 
 /**
- * Collect takeaway customer details before starting / confirming takeaway.
- * Name and phone are required; email is optional.
+ * Optional customer details for the current POS check.
+ * Staff open this from the order panel when they want to record a name.
  */
 export default function PosTakeawayCustomerDrawer({
   isOpen,
@@ -58,43 +47,20 @@ export default function PosTakeawayCustomerDrawer({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [nameError, setNameError] = useState("");
-  const [phoneError, setPhoneError] = useState("");
 
   useEffect(() => {
     if (!isOpen) return;
     setName(String(initialName || ""));
     setPhone(String(initialPhone || ""));
     setEmail(String(initialEmail || ""));
-    setNameError("");
-    setPhoneError("");
   }, [isOpen, initialName, initialPhone, initialEmail]);
 
   function handleSubmit(event) {
     event?.preventDefault?.();
-    const nextName = name.trim();
-    const nextPhone = phone.trim();
-    const nextEmail = email.trim();
-
-    let hasError = false;
-    if (!nextName) {
-      setNameError("Name is required");
-      hasError = true;
-    } else {
-      setNameError("");
-    }
-    if (!nextPhone) {
-      setPhoneError("Phone number is required");
-      hasError = true;
-    } else {
-      setPhoneError("");
-    }
-    if (hasError) return;
-
     onConfirm?.({
-      name: nextName,
-      phone: nextPhone,
-      email: nextEmail,
+      name: name.trim(),
+      phone: phone.trim(),
+      email: email.trim(),
     });
   }
 
@@ -102,8 +68,7 @@ export default function PosTakeawayCustomerDrawer({
     <SideDrawer
       isOpen={isOpen}
       onClose={onClose}
-      title="Takeaway customer"
-      subtitle="Name and phone are required"
+      title="Customer info"
       side="left"
       widthClassName="w-[min(100%,24rem)]"
       contentKey="pos-takeaway-customer"
@@ -121,7 +86,7 @@ export default function PosTakeawayCustomerDrawer({
             form="pos-takeaway-customer-form"
             className="min-h-[48px] flex-1 rounded-lg bg-[#984B28] text-sm font-semibold text-white transition-colors hover:bg-[#7f3f22]"
           >
-            Continue
+            Save
           </button>
         </div>
       }
@@ -136,8 +101,7 @@ export default function PosTakeawayCustomerDrawer({
           label="Name"
           value={name}
           onChange={setName}
-          required
-          error={nameError}
+          placeholder="Guest"
           autoComplete="name"
         />
         <Field
@@ -146,8 +110,6 @@ export default function PosTakeawayCustomerDrawer({
           value={phone}
           onChange={setPhone}
           type="tel"
-          required
-          error={phoneError}
           autoComplete="tel"
           inputMode="tel"
         />

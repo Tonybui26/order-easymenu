@@ -141,10 +141,6 @@ function formatPosTableNames(names) {
   return (names || []).join(", ");
 }
 
-function hasTakeawayTableReference(tableNumber) {
-  return Boolean(String(tableNumber || "").trim());
-}
-
 function mapPosOrderType(orderType) {
   if (orderType === "dine-in") return "dine-in";
   if (orderType === "takeaway") return "pick-up";
@@ -340,7 +336,6 @@ export default function PosTerminal() {
   const resumeLoadedRef = useRef(null);
   const openPayAfterResumeRef = useRef(false);
   const tablePrefilledRef = useRef(null);
-  const pendingTakeawayRef = useRef(null);
   const {
     menuContent,
     posLayouts,
@@ -663,11 +658,6 @@ export default function PosTerminal() {
     const fromParam = resolveOrderTypeFromParam(orderTypeParam);
     if (!fromParam) return;
     router.replace("/pos");
-    if (fromParam === "takeaway") {
-      pendingTakeawayRef.current = { tableNumber: "" };
-      setIsTakeawayCustomerDrawerOpen(true);
-      return;
-    }
     setOrderType(fromParam);
     setIsOrderTypeMissing(false);
   }, [
@@ -731,8 +721,10 @@ export default function PosTerminal() {
       return `BUZZER: ${resolvedTableNumber || "--"}`;
     }
     if (resolvedOrderType === "takeaway") {
-      if (customerName) return `TAKEAWAY: ${customerName}`;
-      return `TAKEAWAY${resolvedTableNumber ? `: ${resolvedTableNumber}` : ""}`;
+      const name = customerName.trim();
+      if (name) return `TAKEAWAY: ${name}`;
+      if (resolvedTableNumber) return `TAKEAWAY: ${resolvedTableNumber} · Guest`;
+      return "TAKEAWAY: Guest";
     }
     if (resolvedOrderType === "delivery") {
       return `DELIVERY${resolvedTableNumber ? `: ${resolvedTableNumber}` : ""}`;
@@ -1234,17 +1226,9 @@ export default function PosTerminal() {
       : number;
 
     if (nextOrderType === "takeaway") {
-      const tableRef = String(nextTableNumber || "").trim();
-      if (hasTakeawayTableReference(tableRef)) {
-        setTableNumber(tableRef);
-        setOrderType("takeaway");
-        setIsOrderTypeMissing(false);
-        return;
-      }
-      pendingTakeawayRef.current = {
-        tableNumber: nextTableNumber || "",
-      };
-      setIsTakeawayCustomerDrawerOpen(true);
+      setTableNumber(String(nextTableNumber || "").trim());
+      setOrderType("takeaway");
+      setIsOrderTypeMissing(false);
       return;
     }
 
@@ -1253,23 +1237,19 @@ export default function PosTerminal() {
     if (nextOrderType) setIsOrderTypeMissing(false);
   }
 
+  function handleOpenCustomerInfo() {
+    setIsTakeawayCustomerDrawerOpen(true);
+  }
+
   function handleTakeawayCustomerConfirm({ name, phone, email }) {
-    const pending = pendingTakeawayRef.current;
-    if (pending && pending.tableNumber != null && pending.tableNumber !== "") {
-      setTableNumber(pending.tableNumber);
-    }
     setCustomerName(String(name || "").trim());
     setCustomerPhone(String(phone || "").trim());
     setCustomerEmail(String(email || "").trim());
-    setOrderType("takeaway");
-    setIsOrderTypeMissing(false);
     setIsTakeawayCustomerDrawerOpen(false);
-    pendingTakeawayRef.current = null;
   }
 
   function handleTakeawayCustomerClose() {
     setIsTakeawayCustomerDrawerOpen(false);
-    pendingTakeawayRef.current = null;
   }
 
   function nudgeTableFieldForMissingOrderType() {
@@ -1342,7 +1322,6 @@ export default function PosTerminal() {
     setCustomerPhone("");
     setCustomerEmail("");
     setIsTakeawayCustomerDrawerOpen(false);
-    pendingTakeawayRef.current = null;
     setCheckDiscount(null);
     setIsDiscountDrawerOpen(false);
     resumeLoadedRef.current = null;
@@ -1491,25 +1470,6 @@ export default function PosTerminal() {
         validationBlocked: true,
         error: "Choose dine in or take away before sending",
       };
-    }
-
-    if (resolvedOrderType === "takeaway") {
-      const hasTableReference = hasTakeawayTableReference(resolvedTableNumber);
-      if (
-        !hasTableReference &&
-        (!customerName.trim() || !customerPhone.trim())
-      ) {
-        pendingTakeawayRef.current = {
-          tableNumber: resolvedTableNumber || "",
-        };
-        setIsTakeawayCustomerDrawerOpen(true);
-        showDismissibleToast("Enter customer name and phone for takeaway");
-        return {
-          success: false,
-          validationBlocked: true,
-          error: "Enter customer name and phone for takeaway",
-        };
-      }
     }
 
     setIsSending(true);
@@ -2312,7 +2272,6 @@ export default function PosTerminal() {
     setCustomerPhone("");
     setCustomerEmail("");
     setIsTakeawayCustomerDrawerOpen(false);
-    pendingTakeawayRef.current = null;
     setIsTablePrefilled(false);
     tablePrefilledRef.current = null;
     setKeypadDrawer(null);
@@ -2824,8 +2783,11 @@ export default function PosTerminal() {
               surchargeLabel={posSurchargeLabel}
               taxPercentage={storeProfile.taxPercentage}
               hasUnsentItems={hasUnsentItems}
+              hasCustomerInfo={Boolean(
+                customerName.trim() || customerPhone.trim(),
+              )}
               viewOnly={isViewOnly}
-              onClear={handleClearOrder}
+              onCustomerInfo={handleOpenCustomerInfo}
               onHold={handleFooterHold}
               onSend={handleSendOrder}
               onDiscount={handleOpenDiscountDrawer}
