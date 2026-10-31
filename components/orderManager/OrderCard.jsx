@@ -33,6 +33,7 @@ import { getCustomerDisplayName } from "@/lib/helper/printNameAlias";
 import { cn } from "@/lib/helper";
 import { isOrderPaidForFulfillment } from "@/lib/helper/orderPaymentStatus";
 import { useMenuContext } from "@/components/context/MenuContext";
+import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import OrderCardMoreInfo from "./OrderCardMoreInfo";
 import RefundModal from "./RefundModal";
 import SendRefundConfirmationModal from "./SendRefundConfirmationModal";
@@ -165,6 +166,7 @@ export default function OrderCard({
   onPrint,
 }) {
   const { menuConfig } = useMenuContext();
+  const { kitchenDisplayEnabled } = useGlobalAppContext();
   const posEnabled = Boolean(menuConfig?.posEnabled);
   const sourceBadge = posEnabled ? getOrderSourceBadge(order) : null;
 
@@ -195,6 +197,7 @@ export default function OrderCard({
     "scheduled",
     "preparing",
     "ready",
+    "kdsCompleted",
   ].includes(viewMode);
   const [fulfillmentNow, setFulfillmentNow] = useState(() => Date.now());
   const [prepareNow, setPrepareNow] = useState(() => Date.now());
@@ -302,7 +305,8 @@ export default function OrderCard({
   const isPreorder = Boolean(order.isPreorder);
 
   const showFulfillmentExpectedLabel =
-    !isTableOrder && ["scheduled", "preparing", "ready"].includes(viewMode);
+    !isTableOrder &&
+    ["scheduled", "preparing", "ready", "kdsCompleted"].includes(viewMode);
 
   const fulfillmentNowDate = new Date(fulfillmentNow);
 
@@ -636,12 +640,14 @@ export default function OrderCard({
             {/* Header */}
             <div className="p-4 pb-4 xl:p-6">
               {/* show me a order status banner here and it only visible in order completed mode */}
-              {viewMode === "completed" && (
+              {(viewMode === "completed" || viewMode === "kdsCompleted") && (
                 <div
                   className={`mb-1 inline-block rounded-md border p-2 ${
                     order.status === "delivered"
                       ? "border-green-300 bg-gradient-to-r from-green-50 to-emerald-50"
-                      : "border-red-300 bg-gradient-to-r from-red-50 to-pink-50"
+                      : order.status === "ready"
+                        ? "border-amber-300 bg-gradient-to-r from-amber-50 to-yellow-50"
+                        : "border-red-300 bg-gradient-to-r from-red-50 to-pink-50"
                   }`}
                 >
                   <div className="flex items-center justify-center">
@@ -650,12 +656,16 @@ export default function OrderCard({
                         className={`text-sm font-semibold capitalize ${
                           order.status === "delivered"
                             ? "text-green-800"
-                            : "text-red-800"
+                            : order.status === "ready"
+                              ? "text-amber-800"
+                              : "text-red-800"
                         }`}
                       >
                         {order.status === "delivered"
                           ? "Completed"
-                          : "Cancelled"}
+                          : order.status === "ready"
+                            ? "Ready"
+                            : "Cancelled"}
                       </span>
                     </div>
                   </div>
@@ -1010,96 +1020,126 @@ export default function OrderCard({
                 </div>
               )}
 
-              <div className="space-y-0 xl:space-y-1">
-                {order.items.map((item, index) => (
-                  <div
-                    key={index}
-                    className={`flex items-start justify-between py-1 transition-all duration-200 xl:py-2 ${
-                      isItemCompleted(index) && order.status === "preparing"
-                        ? "opacity-60"
-                        : ""
-                    }`}
-                  >
+              <div className="space-y-1">
+                {order.items.map((item, index) => {
+                  const canMarkItemDone = order.status === "preparing";
+                  const itemDone = isItemCompleted(index);
+                  return (
                     <div
-                      className={`flex flex-1 items-start ${order.status !== "preparing" ? "space-x-5" : "space-x-2"}`}
+                      key={index}
+                      role={canMarkItemDone ? "button" : undefined}
+                      tabIndex={canMarkItemDone ? 0 : undefined}
+                      aria-pressed={canMarkItemDone ? itemDone : undefined}
+                      aria-label={
+                        canMarkItemDone
+                          ? `${itemDone ? "Undo" : "Mark"} ${getCustomerDisplayName(item.name)} done`
+                          : undefined
+                      }
+                      onClick={
+                        canMarkItemDone
+                          ? () => toggleItemCompletion(index)
+                          : undefined
+                      }
+                      onKeyDown={
+                        canMarkItemDone
+                          ? (event) => {
+                              if (event.key !== "Enter" && event.key !== " ") {
+                                return;
+                              }
+                              event.preventDefault();
+                              toggleItemCompletion(index);
+                            }
+                          : undefined
+                      }
+                      className={`flex items-start justify-between py-1.5 transition-all duration-200 xl:py-2 ${
+                        itemDone && canMarkItemDone ? "opacity-60" : ""
+                      } ${
+                        canMarkItemDone
+                          ? "-mx-2 cursor-pointer rounded-lg px-2 hover:bg-gray-50 active:bg-gray-100"
+                          : ""
+                      }`}
                     >
-                      {/* Completion checkbox - only show when order is preparing */}
-                      {order.status === "preparing" && (
-                        <button
-                          onClick={() => toggleItemCompletion(index)}
-                          className={`mt-0.5 flex size-5 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors xl:size-6 ${
-                            isItemCompleted(index)
-                              ? "border-green-500 bg-green-500 text-white"
-                              : "border-gray-300 hover:border-green-400"
+                      <div
+                        className={`flex flex-1 items-start ${order.status !== "preparing" ? "space-x-5" : "space-x-2"}`}
+                      >
+                        {/* Completion checkbox - only show when order is preparing */}
+                        {canMarkItemDone && (
+                          <span
+                            aria-hidden
+                            className={`mt-0.5 flex size-5 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors xl:size-6 ${
+                              itemDone
+                                ? "border-green-500 bg-green-500 text-white"
+                                : "border-gray-300"
+                            }`}
+                          >
+                            {itemDone && (
+                              <Check className="h-3 w-3" strokeWidth={2} />
+                            )}
+                          </span>
+                        )}
+
+                        {/* Quantity badge - always show, gray out if completed */}
+                        <span
+                          className={`text-base font-bold ${
+                            itemDone && canMarkItemDone
+                              ? "text-gray-400"
+                              : "text-gray-800"
                           }`}
                         >
-                          {isItemCompleted(index) && (
-                            <Check className="h-3 w-3" strokeWidth={2} />
+                          {item.quantity}
+                        </span>
+
+                        <div className="min-w-0 flex-1">
+                          <p
+                            className={`text-base font-bold xl:text-base ${
+                              itemDone && canMarkItemDone
+                                ? "text-gray-500 line-through"
+                                : "text-gray-800"
+                            }`}
+                          >
+                            {getCustomerDisplayName(item.name)}
+                          </p>
+                          {item.selectedVariants &&
+                            item.selectedVariants.length > 0 && (
+                              <p className="text-sm font-medium text-gray-700">
+                                {item.selectedVariants
+                                  .map(
+                                    (variant) =>
+                                      `${getCustomerDisplayName(variant.groupName)}: ${getCustomerDisplayName(variant.optionName)}`,
+                                  )
+                                  .join(", ")}
+                              </p>
+                            )}
+                          <ModifierChoicesGrouped
+                            modifiers={item.selectedModifiers}
+                            className="text-sm text-gray-700"
+                          />
+                          {item.notes && (
+                            <div className="mt-2 rounded-lg border border-yellow-100 bg-yellow-50 p-2">
+                              <p className="mb-1 text-xs font-medium text-yellow-800">
+                                Note
+                              </p>
+                              <p className="text-xs text-yellow-700">
+                                {item.notes}
+                              </p>
+                            </div>
                           )}
-                        </button>
-                      )}
-
-                      {/* Quantity badge - always show, gray out if completed */}
-                      <span
-                        className={`text-base font-bold ${
-                          isItemCompleted(index) && order.status === "preparing"
-                            ? "text-gray-400"
-                            : "text-gray-800"
-                        }`}
-                      >
-                        {item.quantity}
-                      </span>
-
-                      <div className="min-w-0 flex-1">
+                        </div>
+                      </div>
+                      {kitchenDisplayEnabled ? null : (
                         <p
-                          className={`text-base font-bold xl:text-base ${
-                            isItemCompleted(index) &&
-                            order.status === "preparing"
+                          className={`ml-4 shrink-0 text-sm font-semibold xl:text-base ${
+                            itemDone && canMarkItemDone
                               ? "text-gray-500 line-through"
                               : "text-gray-800"
                           }`}
                         >
-                          {getCustomerDisplayName(item.name)}
+                          ${(item.price * item.quantity).toFixed(2)}
                         </p>
-                        {item.selectedVariants &&
-                          item.selectedVariants.length > 0 && (
-                            <p className="text-sm font-medium text-gray-700">
-                              {item.selectedVariants
-                                .map(
-                                  (variant) =>
-                                    `${getCustomerDisplayName(variant.groupName)}: ${getCustomerDisplayName(variant.optionName)}`,
-                                )
-                                .join(", ")}
-                            </p>
-                          )}
-                        <ModifierChoicesGrouped
-                          modifiers={item.selectedModifiers}
-                          className="text-sm text-gray-700"
-                        />
-                        {item.notes && (
-                          <div className="mt-2 rounded-lg border border-yellow-100 bg-yellow-50 p-2">
-                            <p className="mb-1 text-xs font-medium text-yellow-800">
-                              Note
-                            </p>
-                            <p className="text-xs text-yellow-700">
-                              {item.notes}
-                            </p>
-                          </div>
-                        )}
-                      </div>
+                      )}
                     </div>
-                    {/* Line total: visible on all view modes (unpaid tab used separate markup with price always shown). */}
-                    <p
-                      className={`ml-4 shrink-0 text-sm font-semibold xl:text-base ${
-                        isItemCompleted(index) && order.status === "preparing"
-                          ? "text-gray-500 line-through"
-                          : "text-gray-800"
-                      }`}
-                    >
-                      ${(item.price * item.quantity).toFixed(2)}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Special Instructions */}
@@ -1118,7 +1158,7 @@ export default function OrderCard({
         </motion.div>
 
         <AnimatePresence>
-          {moreInfoOpen ? (
+          {moreInfoOpen && !kitchenDisplayEnabled ? (
             <motion.div
               key="order-more-info"
               initial={{ y: "100%" }}
@@ -1136,7 +1176,7 @@ export default function OrderCard({
               />
             </motion.div>
           ) : null}
-          {moreActionsOpen ? (
+          {moreActionsOpen && !kitchenDisplayEnabled ? (
             <motion.div
               key="order-more-actions"
               initial={{ y: "100%" }}
@@ -1218,19 +1258,21 @@ export default function OrderCard({
         </AnimatePresence>
       </div>
 
-      <div className="relative z-30 shrink-0 border-t border-[#eee] bg-[#f6f6f6]">
-        <OrderCardFooterTrigger
-          title="More info"
-          isOpen={moreInfoOpen}
-          onClick={toggleMoreInfo}
-        />
-        <OrderCardFooterTrigger
-          title="More actions"
-          isOpen={moreActionsOpen}
-          onClick={toggleMoreActions}
-          className="border-t border-[#eeeeee]"
-        />
-      </div>
+      {kitchenDisplayEnabled ? null : (
+        <div className="relative z-30 shrink-0 border-t border-[#eee] bg-[#f6f6f6]">
+          <OrderCardFooterTrigger
+            title="More info"
+            isOpen={moreInfoOpen}
+            onClick={toggleMoreInfo}
+          />
+          <OrderCardFooterTrigger
+            title="More actions"
+            isOpen={moreActionsOpen}
+            onClick={toggleMoreActions}
+            className="border-t border-[#eeeeee]"
+          />
+        </div>
+      )}
 
       {/* DaisyUI modal (same pattern as MoreMenuButton): dialog + modal-open + modal-box + modal-backdrop. */}
       <RefundModal

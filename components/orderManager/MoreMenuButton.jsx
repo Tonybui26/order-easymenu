@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Package2,
   Settings,
+  Monitor,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
@@ -60,6 +61,8 @@ export default function MoreMenuButton({
     setNotificationSoundId,
     newOrderAlertsMuted,
     setNewOrderAlertsMuted,
+    kitchenDisplayEnabled,
+    setKitchenDisplayEnabled,
   } = useGlobalAppContext();
 
   // Track audio instances + scheduled replay so the 2s test can be torn down cleanly
@@ -159,8 +162,9 @@ export default function MoreMenuButton({
   }
 
   const moreFeatures = [
-    // View Mode Tabs for Small Screens Only
-    ...(isSmallScreen
+    // View Mode Tabs for Small Screens Only.
+    // Kitchen Display shows Preparing and Ready in the header on every size.
+    ...(isSmallScreen && !kitchenDisplayEnabled
       ? [
           {
             icon: Bell,
@@ -236,6 +240,17 @@ export default function MoreMenuButton({
         ]
       : []),
     // Existing Features (always shown)
+    {
+      id: "kitchen-display",
+      icon: Monitor,
+      title: "Kitchen display",
+      description: kitchenDisplayEnabled
+        ? "On for this device — tap to turn off"
+        : "Off — tap to simplify this screen for the kitchen",
+      action: () => setKitchenDisplayEnabled(!kitchenDisplayEnabled),
+      keepModalOpen: true,
+      isActive: kitchenDisplayEnabled,
+    },
     {
       icon: CheckCheck,
       title: "Completed Orders",
