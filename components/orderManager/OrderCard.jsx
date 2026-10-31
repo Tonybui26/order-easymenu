@@ -33,6 +33,7 @@ import { getCustomerDisplayName } from "@/lib/helper/printNameAlias";
 import { cn } from "@/lib/helper";
 import { isOrderPaidForFulfillment } from "@/lib/helper/orderPaymentStatus";
 import { useMenuContext } from "@/components/context/MenuContext";
+import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import OrderCardMoreInfo from "./OrderCardMoreInfo";
 import RefundModal from "./RefundModal";
 import SendRefundConfirmationModal from "./SendRefundConfirmationModal";
@@ -165,6 +166,7 @@ export default function OrderCard({
   onPrint,
 }) {
   const { menuConfig } = useMenuContext();
+  const { kitchenDisplayEnabled } = useGlobalAppContext();
   const posEnabled = Boolean(menuConfig?.posEnabled);
   const sourceBadge = posEnabled ? getOrderSourceBadge(order) : null;
 
@@ -1126,7 +1128,7 @@ export default function OrderCard({
         </motion.div>
 
         <AnimatePresence>
-          {moreInfoOpen ? (
+          {moreInfoOpen && !kitchenDisplayEnabled ? (
             <motion.div
               key="order-more-info"
               initial={{ y: "100%" }}
@@ -1144,7 +1146,7 @@ export default function OrderCard({
               />
             </motion.div>
           ) : null}
-          {moreActionsOpen ? (
+          {moreActionsOpen && !kitchenDisplayEnabled ? (
             <motion.div
               key="order-more-actions"
               initial={{ y: "100%" }}
@@ -1226,19 +1228,21 @@ export default function OrderCard({
         </AnimatePresence>
       </div>
 
-      <div className="relative z-30 shrink-0 border-t border-[#eee] bg-[#f6f6f6]">
-        <OrderCardFooterTrigger
-          title="More info"
-          isOpen={moreInfoOpen}
-          onClick={toggleMoreInfo}
-        />
-        <OrderCardFooterTrigger
-          title="More actions"
-          isOpen={moreActionsOpen}
-          onClick={toggleMoreActions}
-          className="border-t border-[#eeeeee]"
-        />
-      </div>
+      {kitchenDisplayEnabled ? null : (
+        <div className="relative z-30 shrink-0 border-t border-[#eee] bg-[#f6f6f6]">
+          <OrderCardFooterTrigger
+            title="More info"
+            isOpen={moreInfoOpen}
+            onClick={toggleMoreInfo}
+          />
+          <OrderCardFooterTrigger
+            title="More actions"
+            isOpen={moreActionsOpen}
+            onClick={toggleMoreActions}
+            className="border-t border-[#eeeeee]"
+          />
+        </div>
+      )}
 
       {/* DaisyUI modal (same pattern as MoreMenuButton): dialog + modal-open + modal-box + modal-backdrop. */}
       <RefundModal
