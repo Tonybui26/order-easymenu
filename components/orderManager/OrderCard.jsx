@@ -195,6 +195,7 @@ export default function OrderCard({
     "scheduled",
     "preparing",
     "ready",
+    "kdsCompleted",
   ].includes(viewMode);
   const [fulfillmentNow, setFulfillmentNow] = useState(() => Date.now());
   const [prepareNow, setPrepareNow] = useState(() => Date.now());
@@ -302,7 +303,8 @@ export default function OrderCard({
   const isPreorder = Boolean(order.isPreorder);
 
   const showFulfillmentExpectedLabel =
-    !isTableOrder && ["scheduled", "preparing", "ready"].includes(viewMode);
+    !isTableOrder &&
+    ["scheduled", "preparing", "ready", "kdsCompleted"].includes(viewMode);
 
   const fulfillmentNowDate = new Date(fulfillmentNow);
 
@@ -636,12 +638,14 @@ export default function OrderCard({
             {/* Header */}
             <div className="p-4 pb-4 xl:p-6">
               {/* show me a order status banner here and it only visible in order completed mode */}
-              {viewMode === "completed" && (
+              {(viewMode === "completed" || viewMode === "kdsCompleted") && (
                 <div
                   className={`mb-1 inline-block rounded-md border p-2 ${
                     order.status === "delivered"
                       ? "border-green-300 bg-gradient-to-r from-green-50 to-emerald-50"
-                      : "border-red-300 bg-gradient-to-r from-red-50 to-pink-50"
+                      : order.status === "ready"
+                        ? "border-amber-300 bg-gradient-to-r from-amber-50 to-yellow-50"
+                        : "border-red-300 bg-gradient-to-r from-red-50 to-pink-50"
                   }`}
                 >
                   <div className="flex items-center justify-center">
@@ -650,12 +654,16 @@ export default function OrderCard({
                         className={`text-sm font-semibold capitalize ${
                           order.status === "delivered"
                             ? "text-green-800"
-                            : "text-red-800"
+                            : order.status === "ready"
+                              ? "text-amber-800"
+                              : "text-red-800"
                         }`}
                       >
                         {order.status === "delivered"
                           ? "Completed"
-                          : "Cancelled"}
+                          : order.status === "ready"
+                            ? "Ready"
+                            : "Cancelled"}
                       </span>
                     </div>
                   </div>

@@ -21,6 +21,11 @@ import {
   setMasterDeviceEnabled as persistMasterDeviceEnabled,
   MASTER_DEVICE_ENABLED_CHANGED_EVENT,
 } from "@/lib/utils/masterDevice";
+import {
+  getKitchenDisplayEnabled,
+  setKitchenDisplayEnabled as persistKitchenDisplayEnabled,
+  KITCHEN_DISPLAY_ENABLED_CHANGED_EVENT,
+} from "@/lib/utils/kitchenDisplay";
 
 const GlobalAppContext = createContext();
 
@@ -32,12 +37,15 @@ export const GlobalAppContextProvider = ({ children, userData }) => {
   const [newOrderAlertsMuted, setNewOrderAlertsMutedState] = useState(false);
   const [autoPrintingEnabled, setAutoPrintingEnabledState] = useState(false);
   const [masterDeviceEnabled, setMasterDeviceEnabledState] = useState(true);
+  const [kitchenDisplayEnabled, setKitchenDisplayEnabledState] =
+    useState(false);
 
   useEffect(() => {
     setNotificationSoundIdState(getNotificationSoundId());
     setNewOrderAlertsMutedState(getNewOrderAlertsMuted());
     setAutoPrintingEnabledState(getAutoPrintingEnabled());
     setMasterDeviceEnabledState(getMasterDeviceEnabled());
+    setKitchenDisplayEnabledState(getKitchenDisplayEnabled());
 
     function onSoundChanged(event) {
       const id = event?.detail?.soundId;
@@ -69,6 +77,14 @@ export const GlobalAppContextProvider = ({ children, userData }) => {
       }
     }
 
+    function onKitchenDisplayEnabledChanged(event) {
+      if (typeof event?.detail?.enabled === "boolean") {
+        setKitchenDisplayEnabledState(event.detail.enabled);
+      } else {
+        setKitchenDisplayEnabledState(getKitchenDisplayEnabled());
+      }
+    }
+
     window.addEventListener(
       "order-manager-notification-sound-changed",
       onSoundChanged,
@@ -84,6 +100,10 @@ export const GlobalAppContextProvider = ({ children, userData }) => {
     window.addEventListener(
       MASTER_DEVICE_ENABLED_CHANGED_EVENT,
       onMasterDeviceEnabledChanged,
+    );
+    window.addEventListener(
+      KITCHEN_DISPLAY_ENABLED_CHANGED_EVENT,
+      onKitchenDisplayEnabledChanged,
     );
     return () => {
       window.removeEventListener(
@@ -101,6 +121,10 @@ export const GlobalAppContextProvider = ({ children, userData }) => {
       window.removeEventListener(
         MASTER_DEVICE_ENABLED_CHANGED_EVENT,
         onMasterDeviceEnabledChanged,
+      );
+      window.removeEventListener(
+        KITCHEN_DISPLAY_ENABLED_CHANGED_EVENT,
+        onKitchenDisplayEnabledChanged,
       );
     };
   }, []);
@@ -125,6 +149,11 @@ export const GlobalAppContextProvider = ({ children, userData }) => {
     setMasterDeviceEnabledState(getMasterDeviceEnabled());
   }, []);
 
+  const setKitchenDisplayEnabled = useCallback((enabled) => {
+    persistKitchenDisplayEnabled(enabled);
+    setKitchenDisplayEnabledState(getKitchenDisplayEnabled());
+  }, []);
+
   return (
     <GlobalAppContext.Provider
       value={{
@@ -144,6 +173,9 @@ export const GlobalAppContextProvider = ({ children, userData }) => {
         // Device-local master station for self-order alerts
         masterDeviceEnabled,
         setMasterDeviceEnabled,
+        // Device-local Kitchen Display screen
+        kitchenDisplayEnabled,
+        setKitchenDisplayEnabled,
         // User data (from server-side verification)
         userData,
         // Session status (for loading states)

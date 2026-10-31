@@ -6,7 +6,31 @@ export default function ViewModeTab({
   count,
   isActive,
   onClick,
+  inline = false,
 }) {
+  if (inline) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`flex items-center gap-2 rounded-full px-3 py-1.5 transition-all duration-200 ${
+          isActive
+            ? "bg-neutral-700 text-white ring-2 ring-brand_accent"
+            : "text-gray-300 hover:bg-neutral-700"
+        }`}
+      >
+        <span className="text-sm font-bold">{label}</span>
+        <span
+          className={`flex min-w-6 items-center justify-center rounded-full px-1.5 text-sm font-bold ${
+            isActive ? "bg-brand_accent text-white" : "text-gray-400"
+          }`}
+        >
+          {count}
+        </span>
+      </button>
+    );
+  }
+
   return (
     <button
       onClick={onClick}

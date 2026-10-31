@@ -32,6 +32,7 @@ import {
   Bell,
   ChefHat,
   Check,
+  CheckCheck,
   Radio,
   Clock,
   X,
@@ -77,6 +78,8 @@ import {
   NEW_ORDER_ALERTS_MUTED_CHANGED_EVENT,
 } from "@/lib/utils/newOrderAlerts";
 import { getAutoPrintingEnabled } from "@/lib/utils/autoPrinting";
+import { KITCHEN_DISPLAY_HIDDEN_VIEW_MODES } from "@/lib/utils/kitchenDisplay";
+import { isTakeawayOrder } from "@/lib/helper/orderType";
 import {
   isNotificationWorthyOrder,
   isUnpreparedNewOrder,
@@ -112,13 +115,29 @@ const NEW_ORDER_REALERT_AFTER_MS = 3 * 60 * 1000;
  * - Database finds orders created within this UTC range
  * - User sees orders from their local "January 15th"
  */
+function localDayIsoRange(date) {
+  const startOfLocalDay = new Date(date);
+  startOfLocalDay.setHours(0, 0, 0, 0);
+  const endOfLocalDay = new Date(date);
+  endOfLocalDay.setHours(23, 59, 59, 999);
+  return {
+    startOfLocalDay,
+    endOfLocalDay,
+    startDateUTC: startOfLocalDay.toISOString(),
+    endDateUTC: endOfLocalDay.toISOString(),
+  };
+}
+
 export default function LiveOrderTerminal() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState("new"); // "new", "scheduled", "preparing", "ready", "unpaid", "all", "completed", or "productAvailability"
+  const [viewMode, setViewMode] = useState("new"); // "new", "scheduled", "preparing", "ready", "unpaid", "all", "completed", "kdsCompleted", or "productAvailability"
   const viewModeRef = useRef(viewMode);
   const [completedOrders, setCompletedOrders] = useState([]);
   const [completedOrdersLoading, setCompletedOrdersLoading] = useState(false);
+  const [kdsFinishedOrders, setKdsFinishedOrders] = useState([]);
+  const [kdsFinishedLoading, setKdsFinishedLoading] = useState(false);
+  const kdsFinishedRequestRef = useRef(0);
   const audioRef = useRef(null);
   const soundIntervalRef = useRef(null);
   const playingAudioInstances = useRef(new Set());
@@ -151,8 +170,12 @@ export default function LiveOrderTerminal() {
     setLastDismissedIds(new Set(next.keys()));
   }, []);
   const [audioInitialized, setAudioInitialized] = useState(false);
-  const { soundEnabled, notificationSoundId, newOrderAlertsMuted } =
-    useGlobalAppContext();
+  const {
+    soundEnabled,
+    notificationSoundId,
+    newOrderAlertsMuted,
+    kitchenDisplayEnabled,
+  } = useGlobalAppContext();
   // Polling configuration
   const POLLING_INTERVALS = {
     ACTIVE: 10000, // 10 seconds when app is active
@@ -196,9 +219,19 @@ export default function LiveOrderTerminal() {
 
   useEffect(() => {
     if (!hasPreorderEnabled && viewMode === "scheduled") {
-      setViewMode("new");
+      setViewMode(kitchenDisplayEnabled ? "preparing" : "new");
     }
-  }, [hasPreorderEnabled, viewMode]);
+  }, [hasPreorderEnabled, viewMode, kitchenDisplayEnabled]);
+
+  useEffect(() => {
+    if (kitchenDisplayEnabled) {
+      if (KITCHEN_DISPLAY_HIDDEN_VIEW_MODES.includes(viewMode)) {
+        setViewMode("preparing");
+      }
+      return;
+    }
+    if (viewMode === "kdsCompleted") setViewMode("new");
+  }, [kitchenDisplayEnabled, viewMode]);
 
   // Polling function (defined before startPolling to avoid initialization error)
   const pollingOrders = useCallback(async () => {
@@ -526,19 +559,8 @@ export default function LiveOrderTerminal() {
         // Convert local date to UTC date range for accurate database querying
         // This ensures we get all orders for the user's "day" regardless of timezone
         const localDate = selectedDate;
-
-        // Create start of day in user's local timezone (e.g., 00:00:00)
-        const startOfLocalDay = new Date(localDate);
-        startOfLocalDay.setHours(0, 0, 0, 0);
-
-        // Create end of day in user's local timezone (e.g., 23:59:59.999)
-        const endOfLocalDay = new Date(localDate);
-        endOfLocalDay.setHours(23, 59, 59, 999);
-
-        // Convert local timezone boundaries to UTC for database comparison
-        // This handles cases where user is ahead/behind UTC
-        const startDateUTC = startOfLocalDay.toISOString();
-        const endDateUTC = endOfLocalDay.toISOString();
+        const { startOfLocalDay, endOfLocalDay, startDateUTC, endDateUTC } =
+          localDayIsoRange(localDate);
 
         // Log timezone information for debugging
         const tzInfo = getTimezoneInfo();
@@ -562,6 +584,19 @@ export default function LiveOrderTerminal() {
       }
     }
   };
+
+  const refreshKdsFinishedOrders = useCallback(async () => {
+    const requestId = kdsFinishedRequestRef.current + 1;
+    kdsFinishedRequestRef.current = requestId;
+    try {
+      const { startDateUTC, endDateUTC } = localDayIsoRange(new Date());
+      const data = await fetchCompletedOrders(startDateUTC, endDateUTC);
+      if (kdsFinishedRequestRef.current !== requestId) return;
+      setKdsFinishedOrders(data.orders || []);
+    } catch (error) {
+      console.error("Error fetching kitchen completed orders:", error);
+    }
+  }, []);
 
   // Date picker modal
   // UI Components: Date picker modal
@@ -710,8 +745,9 @@ export default function LiveOrderTerminal() {
     // Clear printed orders tracking when notification is dismissed
     printedOrderIdsRef.current.clear();
     stopSoundCycle();
-    // Switch to new orders tab when notification is dismissed
-    setViewMode("new");
+    // Switch to new orders tab when notification is dismissed.
+    // Kitchen Display keeps the current Preparing / Ready tab.
+    if (!kitchenDisplayEnabled) setViewMode("new");
   };
 
   // Handle app foreground/background (replace existing SSE handler)
@@ -827,13 +863,31 @@ export default function LiveOrderTerminal() {
     }
   }, [viewMode, selectedDate]);
 
+  useEffect(() => {
+    if (!kitchenDisplayEnabled) return undefined;
+    let active = true;
+    setKdsFinishedLoading(true);
+    refreshKdsFinishedOrders().finally(() => {
+      if (active) setKdsFinishedLoading(false);
+    });
+    const intervalId = setInterval(refreshKdsFinishedOrders, 10000);
+    return () => {
+      active = false;
+      clearInterval(intervalId);
+    };
+  }, [kitchenDisplayEnabled, refreshKdsFinishedOrders]);
+
   // Effect to handle view mode changes when Pay at Counter is disabled
   useEffect(() => {
     // If user is on "unpaid" view but Pay at Counter is disabled, switch to "new" view
     if (viewMode === "unpaid" && !storeProfile?.paymentMethods?.cash?.enabled) {
-      setViewMode("new");
+      setViewMode(kitchenDisplayEnabled ? "preparing" : "new");
     }
-  }, [storeProfile?.paymentMethods?.cash?.enabled, viewMode]);
+  }, [
+    storeProfile?.paymentMethods?.cash?.enabled,
+    viewMode,
+    kitchenDisplayEnabled,
+  ]);
 
   // Handle click outside date picker
   useEffect(() => {
@@ -1181,6 +1235,7 @@ export default function LiveOrderTerminal() {
       // If order is delivered or cancelled, remove it after a delay
       // Pay-later dine-in orders stay active until payment is collected
       if (["delivered", "cancelled"].includes(newStatus)) {
+        if (kitchenDisplayEnabled) refreshKdsFinishedOrders();
         const keepDeliveredPayLater =
           newStatus === "delivered" &&
           shouldKeepDeliveredInActive(updatedOrder, menuConfig);
@@ -1527,6 +1582,17 @@ export default function LiveOrderTerminal() {
       return sortOldestFirst(
         orders.filter((order) => order.status === "ready"),
       );
+    } else if (viewMode === "kdsCompleted") {
+      const readyTakeaway = sortOldestFirst(
+        orders.filter(
+          (order) => order.status === "ready" && isTakeawayOrder(order),
+        ),
+      );
+      const readyIds = new Set(readyTakeaway.map((order) => String(order._id)));
+      const finished = kdsFinishedOrders.filter(
+        (order) => !readyIds.has(String(order._id)),
+      );
+      return [...readyTakeaway, ...finished];
     } else if (viewMode === "completed") {
       return orders.filter((order) => order.status === "delivered");
     } else if (viewMode === "productAvailability") {
@@ -1570,6 +1636,9 @@ export default function LiveOrderTerminal() {
     (order) => order.status === "preparing",
   ).length;
   const readyCount = orders.filter((order) => order.status === "ready").length;
+  const kdsCompletedCount =
+    orders.filter((order) => order.status === "ready" && isTakeawayOrder(order))
+      .length + kdsFinishedOrders.length;
   const completedCount = completedOrders.length;
   const completedRefundSummary = useMemo(
     () => summarizeCompletedOrderRefunds(completedOrders),
@@ -1667,7 +1736,76 @@ export default function LiveOrderTerminal() {
         />
 
         {/* Top chrome: header (safe-area top inset) */}
-        <div className="shrink-0 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <div
+          className={
+            kitchenDisplayEnabled
+              ? "shrink-0 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]"
+              : "shrink-0 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]"
+          }
+        >
+          {kitchenDisplayEnabled ? (
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center">
+              <div />
+              <div className="flex items-center gap-1 rounded-full bg-[#0000003d] py-1 pl-3 pr-1 ring-2 ring-[#222222]">
+                <div
+                  className={`flex items-center gap-2 border-r border-white/15 pr-3 text-sm font-bold ${
+                    isPollingActive && consecutiveErrors === 0
+                      ? "text-green-500"
+                      : consecutiveErrors > 0
+                        ? "text-red-400"
+                        : "text-yellow-400"
+                  }`}
+                >
+                  <div
+                    className={`h-2.5 w-2.5 rounded-full ${
+                      isPollingActive && consecutiveErrors === 0
+                        ? "animate-pulse bg-green-500"
+                        : consecutiveErrors > 0
+                          ? "bg-red-500"
+                          : "bg-yellow-500"
+                    }`}
+                  />
+                  <span>
+                    {!isPollingActive
+                      ? "OFFLINE"
+                      : consecutiveErrors > 0
+                        ? "CONNECTING"
+                        : "LIVE"}
+                  </span>
+                </div>
+                <ViewModeTab
+                  inline
+                  icon={ChefHat}
+                  label="Preparing"
+                  count={preparingCount}
+                  isActive={viewMode === "preparing"}
+                  onClick={() => setViewMode("preparing")}
+                />
+                <ViewModeTab
+                  inline
+                  icon={CheckCheck}
+                  label="Completed"
+                  count={kdsCompletedCount}
+                  isActive={viewMode === "kdsCompleted"}
+                  onClick={() => setViewMode("kdsCompleted")}
+                />
+              </div>
+              <div className="flex justify-end">
+                <MoreMenuButton
+                  setViewMode={setViewMode}
+                  viewMode={viewMode}
+                  newOrdersCount={newOrdersCount}
+                  scheduledCount={scheduledCount}
+                  hasPreorderEnabled={hasPreorderEnabled}
+                  preparingCount={preparingCount}
+                  readyCount={readyCount}
+                  allActiveCount={allActiveCount}
+                  unpaidTablesBadgeCount={unpaidTablesBadgeCount}
+                  storeProfile={storeProfile}
+                />
+              </div>
+            </div>
+          ) : (
           <div className="flex items-start justify-between">
             {/* quick settings */}
             <div className="mb-3 flex gap-4 rounded-3xl bg-[#0000003d] p-3 ring-2 ring-[#222222]">
@@ -1711,9 +1849,7 @@ export default function LiveOrderTerminal() {
                       : "LIVE"}
                 </span>
               </div>
-              {/* Button for controlling online orders */}
               <OnlineOrderControlButton />
-              {/* Button for controlling prep time */}
               <PrepTimeControlButton />
               {/* Button for refreshing app data - temporary disabled as not working properly */}
               {/* <button
@@ -1791,6 +1927,7 @@ export default function LiveOrderTerminal() {
               />
             </div>
           </div>
+          )}
         </div>
 
         {/* Notification Overlay */}
@@ -2047,6 +2184,17 @@ export default function LiveOrderTerminal() {
                 </div>
               )}
             </div>
+          ) : viewMode === "kdsCompleted" &&
+            kdsFinishedLoading &&
+            filteredOrders.length === 0 ? (
+            <div className="flex min-h-[200px] items-center justify-center">
+              <div className="text-center">
+                <span className="loading loading-spinner loading-lg text-brand_accent"></span>
+                <h3 className="mt-2 text-lg font-medium text-white">
+                  Loading completed orders...
+                </h3>
+              </div>
+            </div>
           ) : viewMode === "productAvailability" ? (
             <PanelProductAvailability />
           ) : filteredOrders.length === 0 ? (
@@ -2065,6 +2213,8 @@ export default function LiveOrderTerminal() {
                       return "No Orders Preparing";
                     case "ready":
                       return "No Orders Ready";
+                    case "kdsCompleted":
+                      return "No Completed Orders";
                     case "unpaid":
                       return "No Unpaid Counter Orders";
                     case "completed":
@@ -2087,6 +2237,8 @@ export default function LiveOrderTerminal() {
                       return "Orders being prepared will appear here.";
                     case "ready":
                       return "Orders ready for pickup or delivery will show here.";
+                    case "kdsCompleted":
+                      return "Today's completed orders and ready takeaway orders will show here.";
                     case "unpaid":
                       return "Unpaid counter orders will be listed here.";
                     case "completed":

@@ -3,6 +3,7 @@
 import { MonitorSmartphone } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMenuContext } from "@/components/context/MenuContext";
+import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import { getPosHomePath } from "@/lib/pos/posConfig";
 
 /**
@@ -11,8 +12,9 @@ import { getPosHomePath } from "@/lib/pos/posConfig";
 export default function PosEntryButton() {
   const router = useRouter();
   const { menuConfig } = useMenuContext();
+  const { kitchenDisplayEnabled } = useGlobalAppContext();
 
-  if (!menuConfig?.posEnabled) return null;
+  if (!menuConfig?.posEnabled || kitchenDisplayEnabled) return null;
 
   return (
     <button
