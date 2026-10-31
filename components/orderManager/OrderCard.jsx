@@ -638,7 +638,7 @@ export default function OrderCard({
         >
           <div>
             {/* Header */}
-            <div className="p-4 pb-4 xl:p-6">
+            <div className="p-4 pb-2">
               {/* show me a order status banner here and it only visible in order completed mode */}
               {(viewMode === "completed" || viewMode === "kdsCompleted") && (
                 <div
@@ -900,7 +900,7 @@ export default function OrderCard({
               )}
             </div>
             {/* Actions */}
-            <div className="p-4 pt-0 xl:p-6">
+            <div className="p-4 pt-0">
               <div className="flex space-x-3">
                 {showConfirmButton && (
                   <button
