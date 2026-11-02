@@ -70,6 +70,7 @@ import PosOrderPanelFooter from "./PosOrderPanelFooter";
 import PosItemCustomizePanel from "./PosItemCustomizePanel";
 import PosCartLine from "./PosCartLine";
 import PosItemNoteDrawer from "./PosItemNoteDrawer";
+import PosOpenItemDrawer from "./PosOpenItemDrawer";
 import PosCancelSentLineDrawer, {
   POS_CANCEL_SENT_LINE_DRAWER_CLOSED,
 } from "./PosCancelSentLineDrawer";
@@ -164,6 +165,7 @@ function buildPosSendItems(cartLines, menuContent) {
       selectedVariants: line.selectedVariants || [],
       selectedModifiers: line.selectedModifiers || [],
       ...(kitchenCourse ? { kitchenCourse } : null),
+      ...(line.itemGroupId ? { itemGroupId: line.itemGroupId } : null),
     };
   });
 }
@@ -412,6 +414,7 @@ export default function PosTerminal() {
   const [customizingLineId, setCustomizingLineId] = useState(null);
   const [optionsLineId, setOptionsLineId] = useState(null);
   const [noteLineId, setNoteLineId] = useState(null);
+  const [openItemTab, setOpenItemTab] = useState(null);
   const [selectedVariants, setSelectedVariants] = useState({});
   const [selectedModifiers, setSelectedModifiers] = useState({});
   const [isOrderTypeMissing, setIsOrderTypeMissing] = useState(false);
@@ -987,6 +990,37 @@ export default function PosTerminal() {
     if (customizingItem) closeCustomization();
     setMenuSearchQuery("");
     setSelectedTabId(tabId);
+    const tab = tabs.find((entry) => entry.id === tabId);
+    if (tab?.openItem === true && !isViewOnly) {
+      setOpenItemTab(tab);
+    } else {
+      setOpenItemTab(null);
+    }
+  }
+
+  function addOpenItemLine({ name, price }) {
+    if (isViewOnly || !openItemTab) return;
+    const lineId = `open-${Date.now()}`;
+    const itemGroupId =
+      typeof openItemTab.itemGroupId === "string"
+        ? openItemTab.itemGroupId.trim()
+        : "";
+    registerEnteringLine(lineId);
+    setCartLines((prev) => [
+      {
+        lineId,
+        itemId: `open-item:${lineId}`,
+        title: name,
+        basePrice: price,
+        price,
+        quantity: 1,
+        selectedVariants: [],
+        selectedModifiers: [],
+        configKey: `open:${lineId}`,
+        ...(itemGroupId ? { itemGroupId } : null),
+      },
+      ...prev,
+    ]);
   }
 
   function handleSelectVariant(groupId, optionId) {
@@ -2958,6 +2992,14 @@ export default function PosTerminal() {
                   >
                     Select a tab
                   </motion.div>
+                ) : selectedTab.openItem ? (
+                  <motion.div
+                    key={`${selectedTabId}-open-item`}
+                    {...getPosPanelMotionProps(panelTransitionDirection)}
+                    className="flex h-full items-center justify-center px-6 text-center text-sm text-neutral-500"
+                  >
+                    Tap {selectedTab.name || "this tab"} to add a custom item
+                  </motion.div>
                 ) : selectedRows.length === 0 ? (
                   <motion.div
                     key={`${selectedTabId}-empty`}
@@ -3008,6 +3050,13 @@ export default function PosTerminal() {
       <DismissibleToast
         toast={dismissibleToast}
         onDismiss={hideDismissibleToast}
+      />
+      <PosOpenItemDrawer
+        isOpen={Boolean(openItemTab)}
+        tabId={openItemTab?.id || ""}
+        tabName={openItemTab?.name || ""}
+        onClose={() => setOpenItemTab(null)}
+        onAdd={addOpenItemLine}
       />
       <PosCancelSentLineDrawer
         drawerState={cancelSentLineDrawer}
