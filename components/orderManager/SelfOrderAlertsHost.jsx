@@ -7,7 +7,6 @@ import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { usePosNavigate } from "@/components/context/PosNavigateContext";
 import { isSelfOrderAlertsEnabled } from "@/lib/pos/selfOrderAlertsConfig";
-import { POS_HELD_ORDERS_TAB_SELF_ORDERING } from "./PosHeldOrders";
 import SelfOrderAlertStack from "./SelfOrderAlertStack";
 import {
   SELF_ORDER_BATCH_ALERT_ID,
@@ -35,7 +34,7 @@ function SelfOrderAlertsHostActive() {
     (alertId) => {
       if (alertId === CONNECTION_LOST_ALERT_ID) return;
       if (alertId === SELF_ORDER_BATCH_ALERT_ID) {
-        navigate(`/pos/held?tab=${POS_HELD_ORDERS_TAB_SELF_ORDERING}`);
+        navigate("/pos/held");
         return;
       }
 

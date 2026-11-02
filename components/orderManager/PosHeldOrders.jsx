@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePosNavigate } from "@/components/context/PosNavigateContext";
 import toast from "react-hot-toast";
 import {
@@ -67,21 +66,11 @@ function previewLinesFromResumeOrders(orders) {
   );
 }
 
-const HELD_TABS = [
-  { id: "pos", label: "POS" },
-  { id: "self-ordering", label: "Self Ordering" },
-];
-
-export const POS_HELD_ORDERS_TAB_SELF_ORDERING = "self-ordering";
-export const POS_HELD_ORDERS_TAB_POS = "pos";
-
 /**
- * Held Orders — open checks (POS + Self Ordering) until paid and cleared.
+ * Held Orders — open checks (POS, QR, and online) until paid and cleared.
  */
 export default function PosHeldOrders() {
   const { navigate } = usePosNavigate();
-  const searchParams = useSearchParams();
-  const tabParam = searchParams.get("tab");
   const {
     toast: dismissibleToast,
     showToast: showDismissibleToast,
@@ -90,12 +79,6 @@ export default function PosHeldOrders() {
   const { handleOpenCashDrawer } = usePosOpenCashDrawer(showDismissibleToast);
   const { storeProfile, itemGroups, menuConfig, menuContent } = useMenuContext();
   const [heldOrders, setHeldOrders] = useState([]);
-  const [activeTab, setActiveTab] = useState(() => {
-    if (tabParam === POS_HELD_ORDERS_TAB_SELF_ORDERING) {
-      return POS_HELD_ORDERS_TAB_SELF_ORDERING;
-    }
-    return POS_HELD_ORDERS_TAB_POS;
-  });
   const [isLoading, setIsLoading] = useState(true);
   const [processingCheckId, setProcessingCheckId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -134,14 +117,6 @@ export default function PosHeldOrders() {
       if (!silent) setIsLoading(false);
     }
   }, [showDismissibleToast]);
-
-  useEffect(() => {
-    if (tabParam === POS_HELD_ORDERS_TAB_SELF_ORDERING) {
-      setActiveTab(POS_HELD_ORDERS_TAB_SELF_ORDERING);
-    } else if (tabParam === POS_HELD_ORDERS_TAB_POS) {
-      setActiveTab(POS_HELD_ORDERS_TAB_POS);
-    }
-  }, [tabParam]);
 
   useEffect(() => {
     loadHeldOrders({ paintLocalFirst: true });
@@ -276,17 +251,6 @@ export default function PosHeldOrders() {
       cancelled = true;
     };
   }, [drawerHeldOrder, drawerOrderIdsKey]);
-
-  const posHeldOrders = useMemo(
-    () => heldOrders.filter(isPosSourceHeldOrder),
-    [heldOrders],
-  );
-  const selfOrderingHeldOrders = useMemo(
-    () => heldOrders.filter((order) => !isPosSourceHeldOrder(order)),
-    [heldOrders],
-  );
-  const visibleHeldOrders =
-    activeTab === "pos" ? posHeldOrders : selfOrderingHeldOrders;
 
   function clearHeldDrawer() {
     setDrawerHeldOrder(null);
@@ -707,8 +671,7 @@ export default function PosHeldOrders() {
     }
   }
 
-  const tabCount =
-    activeTab === "pos" ? posHeldOrders.length : selfOrderingHeldOrders.length;
+  const openCount = heldOrders.length;
 
   const undeliveredTicketCount = getTicketIdsNotDelivered(drawerHeldOrder).length;
   const needsServe =
@@ -744,83 +707,41 @@ export default function PosHeldOrders() {
             </div>
           ) : (
             <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-6">
-              <div className="mb-7 flex flex-wrap items-end justify-between gap-3">
-                <div className="min-w-0">
-                  <h1 className="text-xl font-bold text-neutral-900">
-                    Held Orders
-                  </h1>
-                  <p className="mt-0.5 text-neutral-500">
-                    {tabCount} open {tabCount === 1 ? "check" : "checks"}
-                    {activeTab === "self-ordering"
-                      ? " · Self Ordering"
-                      : " · POS"}
-                  </p>
-                </div>
-
-                <div className="flex shrink-0 space-x-1 rounded-xl bg-white p-1 shadow-sm">
-                  {HELD_TABS.map((tab) => {
-                    const count =
-                      tab.id === "pos"
-                        ? posHeldOrders.length
-                        : selfOrderingHeldOrders.length;
-                    const isActive = activeTab === tab.id;
-                    return (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`rounded-lg px-4 py-2.5 text-base font-medium transition-all duration-200 ${
-                          isActive
-                            ? "bg-brand_accent text-white shadow-sm"
-                            : "text-gray-600 hover:bg-gray-50 hover:text-gray-800"
-                        }`}
-                      >
-                        {tab.label}
-                        <span
-                          className={`ml-1.5 tabular-nums ${
-                            isActive ? "text-white/80" : "text-gray-400"
-                          }`}
-                        >
-                          ({count})
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
+              <div className="mb-7">
+                <h1 className="text-xl font-bold text-neutral-900">
+                  Held Orders
+                </h1>
+                <p className="mt-0.5 text-neutral-500">
+                  {openCount} open {openCount === 1 ? "check" : "checks"}
+                </p>
               </div>
 
               <div className="duration-200 animate-in fade-in">
-                {visibleHeldOrders.length === 0 ? (
+                {heldOrders.length === 0 ? (
                   <div className="flex min-h-[12rem] items-center justify-center px-6 text-center">
                     <div>
                       <p className="text-base font-semibold text-neutral-700">
-                        {activeTab === "pos"
-                          ? "No POS checks"
-                          : "No Self Ordering checks"}
+                        No open checks
                       </p>
                       <p className="mt-1 text-sm text-neutral-400">
-                        {activeTab === "pos"
-                          ? "Open POS tickets will appear here"
-                          : "Open QR and online orders will appear here"}
+                        POS, QR, and online orders will appear here
                       </p>
                     </div>
                   </div>
                 ) : (
                   <ul className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                    {visibleHeldOrders.map((order) => {
-                      const HeldCard =
-                        activeTab === "pos"
-                          ? PosHeldOrderCard
-                          : SelfOrderingHeldOrderCard;
+                    {heldOrders.map((order) => {
+                      const isPosOrder = isPosSourceHeldOrder(order);
+                      const HeldCard = isPosOrder
+                        ? PosHeldOrderCard
+                        : SelfOrderingHeldOrderCard;
                       return (
                         <li key={order.id} className="min-w-0">
                           <HeldCard
                             order={order}
                             onSelect={handleSelectHeldOrder}
                             onPrepare={
-                              activeTab === "self-ordering"
-                                ? handlePrepareHeldOrder
-                                : undefined
+                              isPosOrder ? undefined : handlePrepareHeldOrder
                             }
                             onReady={handleReadyHeldOrder}
                             onPay={handlePayHeldOrder}

@@ -13,6 +13,7 @@ import {
   User,
 } from "lucide-react";
 import { cn } from "@/lib/helper";
+import HeldOrderChannelBadge from "./HeldOrderChannelBadge";
 import PosActionButton from "./PosActionButton";
 import {
   getSelfOrderingHeldCardActions,
@@ -245,25 +246,28 @@ export default function SelfOrderingHeldOrderCard({
             className="flex w-full cursor-pointer flex-col gap-3 p-4 text-left transition-colors hover:bg-neutral-50/80 active:scale-[0.99]"
           >
             <div className="flex items-start justify-between gap-3">
-              <div
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-lg px-2 py-1 font-mono text-base font-semibold tabular-nums tracking-tight",
-                  isLongHold
-                    ? "bg-amber-50 text-amber-800"
-                    : "bg-neutral-100 text-neutral-800",
-                )}
-                aria-label={`Held for ${holdLabel}`}
-              >
-                <span
+              <div className="flex flex-col items-start gap-1.5">
+                <div
                   className={cn(
-                    "size-1.5 shrink-0 rounded-full",
+                    "inline-flex items-center gap-1.5 rounded-lg px-2 py-1 font-mono text-base font-semibold tabular-nums tracking-tight",
                     isLongHold
-                      ? "bg-amber-500"
-                      : "animate-pulse bg-emerald-500",
+                      ? "bg-amber-50 text-amber-800"
+                      : "bg-neutral-100 text-neutral-800",
                   )}
-                  aria-hidden
-                />
-                {holdLabel}
+                  aria-label={`Held for ${holdLabel}`}
+                >
+                  <span
+                    className={cn(
+                      "size-1.5 shrink-0 rounded-full",
+                      isLongHold
+                        ? "bg-amber-500"
+                        : "animate-pulse bg-emerald-500",
+                    )}
+                    aria-hidden
+                  />
+                  {holdLabel}
+                </div>
+                <HeldOrderChannelBadge order={order} />
               </div>
               <div className="flex flex-col items-end gap-0.5">
                 <span className="text-xl font-bold tabular-nums text-neutral-900">
