@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
+  CircleDollarSign,
   FileText,
   Loader2,
   Printer,
@@ -131,6 +132,7 @@ export default function PosSelfOrderingHeldDrawer({
   heldOrder,
   onPrepare,
   onReady,
+  onPay,
   onComplete,
   onPrintBill,
   onReprintOrder,
@@ -169,6 +171,7 @@ export default function PosSelfOrderingHeldDrawer({
   const {
     showPrepare,
     showReady,
+    showPay,
     showComplete,
     showCancel,
     completeLabel,
@@ -176,7 +179,7 @@ export default function PosSelfOrderingHeldDrawer({
 
   const hasTickets = Boolean(displayHeldOrder?.orderIds?.length);
   const actionsDisabled = isProcessing || !hasTickets;
-  const primaryActionCount = [showPrepare, showReady, showComplete].filter(
+  const primaryActionCount = [showPrepare, showReady, showPay, showComplete].filter(
     Boolean,
   ).length;
 
@@ -212,6 +215,16 @@ export default function PosSelfOrderingHeldDrawer({
               onClick={() => onReady?.(displayHeldOrder)}
             >
               {isProcessing ? "Updating…" : "Ready"}
+            </PosActionButton>
+          ) : null}
+          {showPay ? (
+            <PosActionButton
+              tone="red"
+              icon={CircleDollarSign}
+              disabled={actionsDisabled}
+              onClick={() => onPay?.(displayHeldOrder)}
+            >
+              Pay
             </PosActionButton>
           ) : null}
           {showComplete ? (

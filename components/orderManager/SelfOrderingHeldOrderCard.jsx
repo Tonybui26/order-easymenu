@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  CircleDollarSign,
   Clock3,
   FileText,
   Info,
@@ -148,6 +149,7 @@ export default function SelfOrderingHeldOrderCard({
   onSelect,
   onPrepare,
   onReady,
+  onPay,
   onComplete,
   onPrintBill,
   onReprintOrder,
@@ -164,12 +166,13 @@ export default function SelfOrderingHeldOrderCard({
     showStatus,
     showPrepare,
     showReady,
+    showPay,
     showComplete,
     showCancel,
     primaryStatus,
     completeLabel,
   } = getSelfOrderingHeldCardActions(order);
-  const hasActions = showPrepare || showReady || showComplete;
+  const hasActions = showPrepare || showReady || showPay || showComplete;
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -377,6 +380,19 @@ export default function SelfOrderingHeldOrderCard({
                   }}
                 >
                   {isProcessing ? "Updating…" : "Ready"}
+                </PosActionButton>
+              ) : null}
+              {showPay ? (
+                <PosActionButton
+                  tone="red"
+                  icon={CircleDollarSign}
+                  disabled={isProcessing}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onPay?.(order);
+                  }}
+                >
+                  Pay
                 </PosActionButton>
               ) : null}
               {showComplete ? (

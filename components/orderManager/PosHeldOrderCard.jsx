@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  CircleDollarSign,
   Clock3,
   FileText,
   Info,
@@ -143,6 +144,7 @@ export default function PosHeldOrderCard({
   order,
   onSelect,
   onReady,
+  onPay,
   onAllItemsServed,
   onComplete,
   onPrintBill,
@@ -159,13 +161,14 @@ export default function PosHeldOrderCard({
   const {
     showStatus,
     showReady,
+    showPay,
     showAllItemsServed,
     showComplete,
     aggregateStatus,
     completeLabel,
     allItemsServedLabel,
   } = getPosHeldCardActions(order);
-  const hasActions = showReady || showAllItemsServed || showComplete;
+  const hasActions = showReady || showPay || showAllItemsServed || showComplete;
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -374,6 +377,19 @@ export default function PosHeldOrderCard({
                   }}
                 >
                   {isProcessing ? "Updating…" : "Ready"}
+                </PosActionButton>
+              ) : null}
+              {showPay ? (
+                <PosActionButton
+                  tone="red"
+                  icon={CircleDollarSign}
+                  disabled={isProcessing}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onPay?.(order);
+                  }}
+                >
+                  Pay
                 </PosActionButton>
               ) : null}
               {showComplete ? (

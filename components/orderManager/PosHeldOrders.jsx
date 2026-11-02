@@ -31,6 +31,7 @@ import {
   isPosDineInHeldOrder,
   isPickupOrDeliveryHeldOrder,
   isPosSourceHeldOrder,
+  resolveHeldAggregateStatus,
 } from "@/lib/pos/posHeldOrder";
 import PosChromeHeader from "./PosChromeHeader";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
@@ -343,14 +344,15 @@ export default function PosHeldOrders() {
     );
   }
 
-  function handlePosDrawerPay() {
-    if (!drawerHeldOrder?.orderIds?.length) return;
-    if (drawerHeldOrder.allPaid) {
+  function handlePayHeldOrder(order) {
+    const target = order?.orderIds?.length ? order : drawerHeldOrder;
+    if (!target?.orderIds?.length) return;
+    if (target.allPaid) {
       showDismissibleToast("This check is already paid");
       return;
     }
     navigate(
-      `/pos?resume=${encodeURIComponent(drawerHeldOrder.orderIds.join(","))}&pay=1`,
+      `/pos?resume=${encodeURIComponent(target.orderIds.join(","))}&pay=1`,
     );
   }
 
@@ -470,7 +472,7 @@ export default function PosHeldOrders() {
   }
 
   async function handleCompleteHeldOrder(order) {
-    if (!isPickupOrDeliveryHeldOrder(order) && !order.allPaid) {
+    if (!order.allPaid) {
       showDismissibleToast("Pay the check before completing");
       return;
     }
@@ -711,10 +713,14 @@ export default function PosHeldOrders() {
   const undeliveredTicketCount = getTicketIdsNotDelivered(drawerHeldOrder).length;
   const needsServe =
     Boolean(isPosHeldDrawer) && undeliveredTicketCount > 0;
+  const isPickupDrawer =
+    Boolean(isPosHeldDrawer) && isPickupOrDeliveryHeldOrder(drawerHeldOrder);
+  const pickupAggregate = resolveHeldAggregateStatus(drawerHeldOrder);
   const showPosDrawerAllServed =
-    needsServe && !Boolean(drawerHeldOrder?.allPaid);
-  const showPosDrawerComplete =
-    needsServe && Boolean(drawerHeldOrder?.allPaid);
+    !isPickupDrawer && needsServe && !Boolean(drawerHeldOrder?.allPaid);
+  const showPosDrawerComplete = isPickupDrawer
+    ? Boolean(drawerHeldOrder?.allPaid) && pickupAggregate === "ready"
+    : needsServe && Boolean(drawerHeldOrder?.allPaid);
   const showPosDrawerLoadOrder = Boolean(drawerHeldOrder?.orderIds?.length);
   const showPosDrawerPay =
     Boolean(isPosHeldDrawer) && !Boolean(drawerHeldOrder?.allPaid);
@@ -817,6 +823,7 @@ export default function PosHeldOrders() {
                                 : undefined
                             }
                             onReady={handleReadyHeldOrder}
+                            onPay={handlePayHeldOrder}
                             onAllItemsServed={handleAllItemsServedHeldOrder}
                             onComplete={handleCompleteHeldOrder}
                             onPrintBill={handlePrintBillHeldOrder}
@@ -846,7 +853,7 @@ export default function PosHeldOrders() {
         title={posDrawerTitle}
         heldOrder={drawerHeldOrder}
         onLoadOrder={handlePosDrawerLoadOrder}
-        onPay={handlePosDrawerPay}
+        onPay={() => handlePayHeldOrder(drawerHeldOrder)}
         onPrintBill={() => handlePrintBillHeldOrder(drawerHeldOrder)}
         onReprintOrder={() => handleReprintHeldOrder(drawerHeldOrder)}
         onDelete={() => handleDeleteHeldOrder(drawerHeldOrder)}
@@ -871,6 +878,7 @@ export default function PosHeldOrders() {
         heldOrder={drawerHeldOrder}
         onPrepare={handlePrepareHeldOrder}
         onReady={handleReadyHeldOrder}
+        onPay={handlePayHeldOrder}
         onComplete={handleCompleteHeldOrder}
         onPrintBill={handlePrintBillHeldOrder}
         onReprintOrder={handleReprintHeldOrder}
