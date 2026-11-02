@@ -246,13 +246,14 @@ export default function OrderCard({
 
   const isTableOrder = isDineIn;
   const pickUpTable = getOrderTableNumber(order.table);
+  const pickupTitle = kitchenDisplayEnabled ? "Takeaway" : "Pick-up";
   const orderTitle = isTableOrder
     ? `Table ${order.table}`
     : isDelivery
       ? "Delivery"
       : pickUpTable
-        ? `Pick-up (table ${pickUpTable})`
-        : "Pick-up";
+        ? `${pickupTitle} (table ${pickUpTable})`
+        : pickupTitle;
 
   // Check payment status
   const isPaid = order.paymentStatus === "paid";
@@ -417,6 +418,14 @@ export default function OrderCard({
 
     return false;
   })();
+
+  // Kitchen Display: last ticked line already bumps a preparing ticket.
+  // Keep these flags for that auto-bump. Hide the buttons so staff cannot skip unticked lines.
+  // Complete stays visible once a takeaway ticket is ready (handover, not cooking).
+  const hidePreparingBumpButtons =
+    kitchenDisplayEnabled && order.status === "preparing";
+  const displayReadyButton = showReadyButton && !hidePreparingBumpButtons;
+  const displayDeliverButton = showDeliverButton && !hidePreparingBumpButtons;
 
   // 6. MARK AS PAID BUTTON
   const showMarkAsPaidButton = (() => {
@@ -760,8 +769,13 @@ export default function OrderCard({
                           >
                             <Clock className="size-4" strokeWidth={2} />
                             <span className="text-xs font-semibold">
-                              {scheduledExpectedLabel ??
-                                `${formatPickupTimeShort(order.pickupTime)}`}
+                              {kitchenDisplayEnabled && scheduledExpectedLabel
+                                ? scheduledExpectedLabel.replace(
+                                    /^Pickup\b/,
+                                    "Takeaway",
+                                  )
+                                : (scheduledExpectedLabel ??
+                                  `${formatPickupTimeShort(order.pickupTime)}`)}
                             </span>
                           </div>
                         </div>
@@ -900,6 +914,12 @@ export default function OrderCard({
               )}
             </div>
             {/* Actions */}
+            {(showConfirmButton ||
+              (showAcceptButton && typeof onAccept === "function") ||
+              showPrepareButton ||
+              displayReadyButton ||
+              displayDeliverButton ||
+              showMarkAsPaidButton) && (
             <div className="p-4 pt-0">
               <div className="flex space-x-3">
                 {showConfirmButton && (
@@ -941,7 +961,7 @@ export default function OrderCard({
                   </button>
                 )}
 
-                {showReadyButton && (
+                {displayReadyButton && (
                   <button
                     onClick={onReady}
                     disabled={isProcessing}
@@ -955,7 +975,7 @@ export default function OrderCard({
                   </button>
                 )}
 
-                {showDeliverButton && (
+                {displayDeliverButton && (
                   <button
                     onClick={onDeliver}
                     disabled={isProcessing}
@@ -986,6 +1006,7 @@ export default function OrderCard({
                 )}
               </div>
             </div>
+            )}
             {/* Divider */}
             <div className="h-px bg-gray-300"></div>
 
