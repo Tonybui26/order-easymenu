@@ -42,6 +42,7 @@ function buildStoreProfile(data) {
     storeAddress: (data && data.storeAddress) || "",
     storeABN: (data && data.storeABN) || "",
     timezone: data?.timezone || "Australia/Melbourne",
+    stateOrRegion: String(data?.storeAddressDetail?.stateOrRegion || "").trim(),
     taxPercentage: data?.taxPercentage ?? 10,
     stripeConfig: (data && data.stripeConfig) || {},
     paymentMethods: (data && data.paymentMethods) || {

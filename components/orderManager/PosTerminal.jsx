@@ -1565,6 +1565,7 @@ export default function PosTerminal() {
           orderType: mappedOrderType,
           subtotal: sumCartLinePrices(unsentLines),
           timeZone: storeProfile?.timezone,
+          stateOrRegion: storeProfile?.stateOrRegion,
         });
         const result = await queueOfflinePosSend({
           ...payload,
@@ -2523,6 +2524,7 @@ export default function PosTerminal() {
     orderType: resolvedOrderType,
     subtotal: posPricedSubtotal,
     timeZone: storeProfile?.timezone,
+    stateOrRegion: storeProfile?.stateOrRegion,
   });
   const posSurchargeTotal = posSurcharge.totalSurchargeAmount;
   const posSurchargeLabel =
