@@ -64,6 +64,7 @@ const ROWS = [
     section: "Surcharges",
     indent: true,
   },
+  { key: "holidaySurcharge", label: "Public holiday surcharge", indent: true },
   { key: "serviceSurcharge", label: "Service surcharge", indent: true },
   { key: "totalSurcharge", label: "Total surcharge", emphasis: true },
   {
