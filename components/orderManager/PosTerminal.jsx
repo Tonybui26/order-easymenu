@@ -2845,9 +2845,13 @@ export default function PosTerminal() {
             <aside className="relative z-30 flex w-[120px] shrink-0 flex-col bg-[#f0f0f0] pb-[env(safe-area-inset-bottom)] sm:w-[150px]">
               <div className="-mr-3 min-h-0 flex-1 overflow-y-auto pr-3">
                 {tabs.length === 0 ? (
-                  <div className="p-3 text-center text-xs text-neutral-500">
-                    No POS tabs yet. Configure Menu layout in admin.
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/settings/edit-menu")}
+                    className="p-3 text-center text-xs font-medium text-neutral-500 underline"
+                  >
+                    No POS tabs yet. Edit menu
+                  </button>
                 ) : (
                   <div className="flex min-h-full flex-col">
                     {tabs.map((tab, index) => {

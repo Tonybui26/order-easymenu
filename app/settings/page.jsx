@@ -179,6 +179,16 @@ export default function SettingsPage() {
                 </button>
               );
             })}
+            {menuConfig?.posEnabled ? (
+              <button
+                type="button"
+                onClick={() => router.push("/settings/edit-menu")}
+                className="flex w-full items-center justify-between px-4 py-3 text-left text-sm text-neutral-700 hover:bg-black/[0.04]"
+              >
+                Edit Menu
+                <ChevronRight className="size-4 shrink-0" aria-hidden />
+              </button>
+            ) : null}
           </nav>
         </aside>
 
