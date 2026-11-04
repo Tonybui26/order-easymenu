@@ -25,8 +25,9 @@ import toast from "react-hot-toast";
 
 import { useMenuContext } from "@/components/context/MenuContext";
 import SettingsSaveBar from "@/components/orderManager/settings/SettingsSaveBar";
-import { createPosProduct, updatePosLayouts } from "@/lib/api/fetchApi";
+import { createPosProduct, updatePosLayouts, updatePosProduct } from "@/lib/api/fetchApi";
 import { cn } from "@/lib/helper";
+import { foodGroupIdForItem } from "@/lib/pos/foodGroups";
 import {
   clonePosLayouts,
   serializePosLayouts,
@@ -153,7 +154,7 @@ function SortablePosTab({ tab, isSelected, onSelect, onEdit }) {
   );
 }
 
-function SortablePosItem({ item, onRemove }) {
+function SortablePosItem({ item, onRemove, onEdit }) {
   const {
     attributes,
     listeners,
@@ -178,6 +179,7 @@ function SortablePosItem({ item, onRemove }) {
       )}
       {...attributes}
       {...listeners}
+      onClick={() => onEdit?.(item)}
     >
       <div className="relative min-h-0 flex-1 bg-neutral-100">
         {item.PhotoSrc ? (
@@ -221,7 +223,7 @@ function SortablePosItem({ item, onRemove }) {
 }
 
 export default function PosMenuLayoutView() {
-  const { menuContent, setMenuContent, posLayouts, syncCatalogFromServer } =
+  const { menuContent, setMenuContent, posLayouts, itemGroups, syncCatalogFromServer } =
     useMenuContext();
   const allItems = useAllMenuItems(menuContent);
   const itemsById = useMemo(() => {
@@ -242,6 +244,7 @@ export default function PosMenuLayoutView() {
   const [editingTabId, setEditingTabId] = useState(null);
   const [itemsDrawerRowId, setItemsDrawerRowId] = useState(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const draftRef = useRef(draftLayouts);
@@ -431,6 +434,27 @@ export default function PosMenuLayoutView() {
     toast.success("Product created. Save changes to show it on the POS.");
   }
 
+  function openProductEditor(item) {
+    const categoryId =
+      (menuContent || []).find((section) =>
+        (section.items || []).some((entry) => entry.id === item.id),
+      )?.id || "";
+    setEditingProduct({
+      ...item,
+      categoryId,
+      itemGroupId: foodGroupIdForItem(itemGroups, item.id) || "food",
+    });
+  }
+
+  async function handleSaveProduct(payload) {
+    const result = await updatePosProduct(payload);
+    if (Array.isArray(result?.menuContent)) {
+      setMenuContent(result.menuContent);
+    }
+    await syncCatalogFromServer();
+    toast.success("Product updated");
+  }
+
   function handleRemoveItemFromRow(rowId, itemId) {
     updateSelectedTab((tab) => ({
       ...tab,
@@ -562,6 +586,7 @@ export default function PosMenuLayoutView() {
                               <SortablePosItem
                                 key={item.id}
                                 item={item}
+                                onEdit={openProductEditor}
                                 onRemove={(itemId) =>
                                   handleRemoveItemFromRow(row.id, itemId)
                                 }
@@ -633,6 +658,14 @@ export default function PosMenuLayoutView() {
         sections={categories}
         onClose={() => setIsCreateOpen(false)}
         onCreate={handleCreateProduct}
+      />
+
+      <PosCreateProductModal
+        isOpen={Boolean(editingProduct)}
+        product={editingProduct}
+        sections={categories}
+        onClose={() => setEditingProduct(null)}
+        onSave={handleSaveProduct}
       />
     </>
   );

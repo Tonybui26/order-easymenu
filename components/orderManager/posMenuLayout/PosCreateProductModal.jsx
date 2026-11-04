@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { useMenuContext } from "@/components/context/MenuContext";
 import SideDrawer from "@/components/orderManager/SideDrawer";
+import { foodGroupOptions } from "@/lib/pos/foodGroups";
 
 function sectionLabel(section) {
   return section?.sectionTitle?.trim() || "Untitled category";
@@ -11,14 +13,24 @@ function sectionLabel(section) {
 export default function PosCreateProductModal({
   isOpen,
   sections,
+  product = null,
   onClose,
   onCreate,
+  onSave,
 }) {
+  const { itemGroups } = useMenuContext();
+  const groupOptions = useMemo(
+    () => foodGroupOptions(itemGroups),
+    [itemGroups],
+  );
+  const isEditMode = Boolean(product?.id);
+  const hasVariants = product?.hasVariants === true;
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [newCategoryTitle, setNewCategoryTitle] = useState("");
+  const [itemGroupId, setItemGroupId] = useState("food");
   const [posOnly, setPosOnly] = useState(true);
   const [available, setAvailable] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -27,37 +39,50 @@ export default function PosCreateProductModal({
 
   useEffect(() => {
     if (!isOpen) return;
-    setName("");
-    setDescription("");
-    setPrice("");
-    setCategoryId("");
+    setName(product?.title || "");
+    setDescription(product?.description || "");
+    setPrice(
+      product?.price == null || product?.price === "" ? "" : String(product.price),
+    );
+    setCategoryId(product?.categoryId || "");
     setNewCategoryTitle("");
-    setPosOnly(true);
-    setAvailable(true);
+    setItemGroupId(product?.itemGroupId || groupOptions[0]?.id || "food");
+    setPosOnly(isEditMode ? product?.posOnly === true : true);
+    setAvailable(isEditMode ? product?.available !== false : true);
     setIsSaving(false);
-  }, [isOpen]);
+  }, [isOpen, product, isEditMode, groupOptions]);
 
   const trimmedName = name.trim();
   const canSubmit =
     trimmedName.length > 0 &&
-    (hasCategories ? Boolean(categoryId) : newCategoryTitle.trim().length > 0);
+    Boolean(itemGroupId) &&
+    (hasCategories ? Boolean(categoryId) : !isEditMode && newCategoryTitle.trim().length > 0);
 
   async function handleSubmit() {
     if (!canSubmit || isSaving) return;
     setIsSaving(true);
+    const payload = {
+      title: trimmedName,
+      description: description.trim(),
+      price: hasVariants || price.trim() === "" ? null : price.trim(),
+      categoryId: hasCategories ? categoryId : "",
+      newCategoryTitle: hasCategories || isEditMode ? "" : newCategoryTitle.trim(),
+      itemGroupId,
+      posOnly,
+      available,
+    };
     try {
-      await onCreate?.({
-        title: trimmedName,
-        description: description.trim(),
-        price: price.trim() === "" ? null : price.trim(),
-        categoryId: hasCategories ? categoryId : "",
-        newCategoryTitle: hasCategories ? "" : newCategoryTitle.trim(),
-        posOnly,
-        available,
-      });
+      if (isEditMode) {
+        await onSave?.({ ...payload, itemId: product.id });
+      } else {
+        await onCreate?.(payload);
+      }
       onClose?.();
     } catch (error) {
-      toast.error(error?.message || "Could not create the product");
+      toast.error(
+        error?.message ||
+          (isEditMode ? "Could not save the product" : "Could not create the product"),
+      );
       setIsSaving(false);
     }
   }
@@ -66,7 +91,7 @@ export default function PosCreateProductModal({
     <SideDrawer
       isOpen={isOpen}
       onClose={onClose}
-      title="New product"
+      title={isEditMode ? "Edit product" : "New product"}
       closeDisabled={isSaving}
       footer={
         <div className="flex gap-2">
@@ -76,7 +101,7 @@ export default function PosCreateProductModal({
             disabled={!canSubmit || isSaving}
             onClick={handleSubmit}
           >
-            {isSaving ? "Creating..." : "Create product"}
+            {isSaving ? "Saving..." : isEditMode ? "Save product" : "Create product"}
           </button>
           <button
             type="button"
@@ -139,10 +164,34 @@ export default function PosCreateProductModal({
             )}
           </label>
 
+          <label className="block text-sm font-medium text-neutral-800" htmlFor="pos-product-food-group">
+            Food group
+            <select
+              id="pos-product-food-group"
+              className="select select-bordered mt-1.5 w-full"
+              value={itemGroupId}
+              onChange={(event) => setItemGroupId(event.target.value)}
+            >
+              {groupOptions.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1.5 block text-sm font-normal text-neutral-500">
+              Kitchen printers for this group receive the product.
+            </span>
+          </label>
+
           <div>
             <label className="block text-sm font-medium text-neutral-800" htmlFor="pos-product-price">
               Price
             </label>
+            {hasVariants ? (
+              <p className="mt-1.5 text-sm text-neutral-500">
+                This product uses variant prices. Change those in the back office.
+              </p>
+            ) : (
             <div className="input input-bordered mt-1.5 flex items-center gap-2">
               <span className="text-neutral-500">$</span>
               <input
@@ -157,6 +206,7 @@ export default function PosCreateProductModal({
                 className="w-full bg-transparent outline-none"
               />
             </div>
+            )}
           </div>
 
           <label className="flex items-center justify-between gap-3 rounded-lg bg-neutral-50 px-3 py-3">

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useMenuContext } from "@/components/context/MenuContext";
 import SideDrawer from "@/components/orderManager/SideDrawer";
-import { DEFAULT_ITEM_GROUPS } from "@/lib/constants/itemGroups";
+import { foodGroupOptions } from "@/lib/pos/foodGroups";
 import { cn } from "@/lib/helper";
 
 export const POS_TAB_BACKGROUND_COLORS = [
@@ -18,17 +18,6 @@ export const POS_TAB_BACKGROUND_COLORS = [
   "#F5B8C8",
   "#A8E6C3",
 ];
-
-function foodGroupOptions(itemGroups) {
-  const byId = new Map((itemGroups || []).map((group) => [group.id, group]));
-  return DEFAULT_ITEM_GROUPS.map((group) => {
-    const savedName =
-      typeof byId.get(group.id)?.name === "string"
-        ? byId.get(group.id).name.trim()
-        : "";
-    return { id: group.id, name: savedName || group.name };
-  });
-}
 
 export default function PosTabEditModal({
   isOpen,
