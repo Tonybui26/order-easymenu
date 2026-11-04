@@ -7,6 +7,8 @@ import { Check, Plus } from "lucide-react";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
+import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
+import { canEditPosMenu } from "@/lib/staff/staffRoles";
 import { usePosNavigate } from "@/components/context/PosNavigateContext";
 import { cn } from "@/lib/helper";
 import {
@@ -348,6 +350,9 @@ export default function PosTerminal() {
     menuConfig,
     posSurcharges,
   } = useMenuContext();
+  const { activeOperator, hydrated: operatorHydrated } = useActiveOperator();
+  const canEditMenu =
+    operatorHydrated && canEditPosMenu(menuConfig, activeOperator);
   const tableNamesFromUrl = resumeParam
     ? []
     : parsePosTableNames(tablesParam, tableParam);
@@ -2845,13 +2850,19 @@ export default function PosTerminal() {
             <aside className="relative z-30 flex w-[120px] shrink-0 flex-col bg-[#f0f0f0] pb-[env(safe-area-inset-bottom)] sm:w-[150px]">
               <div className="-mr-3 min-h-0 flex-1 overflow-y-auto pr-3">
                 {tabs.length === 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => navigate("/settings/edit-menu")}
-                    className="p-3 text-center text-xs font-medium text-neutral-500 underline"
-                  >
-                    No POS tabs yet. Edit menu
-                  </button>
+                  canEditMenu ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate("/settings/edit-menu")}
+                      className="p-3 text-center text-xs font-medium text-neutral-500 underline"
+                    >
+                      No POS tabs yet. Edit menu
+                    </button>
+                  ) : (
+                    <p className="p-3 text-center text-xs font-medium text-neutral-500">
+                      No POS tabs yet.
+                    </p>
+                  )
                 ) : (
                   <div className="flex min-h-full flex-col">
                     {tabs.map((tab, index) => {

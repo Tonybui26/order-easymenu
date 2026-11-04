@@ -11,6 +11,8 @@ import SystemSettings from "@/components/orderManager/settings/SystemSettings";
 import SettingsSaveBar from "@/components/orderManager/settings/SettingsSaveBar";
 import { usePosOpenCashDrawer } from "@/components/orderManager/usePosOpenCashDrawer";
 import { useMenuContext } from "@/components/context/MenuContext";
+import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
+import { canEditPosMenu } from "@/lib/staff/staffRoles";
 import { fetchGetMenuByOwnerEmail } from "@/lib/api/fetchApi";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import { resolvePosConfig } from "@/lib/pos/posConfig";
@@ -33,6 +35,9 @@ export default function SettingsPage() {
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
   const { userData } = useGlobalAppContext();
   const { menuConfig, saveMenuConfigExplicit, dataLoaded } = useMenuContext();
+  const { activeOperator, hydrated: operatorHydrated } = useActiveOperator();
+  const canEditMenu =
+    operatorHydrated && canEditPosMenu(menuConfig, activeOperator);
   const savedPosConfig = useMemo(
     () => resolvePosConfig(menuConfig),
     [menuConfig],
@@ -179,7 +184,7 @@ export default function SettingsPage() {
                 </button>
               );
             })}
-            {menuConfig?.posEnabled ? (
+            {canEditMenu ? (
               <button
                 type="button"
                 onClick={() => router.push("/settings/edit-menu")}

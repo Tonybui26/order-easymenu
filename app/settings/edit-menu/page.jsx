@@ -7,19 +7,25 @@ import PosChromeHeader from "@/components/orderManager/PosChromeHeader";
 import PosMenuLayoutView from "@/components/orderManager/posMenuLayout/PosMenuLayoutView";
 import { usePosOpenCashDrawer } from "@/components/orderManager/usePosOpenCashDrawer";
 import { useMenuContext } from "@/components/context/MenuContext";
+import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
+import { canEditPosMenu } from "@/lib/staff/staffRoles";
 
 export default function EditMenuPage() {
   const router = useRouter();
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
   const { menuConfig, dataLoaded } = useMenuContext();
+  const { activeOperator, hydrated: operatorHydrated } = useActiveOperator();
+  const canEditMenu =
+    dataLoaded &&
+    operatorHydrated &&
+    canEditPosMenu(menuConfig, activeOperator);
 
   useEffect(() => {
-    if (dataLoaded && !menuConfig?.posEnabled) {
-      router.replace("/settings");
-    }
-  }, [dataLoaded, menuConfig, router]);
+    if (!dataLoaded || !operatorHydrated) return;
+    if (!canEditMenu) router.replace("/settings");
+  }, [canEditMenu, dataLoaded, operatorHydrated, router]);
 
-  if (!dataLoaded) {
+  if (!dataLoaded || !operatorHydrated) {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center bg-white">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand_accent/30 border-t-brand_accent" />
@@ -27,7 +33,7 @@ export default function EditMenuPage() {
     );
   }
 
-  if (!menuConfig?.posEnabled) return null;
+  if (!canEditMenu) return null;
 
   return (
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
