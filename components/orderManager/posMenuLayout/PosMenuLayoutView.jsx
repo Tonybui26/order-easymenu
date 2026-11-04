@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { Pencil, Plus, X } from "lucide-react";
+import { Pencil, Plus, Trash2, X } from "lucide-react";
 import {
   DndContext,
   DragOverlay,
@@ -455,6 +455,14 @@ export default function PosMenuLayoutView() {
     toast.success("Product updated");
   }
 
+  function handleDeleteRow(rowId) {
+    if (itemsDrawerRowId === rowId) setItemsDrawerRowId(null);
+    updateSelectedTab((tab) => ({
+      ...tab,
+      rows: (tab.rows || []).filter((row) => row.id !== rowId),
+    }));
+  }
+
   function handleRemoveItemFromRow(rowId, itemId) {
     updateSelectedTab((tab) => ({
       ...tab,
@@ -565,8 +573,22 @@ export default function PosMenuLayoutView() {
                     .filter(Boolean);
                   const rowItemIds = rowItems.map((item) => item.id);
 
+                  const isEmptyRow = rowItems.length === 0;
+
                   return (
                     <div key={row.id}>
+                      {isEmptyRow ? (
+                        <div className="flex justify-end px-4 pt-3">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteRow(row.id)}
+                            className="btn btn-ghost btn-sm gap-1 text-red-700"
+                          >
+                            <Trash2 className="size-4" />
+                            Delete row
+                          </button>
+                        </div>
+                      ) : null}
                       <DndContext
                         sensors={sensors}
                         collisionDetection={closestCenter}
