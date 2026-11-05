@@ -2036,6 +2036,10 @@ export default function PosTerminal() {
         taxInvoiceNo: invoiceForPrint,
         discount: footerDiscount,
         surcharges: posSurcharge.surcharges,
+        customerName,
+        printCustomerName: Boolean(
+          posConfig.takeawayPrintCustomerNameOnReceipt,
+        ),
       });
 
       const result = await printTaxInvoiceReceipt(payload);

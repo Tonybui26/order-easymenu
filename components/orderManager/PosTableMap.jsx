@@ -871,7 +871,7 @@ export default function PosTableMap() {
 
       const printResult = await printBillForHeldCheck(posOrders, {
         storeProfile,
-        heldEntry: drawerHeldOrder,
+        menuConfig,
       });
 
       if (printResult.success) {

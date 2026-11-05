@@ -488,7 +488,7 @@ export default function PosHeldOrders() {
 
       const result = await printBillForHeldCheck(orders, {
         storeProfile,
-        heldEntry,
+        menuConfig,
       });
 
       if (result.success) {

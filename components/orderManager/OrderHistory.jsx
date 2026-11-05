@@ -407,6 +407,7 @@ export default function OrderHistory() {
     try {
       const result = await printBillForHistoryCheck(row.orders, {
         storeProfile,
+        menuConfig,
       });
       if (result.success) {
         toast.success(result.message || "Bill printed");
@@ -468,6 +469,7 @@ export default function OrderHistory() {
 
       const result = await printReceiptForHistoryCheck(ordersToPrint, {
         storeProfile,
+        menuConfig,
       });
       if (result.success) {
         toast.success(result.message || "Receipt printed");
