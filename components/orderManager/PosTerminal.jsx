@@ -1551,7 +1551,6 @@ export default function PosTerminal() {
         tableNumber: resolvedTableNumber || "",
       });
       setIsTakeawayCustomerDrawerOpen(true);
-      showDismissibleToast("Enter a customer name for takeaway");
       return {
         success: false,
         validationBlocked: true,
