@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Check, Plus } from "lucide-react";
+import { Check, Plus, UserRoundPen } from "lucide-react";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
@@ -142,6 +142,10 @@ function parsePosTableNames(...rawValues) {
 
 function formatPosTableNames(names) {
   return (names || []).join(", ");
+}
+
+function hasTakeawayTableReference(tableNumber) {
+  return Boolean(String(tableNumber || "").trim());
 }
 
 function mapPosOrderType(orderType) {
@@ -413,6 +417,7 @@ export default function PosTerminal() {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+  const [pendingTakeaway, setPendingTakeaway] = useState(null);
   const [isTakeawayCustomerDrawerOpen, setIsTakeawayCustomerDrawerOpen] =
     useState(false);
   const [customizingItem, setCustomizingItem] = useState(null);
@@ -666,6 +671,11 @@ export default function PosTerminal() {
     const fromParam = resolveOrderTypeFromParam(orderTypeParam);
     if (!fromParam) return;
     router.replace("/pos");
+    if (fromParam === "takeaway") {
+      setPendingTakeaway({ tableNumber: "" });
+      setIsTakeawayCustomerDrawerOpen(true);
+      return;
+    }
     setOrderType(fromParam);
     setIsOrderTypeMissing(false);
   }, [
@@ -715,6 +725,9 @@ export default function PosTerminal() {
     isTableNumberLocked || (isResumedCheck && Boolean(resolvedTableNumber));
   const isTableFieldLocked = isViewOnly;
   const awaitingOrderType = !resolvedOrderType && !isTableFieldLocked;
+  const hasCustomerInfo = Boolean(
+    customerName.trim() || customerPhone.trim(),
+  );
 
   const tableLabel = (() => {
     if (!resolvedOrderType) {
@@ -729,10 +742,8 @@ export default function PosTerminal() {
       return `BUZZER: ${resolvedTableNumber || "--"}`;
     }
     if (resolvedOrderType === "takeaway") {
-      const name = customerName.trim();
-      if (name) return `TAKEAWAY: ${name}`;
-      if (resolvedTableNumber) return `TAKEAWAY: ${resolvedTableNumber} · Guest`;
-      return "TAKEAWAY: Guest";
+      if (customerName.trim()) return `TAKEAWAY: ${customerName.trim()}`;
+      return `TAKEAWAY${resolvedTableNumber ? `: ${resolvedTableNumber}` : ""}`;
     }
     if (resolvedOrderType === "delivery") {
       return `DELIVERY${resolvedTableNumber ? `: ${resolvedTableNumber}` : ""}`;
@@ -1265,9 +1276,18 @@ export default function PosTerminal() {
       : number;
 
     if (nextOrderType === "takeaway") {
-      setTableNumber(String(nextTableNumber || "").trim());
-      setOrderType("takeaway");
-      setIsOrderTypeMissing(false);
+      const tableRef = String(nextTableNumber || "").trim();
+      if (hasTakeawayTableReference(tableRef)) {
+        setTableNumber(tableRef);
+        setOrderType("takeaway");
+        setIsOrderTypeMissing(false);
+        setPendingTakeaway(null);
+        return;
+      }
+      setPendingTakeaway({
+        tableNumber: nextTableNumber || "",
+      });
+      setIsTakeawayCustomerDrawerOpen(true);
       return;
     }
 
@@ -1281,14 +1301,24 @@ export default function PosTerminal() {
   }
 
   function handleTakeawayCustomerConfirm({ name, phone, email }) {
+    const pending = pendingTakeaway;
+    if (pending && pending.tableNumber != null && pending.tableNumber !== "") {
+      setTableNumber(pending.tableNumber);
+    }
     setCustomerName(String(name || "").trim());
     setCustomerPhone(String(phone || "").trim());
     setCustomerEmail(String(email || "").trim());
+    if (pending) {
+      setOrderType("takeaway");
+      setIsOrderTypeMissing(false);
+    }
     setIsTakeawayCustomerDrawerOpen(false);
+    setPendingTakeaway(null);
   }
 
   function handleTakeawayCustomerClose() {
     setIsTakeawayCustomerDrawerOpen(false);
+    setPendingTakeaway(null);
   }
 
   function nudgeTableFieldForMissingOrderType() {
@@ -1361,6 +1391,7 @@ export default function PosTerminal() {
     setCustomerPhone("");
     setCustomerEmail("");
     setIsTakeawayCustomerDrawerOpen(false);
+    setPendingTakeaway(null);
     setCheckDiscount(null);
     setIsDiscountDrawerOpen(false);
     resumeLoadedRef.current = null;
@@ -1508,6 +1539,23 @@ export default function PosTerminal() {
         success: false,
         validationBlocked: true,
         error: "Choose dine in or take away before sending",
+      };
+    }
+
+    if (
+      resolvedOrderType === "takeaway" &&
+      !hasTakeawayTableReference(resolvedTableNumber) &&
+      !customerName.trim()
+    ) {
+      setPendingTakeaway({
+        tableNumber: resolvedTableNumber || "",
+      });
+      setIsTakeawayCustomerDrawerOpen(true);
+      showDismissibleToast("Enter a customer name for takeaway");
+      return {
+        success: false,
+        validationBlocked: true,
+        error: "Enter a customer name for takeaway",
       };
     }
 
@@ -2312,6 +2360,7 @@ export default function PosTerminal() {
     setCustomerPhone("");
     setCustomerEmail("");
     setIsTakeawayCustomerDrawerOpen(false);
+    setPendingTakeaway(null);
     setIsTablePrefilled(false);
     tablePrefilledRef.current = null;
     setKeypadDrawer(null);
@@ -2657,7 +2706,7 @@ export default function PosTerminal() {
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {/* Left: current order */}
           <section className="flex w-[34%] min-w-[280px] max-w-[440px] shrink-0 flex-col bg-white pb-[env(safe-area-inset-bottom)]">
-            <div className="relative z-20 flex shrink-0 items-stretch border-neutral-200 bg-[#f2f2f2] p-2">
+            <div className="relative z-20 flex shrink-0 items-stretch gap-2 border-neutral-200 bg-[#f2f2f2] p-2">
               <motion.button
                 key={tableFieldShakeKey}
                 type="button"
@@ -2678,7 +2727,7 @@ export default function PosTerminal() {
                 }
                 transition={{ duration: 0.35, ease: "easeInOut" }}
                 className={cn(
-                  "flex min-h-[52px] w-full items-center justify-center rounded-md bg-white px-4 text-base font-semibold transition-shadow hover:bg-neutral-50 active:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-800",
+                  "flex min-h-[52px] min-w-0 flex-1 items-center justify-center rounded-md bg-white px-4 text-base font-semibold transition-shadow hover:bg-neutral-50 active:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-800",
                   awaitingOrderType
                     ? isOrderTypeMissing
                       ? "bg-red-50 text-red-700 shadow-[0_4px_14px_rgba(239,68,68,0.35)]"
@@ -2688,6 +2737,18 @@ export default function PosTerminal() {
               >
                 {tableLabel}
               </motion.button>
+              <button
+                type="button"
+                aria-label="Customer info"
+                onClick={handleOpenCustomerInfo}
+                className="flex w-[52px] shrink-0 items-center justify-center rounded-md bg-white text-neutral-700 shadow-[0_0_0_1px_#d4d4d4] transition-colors hover:bg-neutral-50 active:bg-neutral-100"
+              >
+                <UserRoundPen
+                  size={22}
+                  strokeWidth={1.5}
+                  className={cn(hasCustomerInfo && "text-[#984B28]")}
+                />
+              </button>
             </div>
 
             <PosTableEntryDrawer
@@ -2703,6 +2764,11 @@ export default function PosTerminal() {
               isOpen={isTakeawayCustomerDrawerOpen}
               onClose={handleTakeawayCustomerClose}
               onConfirm={handleTakeawayCustomerConfirm}
+              requireName={
+                Boolean(pendingTakeaway) ||
+                (resolvedOrderType === "takeaway" &&
+                  !hasTakeawayTableReference(resolvedTableNumber))
+              }
               initialName={customerName}
               initialPhone={customerPhone}
               initialEmail={customerEmail}
@@ -2824,11 +2890,8 @@ export default function PosTerminal() {
               surchargeLabel={posSurchargeLabel}
               taxPercentage={storeProfile.taxPercentage}
               hasUnsentItems={hasUnsentItems}
-              hasCustomerInfo={Boolean(
-                customerName.trim() || customerPhone.trim(),
-              )}
               viewOnly={isViewOnly}
-              onCustomerInfo={handleOpenCustomerInfo}
+              onClear={handleClearOrder}
               onHold={handleFooterHold}
               onSend={handleSendOrder}
               onDiscount={handleOpenDiscountDrawer}

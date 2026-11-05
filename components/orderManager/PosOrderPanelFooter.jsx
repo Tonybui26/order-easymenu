@@ -1,6 +1,6 @@
 "use client";
 
-import { Folder, Percent, Printer, UserRoundPen } from "lucide-react";
+import { Folder, Percent, Printer, SquareX } from "lucide-react";
 import { cn } from "@/lib/helper";
 import {
   computeIncludedTaxFromInclusiveTotal,
@@ -28,7 +28,7 @@ function formatDiscountLabel(discount) {
 }
 
 /**
- * Fixed footer for the POS order panel: totals + Customer / Hold|Send / Discount.
+ * Fixed footer for the POS order panel: totals + Clear / Hold|Send / Discount.
  * Middle action is Send when there are cart lines not yet sent to kitchen.
  */
 export default function PosOrderPanelFooter({
@@ -38,9 +38,8 @@ export default function PosOrderPanelFooter({
   surchargeLabel = "Surcharge",
   taxPercentage = DEFAULT_TAX_PERCENTAGE,
   hasUnsentItems = false,
-  hasCustomerInfo = false,
   viewOnly = false,
-  onCustomerInfo,
+  onClear,
   onHold,
   onSend,
   onDiscount,
@@ -109,12 +108,12 @@ export default function PosOrderPanelFooter({
 
         <div className="flex bg-[#f8f9fb]">
           <FooterAction
-            icon={UserRoundPen}
+            icon={SquareX}
             label=""
-            ariaLabel="Customer info"
-            onClick={onCustomerInfo}
+            ariaLabel="Clear"
+            onClick={onClear}
+            disabled={viewOnly}
             className="border-neutral-[#e1e1e1] border-r px-6"
-            iconClassName={hasCustomerInfo ? "text-[#984B28]" : undefined}
           />
           <FooterAction
             icon={showSend ? Printer : Folder}
