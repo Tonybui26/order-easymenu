@@ -41,15 +41,23 @@ function Field({
   );
 }
 
+function requirementSubtitle(requireName, requirePhone) {
+  if (requireName && requirePhone) return "Name and phone number are required";
+  if (requireName) return "Name is required";
+  if (requirePhone) return "Phone number is required";
+  return undefined;
+}
+
 /**
  * Customer details for the current POS check.
- * Takeaway without a table reference requires a name; phone and email stay optional.
+ * Takeaway can require a name, a phone number, or both, based on POS settings.
  */
 export default function PosTakeawayCustomerDrawer({
   isOpen,
   onClose,
   onConfirm,
   requireName = false,
+  requirePhone = false,
   initialName = "",
   initialPhone = "",
   initialEmail = "",
@@ -58,6 +66,8 @@ export default function PosTakeawayCustomerDrawer({
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [nameError, setNameError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+  const hasRequiredField = requireName || requirePhone;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -65,6 +75,7 @@ export default function PosTakeawayCustomerDrawer({
     setPhone(String(initialPhone || ""));
     setEmail(String(initialEmail || ""));
     setNameError("");
+    setPhoneError("");
   }, [isOpen, initialName, initialPhone, initialEmail]);
 
   function handleSubmit(event) {
@@ -73,11 +84,20 @@ export default function PosTakeawayCustomerDrawer({
     const nextPhone = phone.trim();
     const nextEmail = email.trim();
 
+    let hasError = false;
     if (requireName && !nextName) {
       setNameError("Name is required");
-      return;
+      hasError = true;
+    } else {
+      setNameError("");
     }
-    setNameError("");
+    if (requirePhone && !nextPhone) {
+      setPhoneError("Phone number is required");
+      hasError = true;
+    } else {
+      setPhoneError("");
+    }
+    if (hasError) return;
 
     onConfirm?.({
       name: nextName,
@@ -90,8 +110,8 @@ export default function PosTakeawayCustomerDrawer({
     <SideDrawer
       isOpen={isOpen}
       onClose={onClose}
-      title={requireName ? "Takeaway customer" : "Customer info"}
-      subtitle={requireName ? "Name is required" : undefined}
+      title={hasRequiredField ? "Takeaway customer" : "Customer info"}
+      subtitle={requirementSubtitle(requireName, requirePhone)}
       side="left"
       widthClassName="w-[min(100%,24rem)]"
       contentKey="pos-takeaway-customer"
@@ -109,7 +129,7 @@ export default function PosTakeawayCustomerDrawer({
             form="pos-takeaway-customer-form"
             className="min-h-[48px] flex-1 rounded-lg bg-[#984B28] text-sm font-semibold text-white transition-colors hover:bg-[#7f3f22]"
           >
-            {requireName ? "Continue" : "Save"}
+            {hasRequiredField ? "Continue" : "Save"}
           </button>
         </div>
       }
@@ -135,6 +155,8 @@ export default function PosTakeawayCustomerDrawer({
           value={phone}
           onChange={setPhone}
           type="tel"
+          required={requirePhone}
+          error={phoneError}
           autoComplete="tel"
           inputMode="tel"
         />

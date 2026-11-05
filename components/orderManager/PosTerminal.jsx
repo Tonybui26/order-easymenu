@@ -353,6 +353,7 @@ export default function PosTerminal() {
     itemGroups,
     menuConfig,
     posSurcharges,
+    dataLoaded,
   } = useMenuContext();
   const { activeOperator, hydrated: operatorHydrated } = useActiveOperator();
   const canEditMenu =
@@ -459,6 +460,14 @@ export default function PosTerminal() {
   const useKitchenPrintAliases = Boolean(
     posConfig.showKitchenPrintAliasesOnPos,
   );
+  const takeawayRequireName = Boolean(
+    posConfig.takeawayRequireCustomerDetails && posConfig.takeawayRequireName,
+  );
+  const takeawayRequirePhone = Boolean(
+    posConfig.takeawayRequireCustomerDetails &&
+      posConfig.takeawayRequirePhone,
+  );
+  const takeawayDetailsRequired = takeawayRequireName || takeawayRequirePhone;
 
   useEffect(() => {
     if (!isTrainingMode || !resumeParam) return;
@@ -670,8 +679,9 @@ export default function PosTerminal() {
     if (!orderTypeParam) return;
     const fromParam = resolveOrderTypeFromParam(orderTypeParam);
     if (!fromParam) return;
+    if (fromParam === "takeaway" && !dataLoaded) return;
     router.replace("/pos");
-    if (fromParam === "takeaway") {
+    if (fromParam === "takeaway" && takeawayDetailsRequired) {
       setPendingTakeaway({ tableNumber: "" });
       setIsTakeawayCustomerDrawerOpen(true);
       return;
@@ -684,6 +694,8 @@ export default function PosTerminal() {
     orderTypeFromUrl,
     orderTypeParam,
     router,
+    dataLoaded,
+    takeawayDetailsRequired,
   ]);
 
   useEffect(() => {
@@ -1277,7 +1289,7 @@ export default function PosTerminal() {
 
     if (nextOrderType === "takeaway") {
       const tableRef = String(nextTableNumber || "").trim();
-      if (hasTakeawayTableReference(tableRef)) {
+      if (hasTakeawayTableReference(tableRef) || !takeawayDetailsRequired) {
         setTableNumber(tableRef);
         setOrderType("takeaway");
         setIsOrderTypeMissing(false);
@@ -1542,10 +1554,12 @@ export default function PosTerminal() {
       };
     }
 
+    const missingTakeawayName = takeawayRequireName && !customerName.trim();
+    const missingTakeawayPhone = takeawayRequirePhone && !customerPhone.trim();
     if (
       resolvedOrderType === "takeaway" &&
       !hasTakeawayTableReference(resolvedTableNumber) &&
-      !customerName.trim()
+      (missingTakeawayName || missingTakeawayPhone)
     ) {
       setPendingTakeaway({
         tableNumber: resolvedTableNumber || "",
@@ -1554,7 +1568,6 @@ export default function PosTerminal() {
       return {
         success: false,
         validationBlocked: true,
-        error: "Enter a customer name for takeaway",
       };
     }
 
@@ -1964,9 +1977,11 @@ export default function PosTerminal() {
             showSuccessToast: false,
           });
           if (!sendResult?.success) {
-            showDismissibleToast(
-              sendResult?.error || "Failed to print receipt",
-            );
+            if (!(sendResult.validationBlocked && !sendResult.error)) {
+              showDismissibleToast(
+                sendResult?.error || "Failed to print receipt",
+              );
+            }
             return;
           }
           if (sendResult.localId) {
@@ -2059,6 +2074,9 @@ export default function PosTerminal() {
         showSuccessToast: false,
       });
       if (!sendResult?.success) {
+        if (sendResult.validationBlocked && !sendResult.error) {
+          return { success: false, validationBlocked: true };
+        }
         return {
           success: false,
           error: sendResult?.error || "Failed to save order before payment",
@@ -2272,6 +2290,9 @@ export default function PosTerminal() {
         forceOnline: mustCompleteServerTicketsOnline,
       });
       if (!sendResult?.success) {
+        if (sendResult.validationBlocked && !sendResult.error) {
+          return { success: false, validationBlocked: true };
+        }
         return {
           success: false,
           error: sendResult?.error || "Failed to send order before payment",
@@ -2382,7 +2403,9 @@ export default function PosTerminal() {
     try {
       const result = await persistPosSale(paymentSummary);
       if (!result?.success) {
-        showDismissibleToast(result?.error || "Failed to complete sale");
+        if (!result.validationBlocked) {
+          showDismissibleToast(result?.error || "Failed to complete sale");
+        }
         return { success: false };
       }
       const invoice = pickTaxInvoiceNoFromSaleResult(result);
@@ -2411,7 +2434,9 @@ export default function PosTerminal() {
     try {
       const result = await persistPosSale(paymentSummary);
       if (!result?.success) {
-        showDismissibleToast(result?.error || "Failed to complete sale");
+        if (!result.validationBlocked) {
+          showDismissibleToast(result?.error || "Failed to complete sale");
+        }
         return;
       }
 
@@ -2764,9 +2789,16 @@ export default function PosTerminal() {
               onClose={handleTakeawayCustomerClose}
               onConfirm={handleTakeawayCustomerConfirm}
               requireName={
-                Boolean(pendingTakeaway) ||
-                (resolvedOrderType === "takeaway" &&
-                  !hasTakeawayTableReference(resolvedTableNumber))
+                (Boolean(pendingTakeaway) ||
+                  (resolvedOrderType === "takeaway" &&
+                    !hasTakeawayTableReference(resolvedTableNumber))) &&
+                takeawayRequireName
+              }
+              requirePhone={
+                (Boolean(pendingTakeaway) ||
+                  (resolvedOrderType === "takeaway" &&
+                    !hasTakeawayTableReference(resolvedTableNumber))) &&
+                takeawayRequirePhone
               }
               initialName={customerName}
               initialPhone={customerPhone}
