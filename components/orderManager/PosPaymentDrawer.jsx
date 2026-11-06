@@ -96,6 +96,7 @@ export default function PosPaymentDrawer({
   const [paymentSummary, setPaymentSummary] = useState(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isSalePersisted, setIsSalePersisted] = useState(false);
+  const [invoiceSaleCompleted, setInvoiceSaleCompleted] = useState(false);
   // True after integrated EFTPOS (Tyro or Linkly) approved — blocks closing mid-flow.
   const [cardApproved, setCardApproved] = useState(false);
   const [isCashDisabledOpen, setIsCashDisabledOpen] = useState(false);
@@ -122,6 +123,7 @@ export default function PosPaymentDrawer({
     setPaymentSummary(null);
     setIsPurchasing(false);
     setIsSalePersisted(false);
+    setInvoiceSaleCompleted(false);
     setCardApproved(false);
     setIsCashDisabledOpen(false);
     setPendingLinklyTxn(null);
@@ -450,7 +452,7 @@ export default function PosPaymentDrawer({
   }
 
   function handleClose() {
-    if (isPurchasing || cardApproved) return;
+    if (isPurchasing || cardApproved || invoiceSaleCompleted) return;
     if (step === "signature") return;
     setStep("tender");
     setPaymentSummary(null);
@@ -473,7 +475,10 @@ export default function PosPaymentDrawer({
       showHeader={false}
       side="right"
       closeDisabled={
-        isPurchasing || cardApproved || step === "signature"
+        isPurchasing ||
+        cardApproved ||
+        invoiceSaleCompleted ||
+        step === "signature"
       }
       panelClassName="bg-[#984B28]"
       bodyClassName=""
@@ -600,6 +605,11 @@ export default function PosPaymentDrawer({
           isPrintingReceipt={isPrintingReceipt}
           isCompletingSale={isCompletingSale}
           isSalePersisted={isSalePersisted}
+          invoiceSaleCompleted={invoiceSaleCompleted}
+          onInvoicePrinted={() => {
+            setIsSalePersisted(true);
+            setInvoiceSaleCompleted(true);
+          }}
           trainingMode={trainingMode}
           onTrainingDone={onTrainingDone}
           hideReceiptActions={hideReceiptActions}
@@ -736,16 +746,20 @@ function FinaliseSaleStep({
   isPrintingReceipt = false,
   isCompletingSale = false,
   isSalePersisted = false,
+  invoiceSaleCompleted = false,
+  onInvoicePrinted,
   trainingMode = false,
   onTrainingDone,
   hideReceiptActions = false,
   showManualCardInstruction = false,
 }) {
-  const completeLabel = isSalePersisted
-    ? "Done"
-    : isCompletingSale
-      ? "Saving…"
-      : "Complete Sale";
+  const completeLabel = invoiceSaleCompleted
+    ? "Sale Completed"
+    : isSalePersisted
+      ? "Done"
+      : isCompletingSale
+        ? "Saving…"
+        : "Complete Sale";
   const isCard = paymentSummary?.method === "credit-card";
   const hasCardFee = isCard && Number(processingFee) > 0;
 
@@ -793,8 +807,13 @@ function FinaliseSaleStep({
           <div className="mt-5 grid w-full max-w-sm grid-cols-2 gap-3">
             <button
               type="button"
-              disabled={isPrintingReceipt}
-              onClick={() => onPrintReceipt?.(paymentSummary)}
+              disabled={isPrintingReceipt || isCompletingSale}
+              onClick={async () => {
+                const result = await onPrintReceipt?.(paymentSummary);
+                if (result?.salePersisted) {
+                  onInvoicePrinted?.();
+                }
+              }}
               className="min-h-[4.25rem] rounded-lg bg-[#E7AB94] px-3 text-sm font-bold uppercase tracking-wide text-[#984B23] transition-colors hover:bg-[#E7AB94] active:bg-[#E7AB94] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isPrintingReceipt ? "Printing…" : "Print Invoice"}
@@ -821,7 +840,7 @@ function FinaliseSaleStep({
         <button
           type="button"
           onClick={onCompleteSale}
-          disabled={isCompletingSale}
+          disabled={isCompletingSale || isPrintingReceipt}
           className="mt-6 flex min-h-[3.75rem] w-full items-center justify-center rounded-lg bg-[#ef3636] text-base font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24] disabled:cursor-not-allowed disabled:opacity-70"
         >
           {completeLabel}

@@ -406,6 +406,8 @@ export default function PosTerminal() {
   const [checkOrderIds, setCheckOrderIds] = useState([]);
   const [posCheckId, setPosCheckId] = useState(null);
   const [taxInvoiceNo, setTaxInvoiceNo] = useState("");
+  const taxInvoiceNoRef = useRef("");
+  const salePersistedRef = useRef(false);
   const [isCheckPaid, setIsCheckPaid] = useState(false);
   const [isResumedCheck, setIsResumedCheck] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -1436,6 +1438,8 @@ export default function PosTerminal() {
     setCheckOrderIds([]);
     setPosCheckId(null);
     setTaxInvoiceNo("");
+    taxInvoiceNoRef.current = "";
+    salePersistedRef.current = false;
     setIsCheckPaid(false);
     setIsResumedCheck(false);
     setIsOrderTypeMissing(false);
@@ -1995,81 +1999,71 @@ export default function PosTerminal() {
   }
 
   async function handlePrintReceipt(paymentSummary) {
-    if (isPrintingReceipt || isTrainingMode) return;
+    if (isPrintingReceipt || isTrainingMode) return { success: false };
 
     const printableLines = cartLines.filter(
       (line) => !isCancelledCartLine(line),
     );
     if (printableLines.length === 0) {
       showDismissibleToast("Nothing on the check to print");
-      return;
+      return { success: false };
     }
 
     setIsPrintingReceipt(true);
     try {
-      let invoiceForPrint = taxInvoiceNo;
-      let linesForPrint = printableLines;
+      let salePersisted = salePersistedRef.current;
+      let invoiceForPrint = taxInvoiceNoRef.current || taxInvoiceNo;
+      let localIdsForInvoice = [];
 
-      // secondTest: local outbox has no taxInvoiceNo until this check is uploaded.
-      if (isStoreSecondTest(menuConfig) && !invoiceForPrint) {
-        if (printableLines.some(isSendableCartLine)) {
-          const sendResult = await sendUnsentLinesToKitchen({
-            showSuccessToast: false,
-          });
-          if (!sendResult?.success) {
-            if (!(sendResult.validationBlocked && !sendResult.error)) {
-              showDismissibleToast(
-                sendResult?.error || "Failed to print receipt",
-              );
-            }
-            return;
-          }
-          if (sendResult.localId) {
-            linesForPrint = printableLines.map((line) =>
-              isSendableCartLine(line)
-                ? { ...line, sourceOrderId: sendResult.localId }
-                : line,
-            );
-          }
+      if (!salePersisted) {
+        const persisted = await handlePersistSale(paymentSummary);
+        if (!persisted?.success) {
+          return { success: false, salePersisted: false };
         }
+        salePersisted = true;
+        invoiceForPrint =
+          String(persisted.taxInvoiceNo || "").trim() || invoiceForPrint;
+        localIdsForInvoice = persisted.localIds || [];
+      }
 
+      if (!invoiceForPrint && isStoreSecondTest(menuConfig)) {
         const localIds = [
           ...new Set(
             [
+              ...localIdsForInvoice,
               ...checkOrderIds.map((id) => String(id || "").trim()),
-              ...linesForPrint.map((line) =>
+              ...printableLines.map((line) =>
                 String(line.sourceOrderId || "").trim(),
               ),
               activeOrderId ? String(activeOrderId).trim() : "",
             ].filter((id) => id && !isMongoObjectId(id)),
           ),
         ];
-
         if (localIds.length > 0) {
-          // Quiet: keep localIds on the cart so Complete Sale can still queue pay.
           const syncResult = await syncLocalTicketsForInvoice(localIds, {
             notify: false,
           });
           if (!syncResult?.success) {
             showDismissibleToast(
-              syncResult?.error || "Failed to print receipt",
+              syncResult?.error || "Failed to print invoice",
             );
-            return;
+            return { success: false, salePersisted, printed: false };
           }
           invoiceForPrint = String(syncResult.taxInvoiceNo || "").trim();
-          if (invoiceForPrint) {
-            setTaxInvoiceNo((prev) => prev || invoiceForPrint);
-          }
-          if (!invoiceForPrint) {
-            showDismissibleToast("Failed to print receipt");
-            return;
-          }
         }
+      }
+
+      if (invoiceForPrint) {
+        taxInvoiceNoRef.current = taxInvoiceNoRef.current || invoiceForPrint;
+        setTaxInvoiceNo((prev) => prev || invoiceForPrint);
+      } else {
+        showDismissibleToast("Invoice number was not assigned");
+        return { success: false, salePersisted, printed: false };
       }
 
       const payload = buildTaxInvoiceReceiptFromPosCheck({
         storeProfile,
-        cartLines: linesForPrint,
+        cartLines: printableLines,
         orderType: resolvedOrderType,
         tableNumber: resolvedTableNumber,
         paymentSummary,
@@ -2083,14 +2077,23 @@ export default function PosTerminal() {
       });
 
       const result = await printTaxInvoiceReceipt(payload);
-
       if (result.success) {
         toast.success(result.message);
       } else {
-        showDismissibleToast(result.message || "Failed to print receipt");
+        showDismissibleToast(result.message || "Failed to print invoice");
       }
+      return {
+        success: Boolean(result.success),
+        salePersisted,
+        printed: Boolean(result.success),
+      };
     } catch (error) {
-      showDismissibleToast(error?.message || "Failed to print receipt");
+      showDismissibleToast(error?.message || "Failed to print invoice");
+      return {
+        success: false,
+        salePersisted: salePersistedRef.current,
+        printed: false,
+      };
     } finally {
       setIsPrintingReceipt(false);
     }
@@ -2195,7 +2198,7 @@ export default function PosTerminal() {
       };
     }
 
-    return { success: true, pendingSync: true };
+      return { success: true, pendingSync: true, localIds: [...localIds] };
   }
 
   async function prepareQrCounterOrdersAfterPay(orders) {
@@ -2416,6 +2419,8 @@ export default function PosTerminal() {
     setCheckOrderIds([]);
     setPosCheckId(null);
     setTaxInvoiceNo("");
+    taxInvoiceNoRef.current = "";
+    salePersistedRef.current = false;
     setIsCheckPaid(false);
     setIsResumedCheck(false);
     setTableNumber("");
@@ -2453,10 +2458,18 @@ export default function PosTerminal() {
         return { success: false };
       }
       const invoice = pickTaxInvoiceNoFromSaleResult(result);
-      if (invoice) setTaxInvoiceNo((prev) => prev || invoice);
+      if (invoice) {
+        taxInvoiceNoRef.current = taxInvoiceNoRef.current || invoice;
+        setTaxInvoiceNo((prev) => prev || invoice);
+      }
+      salePersistedRef.current = true;
       await prepareQrCounterOrdersAfterPay(result.orders);
       toast.success("Sale completed");
-      return { success: true, taxInvoiceNo: invoice || null };
+      return {
+        success: true,
+        taxInvoiceNo: invoice || taxInvoiceNoRef.current || null,
+        localIds: result.localIds || [],
+      };
     } catch (error) {
       showDismissibleToast(error?.message || "Failed to complete sale");
       return { success: false };
