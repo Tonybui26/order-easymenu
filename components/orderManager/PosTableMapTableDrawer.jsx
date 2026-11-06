@@ -82,7 +82,7 @@ function PreviewLine({ line }) {
   );
 }
 
-/** Plain POS item list — no Staff order / Paid grouping chrome. */
+/** Plain POS item list for items that are still unpaid. */
 function PosPreviewLines({ sectionId, lines }) {
   if (!lines?.length) return null;
 
@@ -156,9 +156,38 @@ function QrPreviewSection({ section }) {
   );
 }
 
+function PosPaidPreviewSection({ section }) {
+  const lines = section?.lines || [];
+  if (lines.length === 0) return null;
+
+  return (
+    <li className="list-none overflow-hidden rounded-xl border border-neutral-200 bg-white">
+      <div className="flex items-center justify-between gap-2 border-b border-neutral-100 bg-neutral-50 px-3 py-2">
+        <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+          POS
+        </span>
+        <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+          Paid
+        </span>
+      </div>
+      <ul className="divide-y divide-neutral-100">
+        {lines.map((line) => (
+          <PreviewLine
+            key={
+              line.lineId ||
+              `${section.id}-${line.sourceOrderId}-${line.itemId}-${line.title}-${line.quantity}`
+            }
+            line={line}
+          />
+        ))}
+      </ul>
+    </li>
+  );
+}
+
 /**
- * Render QR sections as grouped cards; merge adjacent POS sections into a
- * plain item list (no Staff order chrome).
+ * Unpaid POS items stay one list. Each paid POS ticket is its own docket.
+ * QR orders stay one card per order.
  */
 function PreviewSectionsList({ sections }) {
   const nodes = [];
@@ -181,8 +210,17 @@ function PreviewSectionsList({ sections }) {
   for (const section of sections || []) {
     if (section?.type === "qr") {
       flushPos();
+      nodes.push(<QrPreviewSection key={section.id} section={section} />);
+      continue;
+    }
+
+    if (section?.allPaid) {
+      flushPos();
       nodes.push(
-        <QrPreviewSection key={section.id} section={section} />,
+        <PosPaidPreviewSection
+          key={section.id || `pos-paid-${nodes.length}`}
+          section={section}
+        />,
       );
       continue;
     }
