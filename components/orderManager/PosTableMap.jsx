@@ -12,6 +12,9 @@ import {
   completePosSaleBatch,
   fetchPosHeldOrders,
   fetchPosResumeOrders,
+  fetchManualOpenTables,
+  openManualTable,
+  closeManualTable,
   mergePosTables,
   unmergePosTables,
   markOrderPayLater,
@@ -77,6 +80,7 @@ import {
   normalizeTableMapTableName,
 } from "@/lib/pos/posTableMaps";
 import { resolvePosConfig } from "@/lib/pos/posConfig";
+import { startedAtForTableNames } from "@/lib/pos/tableOpenDuration";
 import {
   isLinklyPosCardReady,
   isTyroPosCardReady,
@@ -141,6 +145,9 @@ export default function PosTableMap() {
   }, [posTableMaps]);
   const [selectedMapId, setSelectedMapId] = useState(null);
   const [heldOrders, setHeldOrders] = useState([]);
+  const [openTableRounds, setOpenTableRounds] = useState([]);
+  const [isManualDrawer, setIsManualDrawer] = useState(false);
+  const [isManualTableSaving, setIsManualTableSaving] = useState(false);
   const [todayBookings, setTodayBookings] = useState([]);
   const [now, setNow] = useState(() => Date.now());
   const [drawerTableName, setDrawerTableName] = useState(null);
@@ -291,6 +298,48 @@ export default function PosTableMap() {
   }, []);
 
   const bookingEnabled = Boolean(menuConfig?.bookingEnabled);
+  const posTableConfig = resolvePosConfig(menuConfig);
+  const manualOpenTableEnabled = posTableConfig.manualOpenTableEnabled === true;
+  const manualCloseTableEnabled =
+    posTableConfig.manualCloseTableEnabled === true;
+  const tableTimerEnabled = manualOpenTableEnabled || manualCloseTableEnabled;
+  const openRoundTableKeys = useMemo(() => {
+    if (!tableTimerEnabled) return new Set();
+    const keys = new Set();
+    for (const round of openTableRounds) {
+      for (const name of round?.tables || []) {
+        const key = normalizeTableMapTableName(name);
+        if (key) keys.add(key);
+      }
+    }
+    return keys;
+  }, [tableTimerEnabled, openTableRounds]);
+
+  const loadOpenTableRounds = useCallback(async () => {
+    if (!tableTimerEnabled) {
+      setOpenTableRounds([]);
+      return;
+    }
+    try {
+      const result = await fetchManualOpenTables();
+      if (result?.success) setOpenTableRounds(result.rounds || []);
+    } catch {
+      // Floor still shows checks if this list cannot be loaded.
+    }
+  }, [tableTimerEnabled]);
+
+  const drawerOpenedAt = useMemo(() => {
+    if (!tableTimerEnabled || !drawerTableName) return null;
+    const names = drawerHeldOrder
+      ? heldEntryTableNames(drawerHeldOrder)
+      : [drawerTableName];
+    const fromRound = startedAtForTableNames(
+      openTableRounds,
+      names.length ? names : [drawerTableName],
+    );
+    if (fromRound) return fromRound;
+    return drawerHeldOrder?.heldAt || drawerHeldOrder?.createdAt || null;
+  }, [tableTimerEnabled, drawerTableName, drawerHeldOrder, openTableRounds]);
 
   const loadTodayBookings = useCallback(async () => {
     if (!bookingEnabled) {
@@ -328,6 +377,7 @@ export default function PosTableMap() {
         if (!cancelled) {
           void loadHeldOrders();
           void loadTodayBookings();
+          void loadOpenTableRounds();
         }
       }, TABLE_MAP_POLL_MS);
     };
@@ -336,6 +386,7 @@ export default function PosTableMap() {
       if (cancelled) return;
       void loadHeldOrders({ paintLocalFirst: true });
       void loadTodayBookings();
+      void loadOpenTableRounds();
       startPollInterval();
     };
 
@@ -375,7 +426,7 @@ export default function PosTableMap() {
       clearPollInterval();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [loadHeldOrders, loadTodayBookings]);
+  }, [loadHeldOrders, loadTodayBookings, loadOpenTableRounds]);
 
   useEffect(() => {
     if (!isPending) {
@@ -400,12 +451,24 @@ export default function PosTableMap() {
     if (!drawerTableName) return;
     const latest = findHeldOrderForTableMap(heldOrders, drawerTableName);
     if (!latest) {
-      if (!isProcessing) {
-        setDrawerTableName(null);
+      if (isManualDrawer) return;
+      if (isProcessing) return;
+      const key = normalizeTableMapTableName(drawerTableName);
+      if (manualCloseTableEnabled && openRoundTableKeys.has(key)) {
+        setIsManualDrawer(true);
         setDrawerHeldOrder(null);
+        setPreviewSections([]);
+        setPreviewSurchargeLines([]);
+        setPreviewError(null);
+        setIsPreviewLoading(false);
+        return;
       }
+      setDrawerTableName(null);
+      setDrawerHeldOrder(null);
+      setIsManualDrawer(false);
       return;
     }
+    if (isManualDrawer) setIsManualDrawer(false);
     setDrawerHeldOrder((prev) => {
       if (
         prev &&
@@ -424,7 +487,14 @@ export default function PosTableMap() {
       }
       return latest;
     });
-  }, [heldOrders, drawerTableName, isProcessing]);
+  }, [
+    heldOrders,
+    drawerTableName,
+    isProcessing,
+    isManualDrawer,
+    manualCloseTableEnabled,
+    openRoundTableKeys,
+  ]);
 
   const drawerOrderIdsKey = orderIdsCacheKey(drawerHeldOrder?.orderIds);
 
@@ -488,9 +558,10 @@ export default function PosTableMap() {
   }, [drawerTableName, drawerOrderIdsKey]);
 
   function handleCloseDrawer() {
-    if (isProcessing) return;
+    if (isProcessing || isManualTableSaving) return;
     setDrawerTableName(null);
     setDrawerHeldOrder(null);
+    setIsManualDrawer(false);
     setPreviewSections([]);
     setPreviewSurchargeLines([]);
     setPreviewError(null);
@@ -546,6 +617,7 @@ export default function PosTableMap() {
             return;
           }
           await loadHeldOrders();
+          await loadOpenTableRounds();
         }
         setMergeGroups(result.groups);
         savePosTableMergeGroups(mergeStoreKey, result.groups);
@@ -669,6 +741,19 @@ export default function PosTableMap() {
 
     const heldOrder = findHeldOrderForTableMap(heldOrders, tableName);
     if (!heldOrder) {
+      const hasOpenRound = openRoundTableKeys.has(
+        normalizeTableMapTableName(tableName),
+      );
+      if (manualOpenTableEnabled || hasOpenRound) {
+        setIsManualDrawer(true);
+        setDrawerTableName(tableName);
+        setDrawerHeldOrder(null);
+        setPreviewSections([]);
+        setPreviewSurchargeLines([]);
+        setPreviewError(null);
+        setIsPreviewLoading(false);
+        return;
+      }
       const localGroup = findMergeGroupForTable(mergeGroups, tableName);
       const seatNames = localGroup?.tableNames?.length
         ? localGroup.tableNames
@@ -684,6 +769,7 @@ export default function PosTableMap() {
       return;
     }
 
+    setIsManualDrawer(false);
     setDrawerTableName(tableName);
     setDrawerHeldOrder(heldOrder);
     const cacheKey = orderIdsCacheKey(heldOrder.orderIds);
@@ -714,6 +800,73 @@ export default function PosTableMap() {
     }
     setNavigatingTableNames(names);
     navigate(`/pos?${params.toString()}`);
+  }
+
+  function openNewOrderForTable(tableName) {
+    const localGroup = findMergeGroupForTable(mergeGroups, tableName);
+    const seatNames = localGroup?.tableNames?.length
+      ? localGroup.tableNames
+      : [tableName];
+    navigateDineInTables(seatNames);
+  }
+
+  async function handleOpenTableManually() {
+    const tableName = String(drawerTableName || "").trim();
+    if (!tableName || isManualTableSaving) return;
+    setIsManualTableSaving(true);
+    try {
+      const result = await openManualTable(tableName);
+      if (!result?.success) {
+        showDismissibleToast(result?.error || "Could not open table");
+        return;
+      }
+      const openedName = result.table || tableName;
+      const openedKey = normalizeTableMapTableName(openedName);
+      setOpenTableRounds((prev) => {
+        const exists = prev.some((round) =>
+          (round.tables || []).some(
+            (name) => normalizeTableMapTableName(name) === openedKey,
+          ),
+        );
+        if (exists) return prev;
+        return [
+          ...prev,
+          {
+            tables: [openedName],
+            startedAt: result.startedAt || new Date().toISOString(),
+          },
+        ];
+      });
+    } finally {
+      setIsManualTableSaving(false);
+    }
+  }
+
+  async function handleCloseTableManually() {
+    const tableName = String(drawerTableName || "").trim();
+    if (!tableName || isManualTableSaving) return;
+    setIsManualTableSaving(true);
+    try {
+      const result = await closeManualTable(tableName);
+      if (!result?.success) {
+        showDismissibleToast(result?.error || "Could not close table");
+        return;
+      }
+      const key = normalizeTableMapTableName(tableName);
+      setOpenTableRounds((prev) =>
+        prev.filter(
+          (round) =>
+            !(round.tables || []).some(
+              (name) => normalizeTableMapTableName(name) === key,
+            ),
+        ),
+      );
+      setDrawerTableName(null);
+      setDrawerHeldOrder(null);
+      setIsManualDrawer(false);
+    } finally {
+      setIsManualTableSaving(false);
+    }
   }
 
   function openNewTableTicket() {
@@ -836,6 +989,7 @@ export default function PosTableMap() {
       await prepareQrCounterOrdersAfterPay(result.orders);
       toast.success("Sale completed");
       await loadHeldOrders();
+      await loadOpenTableRounds();
       return { success: true };
     } catch (error) {
       showDismissibleToast(error?.message || "Failed to complete sale");
@@ -1142,6 +1296,7 @@ export default function PosTableMap() {
       setDeleteTarget(null);
       handleCloseDrawer();
       await loadHeldOrders();
+      await loadOpenTableRounds();
     } catch (error) {
       showDismissibleToast(error?.message || "Failed to delete check");
     } finally {
@@ -1171,6 +1326,7 @@ export default function PosTableMap() {
       }
       toast.success(successMessage);
       await loadHeldOrders();
+      await loadOpenTableRounds();
     } catch (error) {
       showDismissibleToast(error?.message || "Failed to update tickets");
     } finally {
@@ -1317,6 +1473,7 @@ export default function PosTableMap() {
               navigatingTableNames={navigatingTableNames}
               disableInteraction={navigatingTableNames.length > 0}
               mergeColorByTableName={mergeColorByTableName}
+              manualOpenTableKeys={openRoundTableKeys}
               onTableSelect={handleTableSelect}
             />
           </div>
@@ -1352,7 +1509,6 @@ export default function PosTableMap() {
         onDelete={handleDeleteOrder}
         onAllServed={handleAllServed}
         onComplete={handleComplete}
-        isProcessing={isProcessing || isDeleting}
         previewSections={previewSections}
         surchargeLines={previewSurchargeLines}
         isPreviewLoading={isPreviewLoading}
@@ -1362,6 +1518,29 @@ export default function PosTableMap() {
         showLoadOrder={showLoadOrder}
         showPay={showPay}
         showSendToKitchen={showSendToKitchen}
+        manualMode={
+          isManualDrawer
+            ? openRoundTableKeys.has(
+                normalizeTableMapTableName(drawerTableName),
+              )
+              ? "occupied"
+              : "available"
+            : null
+        }
+        emptySubtitle={
+          isManualDrawer
+            ? openRoundTableKeys.has(
+                normalizeTableMapTableName(drawerTableName),
+              )
+              ? "Occupied"
+              : "No order yet"
+            : undefined
+        }
+        openedAt={drawerOpenedAt}
+        onOpenTable={handleOpenTableManually}
+        onCloseTable={handleCloseTableManually}
+        onNewOrder={() => openNewOrderForTable(drawerTableName)}
+        isProcessing={isProcessing || isDeleting || isManualTableSaving}
       />
 
       <PosPaymentDrawer

@@ -18,6 +18,7 @@ import { isKitchenPrintingEnabled } from "@/lib/pos/kitchenPrintingConfig";
 import { useMenuContext } from "@/components/context/MenuContext";
 import PosActionButton from "./PosActionButton";
 import SideDrawer from "./SideDrawer";
+import TableOpenTimerBadge from "./TableOpenTimerBadge";
 
 function formatBookingTime(startsAt) {
   const date = new Date(startsAt);
@@ -267,6 +268,11 @@ export default function PosTableMapTableDrawer({
   showSendToKitchen: showSendToKitchenProp = false,
   totalLabel = "Table total",
   emptySubtitle = "Open check on this table",
+  manualMode = null,
+  openedAt = null,
+  onOpenTable,
+  onCloseTable,
+  onNewOrder,
 }) {
   const { menuConfig } = useMenuContext();
   const kitchenPrintingEnabled = isKitchenPrintingEnabled(menuConfig);
@@ -292,6 +298,8 @@ export default function PosTableMapTableDrawer({
       showSendToKitchen: showSendToKitchenProp,
       totalLabel,
       emptySubtitle,
+      manualMode,
+      openedAt,
     };
   }
 
@@ -313,6 +321,7 @@ export default function PosTableMapTableDrawer({
   const displayShowComplete = Boolean(snap.showComplete);
   const displayTotalLabel = snap.totalLabel || "Table total";
   const displayEmptySubtitle = snap.emptySubtitle || "Open check on this table";
+  const displayManualMode = snap.manualMode || null;
   const previewLineCount = displayPreviewSections.reduce(
     (sum, section) => sum + (section.lines?.length || 0),
     0,
@@ -341,7 +350,7 @@ export default function PosTableMapTableDrawer({
   }
 
   const hasTickets = Boolean(displayHeldOrder?.orderIds?.length);
-  const actionsDisabled = isProcessing || !hasTickets;
+  const actionsDisabled = isProcessing || (!hasTickets && !displayManualMode);
   const footerPrimaryCount = [
     showSendToKitchen,
     showPay,
@@ -356,7 +365,32 @@ export default function PosTableMapTableDrawer({
     return true;
   });
 
-  const headerActions = showLoadOrder ? (
+  const manualActions = displayManualMode ? (
+    <div className="grid gap-2">
+      {displayManualMode === "occupied" ? (
+        <PosActionButton
+          className="bg-neutral-100 text-neutral-900 hover:bg-neutral-200 active:bg-neutral-300"
+          disabled={isProcessing}
+          onClick={onCloseTable}
+        >
+          {isProcessing ? "Closing…" : "Close table"}
+        </PosActionButton>
+      ) : (
+        <PosActionButton
+          tone="purple"
+          disabled={isProcessing}
+          onClick={onOpenTable}
+        >
+          {isProcessing ? "Opening…" : "Open table"}
+        </PosActionButton>
+      )}
+      <PosActionButton tone="blue" disabled={isProcessing} onClick={onNewOrder}>
+        New order
+      </PosActionButton>
+    </div>
+  ) : null;
+
+  const headerActions = !displayManualMode && showLoadOrder ? (
     <button
       type="button"
       disabled={actionsDisabled}
@@ -371,8 +405,9 @@ export default function PosTableMapTableDrawer({
     </button>
   ) : null;
 
-  const actionButtons =
-    footerPrimaryCount > 0 || visibleMoreActions.length > 0 ? (
+  const actionButtons = manualActions
+    ? manualActions
+    : footerPrimaryCount > 0 || visibleMoreActions.length > 0 ? (
     <div className="flex flex-col gap-2">
       {footerPrimaryCount > 0 ? (
         <div
@@ -496,6 +531,11 @@ export default function PosTableMapTableDrawer({
       isOpen={isOpen}
       onClose={onClose}
       title={displayTitle}
+      titleAddon={
+        snap.openedAt ? (
+          <TableOpenTimerBadge startedAt={snap.openedAt} />
+        ) : null
+      }
       subtitle={
         subtitleParts.length > 0
           ? subtitleParts.join(" · ")
@@ -532,25 +572,36 @@ export default function PosTableMapTableDrawer({
             </ul>
           </div>
         ) : null}
-        <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-          Order items
-        </div>
-        {displayPreviewLoading ? (
-          <div className="flex items-center justify-center gap-2 rounded-xl border border-neutral-100 bg-white px-3 py-8 text-sm text-neutral-500">
-            <Loader2 className="size-4 animate-spin" aria-hidden />
-            Loading items…
-          </div>
-        ) : displayPreviewError ? (
-          <p className="rounded-xl border border-red-100 bg-white px-3 py-4 text-sm text-red-600">
-            {displayPreviewError}
+        {displayManualMode ? (
+          <p className="rounded-xl border border-neutral-100 bg-white px-3 py-4 text-sm text-neutral-600">
+            {displayManualMode === "occupied"
+              ? "Occupied, with no order yet. Add an order when guests are ready, or close the table."
+              : "Open the table to mark it occupied, or start an order now."}
           </p>
-        ) : previewLineCount === 0 ? (
-          <p className="rounded-xl border border-neutral-100 bg-white px-3 py-4 text-sm text-neutral-500">
-            No items on this check.
-          </p>
-        ) : (
-          <PreviewSectionsList sections={displayPreviewSections} />
-        )}
+        ) : null}
+        {!displayManualMode ? (
+          <>
+            <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              Order items
+            </div>
+            {displayPreviewLoading ? (
+              <div className="flex items-center justify-center gap-2 rounded-xl border border-neutral-100 bg-white px-3 py-8 text-sm text-neutral-500">
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+                Loading items…
+              </div>
+            ) : displayPreviewError ? (
+              <p className="rounded-xl border border-red-100 bg-white px-3 py-4 text-sm text-red-600">
+                {displayPreviewError}
+              </p>
+            ) : previewLineCount === 0 ? (
+              <p className="rounded-xl border border-neutral-100 bg-white px-3 py-4 text-sm text-neutral-500">
+                No items on this check.
+              </p>
+            ) : (
+              <PreviewSectionsList sections={displayPreviewSections} />
+            )}
+          </>
+        ) : null}
         {previewLineCount > 0 &&
         !displayPreviewLoading &&
         !displayPreviewError ? (

@@ -19,6 +19,7 @@ export default function SideDrawer({
   isOpen,
   onClose,
   title,
+  titleAddon = null,
   subtitle,
   children,
   footer = null,
@@ -141,9 +142,10 @@ export default function SideDrawer({
                       {title ? (
                         <h2
                           id={titleId}
-                          className="text-lg font-bold text-neutral-900"
+                          className="flex min-w-0 items-center gap-2 text-lg font-bold text-neutral-900"
                         >
-                          {title}
+                          <span className="truncate">{title}</span>
+                          {titleAddon}
                         </h2>
                       ) : null}
                       {subtitle ? (

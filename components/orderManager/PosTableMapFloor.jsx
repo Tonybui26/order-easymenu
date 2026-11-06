@@ -47,6 +47,7 @@ export default function PosTableMapFloor({
   navigatingTableNames = [],
   disableInteraction = false,
   mergeColorByTableName = null,
+  manualOpenTableKeys = null,
   onTableSelect,
 }) {
   const containerRef = useRef(null);
@@ -113,9 +114,16 @@ export default function PosTableMapFloor({
               const heldOrder = isInteractive
                 ? findHeldOrderForTableMap(heldOrders, tableName)
                 : null;
-              const status = resolvePosTableMapStatus(heldOrder);
-              const statusFill = getPosTableMapStatusFill(status);
               const tableKey = normalizeTableMapTableName(tableName);
+              let status = resolvePosTableMapStatus(heldOrder);
+              if (
+                tableKey &&
+                manualOpenTableKeys?.has(tableKey) &&
+                status === POS_TABLE_MAP_STATUS.available
+              ) {
+                status = POS_TABLE_MAP_STATUS.occupied;
+              }
+              const statusFill = getPosTableMapStatusFill(status);
               const isSelected = tableKey ? selectedKeys.has(tableKey) : false;
               const isNavigating = tableKey ? navigatingKeys.has(tableKey) : false;
               const hasSelfOrderDot =

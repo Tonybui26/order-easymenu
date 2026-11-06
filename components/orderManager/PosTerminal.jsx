@@ -13,6 +13,7 @@ import { usePosNavigate } from "@/components/context/PosNavigateContext";
 import { cn } from "@/lib/helper";
 import {
   completePosSaleBatch,
+  fetchManualOpenTables,
   fetchPosResumeOrders,
   sendPosOrder,
   editCounterQrOrderItem,
@@ -59,6 +60,7 @@ import {
 } from "@/lib/pos/posResumeOrder";
 import { isCounterPayment, isPayLaterAtCounterEnabled } from "@/lib/helper/payLater";
 import { calculatePosSurcharge } from "@/lib/pos/posSurcharges";
+import { startedAtForTableNames } from "@/lib/pos/tableOpenDuration";
 import { printHeldCheckKitchenOnPrepare } from "@/lib/pos/posHeldOrderPrint";
 import {
   buildCustomerDisplayCartSnapshot,
@@ -77,6 +79,7 @@ import PosCancelSentLineDrawer, {
   POS_CANCEL_SENT_LINE_DRAWER_CLOSED,
 } from "./PosCancelSentLineDrawer";
 import PosChromeHeader from "./PosChromeHeader";
+import TableOpenTimerBadge from "./TableOpenTimerBadge";
 import PosMenuSearch from "./PosMenuSearch";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 import DismissibleToast, {
@@ -437,6 +440,10 @@ export default function PosTerminal() {
   const [isVoidingLine, setIsVoidingLine] = useState(false);
   const { handleOpenCashDrawer } = usePosOpenCashDrawer(showDismissibleToast);
   const posConfig = useMemo(() => resolvePosConfig(menuConfig), [menuConfig]);
+  const tableTimerEnabled =
+    posConfig.manualOpenTableEnabled === true ||
+    posConfig.manualCloseTableEnabled === true;
+  const [openTableRounds, setOpenTableRounds] = useState([]);
   const tyroPayments = useMemo(
     () => resolvePosPaymentsConfig(menuConfig).tyro,
     [menuConfig],
@@ -762,6 +769,39 @@ export default function PosTerminal() {
     }
     return `TABLE: ${resolvedTableNumber || "--"}`;
   })();
+
+  const tableOpenStartedAt = useMemo(() => {
+    if (!tableTimerEnabled || resolvedOrderType !== "dine-in") return null;
+    return startedAtForTableNames(openTableRounds, resolvedTableNames);
+  }, [tableTimerEnabled, resolvedOrderType, openTableRounds, resolvedTableNames]);
+
+  useEffect(() => {
+    if (!tableTimerEnabled) {
+      setOpenTableRounds([]);
+      return;
+    }
+    let cancelled = false;
+
+    async function loadOpenRounds() {
+      try {
+        const result = await fetchManualOpenTables();
+        if (!cancelled && result?.success) {
+          setOpenTableRounds(result.rounds || []);
+        }
+      } catch {
+        // The table label still works if the timer cannot be loaded.
+      }
+    }
+
+    void loadOpenRounds();
+    const intervalId = setInterval(() => {
+      void loadOpenRounds();
+    }, 15_000);
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [tableTimerEnabled, resolvedPrimaryTable, checkOrderIds.length]);
 
   function registerEnteringLine(lineId) {
     setEnteringLineIds((prev) => {
@@ -2755,7 +2795,7 @@ export default function PosTerminal() {
                 }
                 transition={{ duration: 0.35, ease: "easeInOut" }}
                 className={cn(
-                  "flex min-h-[52px] min-w-0 flex-1 items-center justify-center rounded-md bg-white px-4 text-base font-semibold transition-shadow hover:bg-neutral-50 active:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-800",
+                  "flex min-h-[52px] min-w-0 flex-1 items-center justify-center gap-2 rounded-md bg-white px-4 text-base font-semibold transition-shadow hover:bg-neutral-50 active:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-800",
                   awaitingOrderType
                     ? isOrderTypeMissing
                       ? "bg-red-50 text-red-700 shadow-[0_4px_14px_rgba(239,68,68,0.35)]"
@@ -2763,7 +2803,10 @@ export default function PosTerminal() {
                     : "text-neutral-700 shadow-[0_0_0_1px_#d4d4d4]",
                 )}
               >
-                {tableLabel}
+                <span className="truncate">{tableLabel}</span>
+                {tableOpenStartedAt ? (
+                  <TableOpenTimerBadge startedAt={tableOpenStartedAt} />
+                ) : null}
               </motion.button>
               <button
                 type="button"
