@@ -72,7 +72,10 @@ function buildVisibleActions(row) {
   // Cancelled unpaid: no footer actions.
   // Cancelled paid: Refund (+ Email if Online). Cancelled refunded: confirmation email.
   if (row?.isCancelled) {
-    if (canEmail) actions.push(EMAIL_RECEIPT_ACTION);
+    if (canEmail) {
+      actions.push(EMAIL_RECEIPT_ACTION);
+      actions.push(PRINT_ACTIONS.find((action) => action.id === "print-receipt"));
+    }
     if (canSendRefundConfirmation) {
       actions.push(SEND_REFUND_CONFIRMATION_ACTION);
     }
@@ -84,8 +87,8 @@ function buildVisibleActions(row) {
 
   if (canEmail) {
     actions.push(EMAIL_RECEIPT_ACTION);
+    actions.push(PRINT_ACTIONS.find((action) => action.id === "print-receipt"));
   } else if (row?.payment !== "Online") {
-    // Online rows use email (or refund confirmation), not thermal print.
     actions.push(...PRINT_ACTIONS);
   }
 
