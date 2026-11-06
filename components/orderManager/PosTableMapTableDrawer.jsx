@@ -398,7 +398,7 @@ export default function PosTableMapTableDrawer({
 
   const visibleMoreActions = TABLE_MORE_ACTIONS.filter((action) => {
     if (action.id === "delete") return !allPaid;
-    if (action.id === "print-bill") return !allPaid;
+    if (action.id === "print-bill") return hasTickets;
     if (action.id === "reprint-order") return kitchenPrintingEnabled;
     return true;
   });
@@ -545,7 +545,10 @@ export default function PosTableMapTableDrawer({
 
   const moreActionsPanel = showMoreActions ? (
     <div className="flex flex-col gap-2 p-3 pb-6">
-      {visibleMoreActions.map((action) => (
+      {visibleMoreActions.map((action) => {
+        const label =
+          action.id === "print-bill" && allPaid ? "Print Invoice" : action.label;
+        return (
         <PosActionButton
           key={action.id}
           tone={action.tone}
@@ -558,9 +561,10 @@ export default function PosTableMapTableDrawer({
             if (action.id === "delete") onDelete?.();
           }}
         >
-          {action.label}
+          {label}
         </PosActionButton>
-      ))}
+        );
+      })}
     </div>
   ) : null;
 

@@ -55,6 +55,10 @@ import {
   reprintHeldCheckKitchen,
 } from "@/lib/pos/posHeldOrderPrint";
 import {
+  groupOrdersByPaidSale,
+  printReceiptForHistoryCheck,
+} from "@/lib/pos/posHistoryOrderPrint";
+import {
   buildHeldDrawerPreviewSections,
   buildHeldDrawerSurchargeLines,
 } from "@/lib/pos/posHeldDrawerPreview";
@@ -1138,8 +1142,9 @@ export default function PosTableMap() {
   async function handlePrintBill() {
     if (!drawerHeldOrder?.orderIds?.length || isProcessing) return;
 
+    const printInvoice = Boolean(drawerHeldOrder.allPaid);
     const posOrderIds = getDrawerPosOrderIds(drawerHeldOrder);
-    if (posOrderIds.length === 0) {
+    if (!printInvoice && posOrderIds.length === 0) {
       showDismissibleToast("Print bill is only available for POS checks");
       return;
     }
@@ -1148,6 +1153,22 @@ export default function PosTableMap() {
     try {
       const orders = await loadDrawerCheckOrders();
       if (!orders) return;
+
+      if (printInvoice) {
+        const groups = groupOrdersByPaidSale(orders);
+        for (const group of groups) {
+          const result = await printReceiptForHistoryCheck(group, {
+            storeProfile,
+            menuConfig,
+          });
+          if (!result.success) {
+            showDismissibleToast(result.message || "Failed to print invoice");
+            return;
+          }
+        }
+        toast.success(groups.length > 1 ? "Invoices printed" : "Invoice printed");
+        return;
+      }
 
       const posOrders = orders.filter(
         (order) => String(order?.source || "").trim() === "pos",
