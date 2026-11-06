@@ -37,7 +37,7 @@ const EMAIL_RECEIPT_ACTION = {
   id: "email-receipt",
   label: "Email Receipt",
   icon: Mail,
-  className: "bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white",
+  className: "bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white",
 };
 
 const SEND_REFUND_CONFIRMATION_ACTION = {
@@ -202,15 +202,12 @@ export default function OrderHistoryActionsPanel({
             >
               {visibleActions.map((action) => {
                 const Icon = action.icon;
-                const hasEmailReceipt = visibleActions.some(
-                  (item) => item.id === "email-receipt",
-                );
                 const disabled =
                   isProcessing &&
                   (action.id === "print-bill" || action.id === "print-receipt");
                 const spansFullWidth =
                   action.id === "send-refund-confirmation" ||
-                  (action.id === "refund" && !hasEmailReceipt) ||
+                  action.id === "refund" ||
                   action.id === "delete" ||
                   (action.id === "email-receipt" && visibleActions.length === 1);
 
