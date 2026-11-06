@@ -143,7 +143,7 @@ const HELD_MORE_ACTIONS = [
 
 /**
  * Held-order card for Self Ordering (QR / online) checks.
- * Status and actions follow Live Order Terminal (non-counter online flow).
+ * Paid online orders follow kitchen steps. Unpaid counter cash/card shows Pay.
  */
 export default function SelfOrderingHeldOrderCard({
   order,

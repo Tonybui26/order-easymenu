@@ -85,6 +85,8 @@ export default function PosPaymentDrawer({
   linklyCardEnabled = false,
   linklyConfig = null,
   onOpenCashDrawer,
+  /** Held QR counter pay: cash/card tender and Complete Sale, no tax invoice print. */
+  hideReceiptActions = false,
 }) {
   const { session } = usePosRegisterSession();
   const { storeProfile } = useMenuContext();
@@ -600,6 +602,7 @@ export default function PosPaymentDrawer({
           isSalePersisted={isSalePersisted}
           trainingMode={trainingMode}
           onTrainingDone={onTrainingDone}
+          hideReceiptActions={hideReceiptActions}
           showManualCardInstruction={
             paymentSummary.method === "credit-card" &&
             !cardApproved &&
@@ -735,6 +738,7 @@ function FinaliseSaleStep({
   isSalePersisted = false,
   trainingMode = false,
   onTrainingDone,
+  hideReceiptActions = false,
   showManualCardInstruction = false,
 }) {
   const completeLabel = isSalePersisted
@@ -785,7 +789,7 @@ function FinaliseSaleStep({
             Nothing is saved. Close this step, then tap Hold to clear the
             training check.
           </p>
-        ) : (
+        ) : hideReceiptActions ? null : (
           <div className="mt-5 grid w-full max-w-sm grid-cols-2 gap-3">
             <button
               type="button"

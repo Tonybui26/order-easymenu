@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePosNavigate } from "@/components/context/PosNavigateContext";
 import toast from "react-hot-toast";
 import {
+  completePosSaleBatch,
   fetchPosHeldOrders,
   fetchPosResumeOrders,
+  updateOrderStatus,
 } from "@/lib/api/fetchApi";
 import {
   markPosBillPrintedMixed,
@@ -30,8 +32,17 @@ import {
   isPosDineInHeldOrder,
   isPickupOrDeliveryHeldOrder,
   isPosSourceHeldOrder,
+  isUnpaidCounterSelfOrder,
   resolveHeldAggregateStatus,
 } from "@/lib/pos/posHeldOrder";
+import { isCounterPayment } from "@/lib/helper/payLater";
+import { resolvePosConfig } from "@/lib/pos/posConfig";
+import {
+  isLinklyPosCardReady,
+  isTyroPosCardReady,
+  resolvePosPaymentsConfig,
+} from "@/lib/pos/posPaymentsConfig";
+import PosPaymentDrawer from "./PosPaymentDrawer";
 import PosChromeHeader from "./PosChromeHeader";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 import PosHeldOrderCard from "./PosHeldOrderCard";
@@ -66,6 +77,14 @@ function previewLinesFromResumeOrders(orders) {
   );
 }
 
+function shouldPrepareOrderAfterPosPay(order) {
+  if (!order) return false;
+  if (String(order?.source || "").trim() === "pos") return false;
+  if (!isCounterPayment(order?.paymentMethod)) return false;
+  const status = String(order?.status || "").trim();
+  return ["pending", "confirmed", "accepted"].includes(status);
+}
+
 /**
  * Held Orders — open checks (POS, QR, and online) until paid and cleared.
  */
@@ -78,6 +97,18 @@ export default function PosHeldOrders() {
   } = useDismissibleToast();
   const { handleOpenCashDrawer } = usePosOpenCashDrawer(showDismissibleToast);
   const { storeProfile, itemGroups, menuConfig, menuContent } = useMenuContext();
+  const posConfig = useMemo(() => resolvePosConfig(menuConfig), [menuConfig]);
+  const isPayFirstMode = Boolean(posConfig.payFirstModeEnabled);
+  const tyroPayments = useMemo(
+    () => resolvePosPaymentsConfig(menuConfig).tyro,
+    [menuConfig],
+  );
+  const linklyPayments = useMemo(
+    () => resolvePosPaymentsConfig(menuConfig).linkly,
+    [menuConfig],
+  );
+  const tyroCardEnabled = isTyroPosCardReady(menuConfig);
+  const linklyCardEnabled = isLinklyPosCardReady(menuConfig);
   const [heldOrders, setHeldOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [processingCheckId, setProcessingCheckId] = useState(null);
@@ -88,6 +119,8 @@ export default function PosHeldOrders() {
   const [cancelDrawerOpen, setCancelDrawerOpen] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [drawerHeldOrder, setDrawerHeldOrder] = useState(null);
+  const [tenderHeldOrder, setTenderHeldOrder] = useState(null);
+  const [isCompletingSale, setIsCompletingSale] = useState(false);
   const [previewLines, setPreviewLines] = useState([]);
   const [previewSections, setPreviewSections] = useState([]);
   const [previewSurchargeLines, setPreviewSurchargeLines] = useState([]);
@@ -315,9 +348,93 @@ export default function PosHeldOrders() {
       showDismissibleToast("This check is already paid");
       return;
     }
+    // QR counter cash/card stays on Held — tender only, no POS menu or invoice.
+    if (!isPosSourceHeldOrder(target) && isUnpaidCounterSelfOrder(target)) {
+      clearHeldDrawer();
+      setTenderHeldOrder(target);
+      return;
+    }
     navigate(
       `/pos?resume=${encodeURIComponent(target.orderIds.join(","))}&pay=1`,
     );
+  }
+
+  async function prepareQrCounterOrdersAfterPay(orders) {
+    if (!isPayFirstMode) return;
+
+    const toPrepare = (orders || []).filter(shouldPrepareOrderAfterPosPay);
+    if (toPrepare.length === 0) return;
+
+    const preparedIds = [];
+    for (const order of toPrepare) {
+      try {
+        const updated = await updateOrderStatus(order._id, "preparing");
+        preparedIds.push(String(updated?._id || order._id));
+      } catch (error) {
+        console.error(
+          `[held pay] Failed to prepare QR order ${order._id}:`,
+          error,
+        );
+      }
+    }
+
+    if (preparedIds.length === 0 || !storeProfile) return;
+
+    try {
+      await printHeldCheckKitchenOnPrepare(orders, preparedIds, {
+        storeProfile,
+        itemGroups,
+        menuConfig,
+        menuContent,
+      });
+    } catch (error) {
+      console.error("[held pay] Kitchen print after QR pay failed:", error);
+    }
+  }
+
+  async function persistHeldQrSale(paymentSummary) {
+    const target = tenderHeldOrder;
+    if (!target?.orderIds?.length) {
+      return { success: false, error: "No order to pay" };
+    }
+    if (!paymentSummary?.method) {
+      return { success: false, error: "Payment method is required" };
+    }
+
+    setIsCompletingSale(true);
+    try {
+      const result = await completePosSaleBatch({
+        orderIds: target.orderIds,
+        method: paymentSummary.method,
+        amountTendered: Number(paymentSummary.amountTendered || 0),
+        changeDue: Number(paymentSummary.change || 0),
+        processingFee: Number(paymentSummary.processingFee || 0),
+      });
+      if (!result?.success) {
+        showDismissibleToast(result?.error || "Failed to complete sale");
+        return { success: false };
+      }
+
+      await prepareQrCounterOrdersAfterPay(result.orders);
+      toast.success("Sale completed");
+      await loadHeldOrders({ silent: true });
+      return { success: true };
+    } catch (error) {
+      showDismissibleToast(error?.message || "Failed to complete sale");
+      return { success: false };
+    } finally {
+      setIsCompletingSale(false);
+    }
+  }
+
+  async function handleHeldQrCompleteSale(paymentSummary) {
+    const result = await persistHeldQrSale(paymentSummary);
+    if (!result?.success) return;
+    setTenderHeldOrder(null);
+  }
+
+  function handleHeldQrFinishPaidSale() {
+    setTenderHeldOrder(null);
   }
 
   async function markTicketsDelivered(order, orderIds, successMessage) {
@@ -808,6 +925,27 @@ export default function PosHeldOrders() {
         previewLines={previewLines}
         isPreviewLoading={isPreviewLoading}
         previewError={previewError}
+      />
+
+      <PosPaymentDrawer
+        isOpen={Boolean(tenderHeldOrder)}
+        onClose={() => {
+          if (isCompletingSale) return;
+          setTenderHeldOrder(null);
+        }}
+        amountDue={Number(
+          tenderHeldOrder?.amountDue ?? tenderHeldOrder?.total ?? 0,
+        )}
+        onCompleteSale={handleHeldQrCompleteSale}
+        onPersistSale={persistHeldQrSale}
+        onFinishPaidSale={handleHeldQrFinishPaidSale}
+        isCompletingSale={isCompletingSale}
+        hideReceiptActions
+        tyroCardEnabled={tyroCardEnabled}
+        tyroConfig={tyroPayments}
+        linklyCardEnabled={linklyCardEnabled}
+        linklyConfig={linklyPayments}
+        onOpenCashDrawer={handleOpenCashDrawer}
       />
 
       <DeleteOrderDrawer
