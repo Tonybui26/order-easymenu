@@ -422,7 +422,12 @@ export default function PosHeldOrderCard({
               transition={{ type: "spring", damping: 28, stiffness: 320 }}
               className="absolute inset-x-0 bottom-0 z-20 flex flex-col gap-2 rounded-b-2xl border-t border-neutral-100 bg-white p-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]"
             >
-              {visibleMoreActions.map((action) => (
+              {visibleMoreActions.map((action) => {
+                const label =
+                  action.id === "print-bill" && order?.allPaid
+                    ? "Print Invoice"
+                    : action.label;
+                return (
                 <PosActionButton
                   key={action.id}
                   tone={action.tone}
@@ -442,9 +447,10 @@ export default function PosHeldOrderCard({
                     if (action.id === "delete") onDelete?.(order);
                   }}
                 >
-                  {action.label}
+                  {label}
                 </PosActionButton>
-              ))}
+                );
+              })}
             </motion.div>
           ) : null}
         </AnimatePresence>

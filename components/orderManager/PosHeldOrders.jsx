@@ -19,6 +19,7 @@ import {
   printHeldCheckKitchenOnPrepare,
   reprintHeldCheckKitchen,
 } from "@/lib/pos/posHeldOrderPrint";
+import { printReceiptForHistoryCheck } from "@/lib/pos/posHistoryOrderPrint";
 import {
   buildHeldDrawerPreviewSections,
   buildHeldDrawerSurchargeLines,
@@ -603,13 +604,22 @@ export default function PosHeldOrders() {
       const orders = await loadHeldCheckOrders(heldEntry);
       if (!orders) return;
 
-      const result = await printBillForHeldCheck(orders, {
-        storeProfile,
-        menuConfig,
-      });
+      const printInvoice = Boolean(heldEntry?.allPaid);
+      const result = printInvoice
+        ? await printReceiptForHistoryCheck(orders, {
+            storeProfile,
+            menuConfig,
+          })
+        : await printBillForHeldCheck(orders, {
+            storeProfile,
+            menuConfig,
+          });
 
       if (result.success) {
-        toast.success(result.message || "Bill printed");
+        toast.success(
+          result.message || (printInvoice ? "Invoice printed" : "Bill printed"),
+        );
+        if (printInvoice) return;
         const markResult = await markPosBillPrintedMixed(heldEntry.orderIds || []);
         if (!markResult?.success) {
           showDismissibleToast(
