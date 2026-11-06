@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
 import {
   fetchBookings,
+  completePosSaleBatch,
   fetchPosHeldOrders,
   fetchPosResumeOrders,
   mergePosTables,
@@ -21,7 +22,7 @@ import {
   updateHeldCheckStatusMixed,
 } from "@/lib/localDb/localHeldActions";
 import { isNativeApp } from "@/lib/helper/platformDetection";
-import { isPayLaterAtCounterEnabled } from "@/lib/helper/payLater";
+import { isCounterPayment, isPayLaterAtCounterEnabled } from "@/lib/helper/payLater";
 import {
   drawerEntryHasQrContext,
   findHeldOrderForTableMap,
@@ -32,6 +33,7 @@ import {
 import {
   canSendTableMapToKitchen,
   getDrawerKitchenCandidateOrderIds,
+  getDrawerUnpaidCounterQrOrderIds,
   hasTableMapKitchenInProgress,
   resolveTableMapDrawerPaymentActions,
 } from "@/lib/pos/posTableMapKitchen";
@@ -75,7 +77,13 @@ import {
   normalizeTableMapTableName,
 } from "@/lib/pos/posTableMaps";
 import { resolvePosConfig } from "@/lib/pos/posConfig";
+import {
+  isLinklyPosCardReady,
+  isTyroPosCardReady,
+  resolvePosPaymentsConfig,
+} from "@/lib/pos/posPaymentsConfig";
 import PosChromeHeader from "./PosChromeHeader";
+import PosPaymentDrawer from "./PosPaymentDrawer";
 import PosTableMapFloor from "./PosTableMapFloor";
 import PosTableMapTableDrawer from "./PosTableMapTableDrawer";
 import PosTableMapUndoMergeModal from "./PosTableMapUndoMergeModal";
@@ -106,6 +114,14 @@ function ticketsStatusKey(heldOrder) {
     .join(",");
 }
 
+function shouldPrepareOrderAfterPosPay(order) {
+  if (!order) return false;
+  if (String(order?.source || "").trim() === "pos") return false;
+  if (!isCounterPayment(order?.paymentMethod)) return false;
+  const status = String(order?.status || "").trim();
+  return ["pending", "confirmed", "accepted"].includes(status);
+}
+
 export default function PosTableMap() {
   const { navigate, isPending } = usePosNavigate();
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
@@ -129,6 +145,8 @@ export default function PosTableMap() {
   const [now, setNow] = useState(() => Date.now());
   const [drawerTableName, setDrawerTableName] = useState(null);
   const [drawerHeldOrder, setDrawerHeldOrder] = useState(null);
+  const [tenderTarget, setTenderTarget] = useState(null);
+  const [isCompletingSale, setIsCompletingSale] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [previewSections, setPreviewSections] = useState([]);
   const [previewSurchargeLines, setPreviewSurchargeLines] = useState([]);
@@ -156,6 +174,16 @@ export default function PosTableMap() {
   const isPayFirstMode = Boolean(
     resolvePosConfig(menuConfig).payFirstModeEnabled,
   );
+  const tyroPayments = useMemo(
+    () => resolvePosPaymentsConfig(menuConfig).tyro,
+    [menuConfig],
+  );
+  const linklyPayments = useMemo(
+    () => resolvePosPaymentsConfig(menuConfig).linkly,
+    [menuConfig],
+  );
+  const tyroCardEnabled = isTyroPosCardReady(menuConfig);
+  const linklyCardEnabled = isLinklyPosCardReady(menuConfig);
   const unpaidQrPaymentTableKeys = useMemo(
     () =>
       buildUnpaidQrPaymentTableIndicatorKeys(heldOrders, {
@@ -688,20 +716,30 @@ export default function PosTableMap() {
     navigate(`/pos?${params.toString()}`);
   }
 
+  function openNewTableTicket() {
+    const seatNames = heldEntryTableNames(drawerHeldOrder);
+    navigateDineInTables(
+      seatNames.length > 0
+        ? seatNames
+        : drawerTableName
+          ? [drawerTableName]
+          : [],
+    );
+  }
+
   function handleLoadOrder() {
     if (!drawerHeldOrder?.orderIds?.length) return;
 
-    // Paid tickets stay on the table drawer. Open only loads what is still unpaid.
-    const payableOrderIds = getDrawerPayableOrderIds(drawerHeldOrder);
+    // Unpaid QR counter tickets stay as their own check. Open starts a new
+    // POS ticket, or resumes an existing POS check without the QR order.
+    const counterQrIds = new Set(
+      getDrawerUnpaidCounterQrOrderIds(drawerHeldOrder),
+    );
+    const payableOrderIds = getDrawerPayableOrderIds(drawerHeldOrder).filter(
+      (id) => !counterQrIds.has(id),
+    );
     if (payableOrderIds.length === 0) {
-      const seatNames = heldEntryTableNames(drawerHeldOrder);
-      navigateDineInTables(
-        seatNames.length > 0
-          ? seatNames
-          : drawerTableName
-            ? [drawerTableName]
-            : [],
-      );
+      openNewTableTicket();
       return;
     }
 
@@ -716,9 +754,105 @@ export default function PosTableMap() {
       showDismissibleToast("This check is already paid");
       return;
     }
+
+    const counterQrIds = getDrawerUnpaidCounterQrOrderIds(drawerHeldOrder);
+    const qrIdSet = new Set(counterQrIds);
+    const posPayableIds = payableOrderIds.filter((id) => !qrIdSet.has(id));
+
+    // QR counter cash/card: tender on the table map. Do not open the POS menu.
+    if (counterQrIds.length > 0 && posPayableIds.length === 0) {
+      setTenderTarget({
+        orderIds: counterQrIds,
+        amountDue: Number(
+          drawerHeldOrder?.amountDue ?? drawerHeldOrder?.total ?? 0,
+        ),
+      });
+      handleCloseDrawer();
+      return;
+    }
+
+    const resumeIds = posPayableIds.length > 0 ? posPayableIds : payableOrderIds;
     navigate(
-      `/pos?resume=${encodeURIComponent(payableOrderIds.join(","))}&pay=1`,
+      `/pos?resume=${encodeURIComponent(resumeIds.join(","))}&pay=1`,
     );
+  }
+
+  async function prepareQrCounterOrdersAfterPay(orders) {
+    if (!isPayFirstMode) return;
+
+    const toPrepare = (orders || []).filter(shouldPrepareOrderAfterPosPay);
+    if (toPrepare.length === 0) return;
+
+    const preparedIds = [];
+    for (const order of toPrepare) {
+      try {
+        const updated = await updateOrderStatus(order._id, "preparing");
+        preparedIds.push(String(updated?._id || order._id));
+      } catch (error) {
+        console.error(
+          `[table-map pay] Failed to prepare QR order ${order._id}:`,
+          error,
+        );
+      }
+    }
+
+    if (preparedIds.length === 0 || !storeProfile) return;
+
+    try {
+      await printHeldCheckKitchenOnPrepare(orders, preparedIds, {
+        storeProfile,
+        itemGroups,
+        menuConfig,
+        menuContent,
+      });
+    } catch (error) {
+      console.error("[table-map pay] Kitchen print after QR pay failed:", error);
+    }
+  }
+
+  async function persistTableQrSale(paymentSummary) {
+    const target = tenderTarget;
+    if (!target?.orderIds?.length) {
+      return { success: false, error: "No order to pay" };
+    }
+    if (!paymentSummary?.method) {
+      return { success: false, error: "Payment method is required" };
+    }
+
+    setIsCompletingSale(true);
+    try {
+      const result = await completePosSaleBatch({
+        orderIds: target.orderIds,
+        method: paymentSummary.method,
+        amountTendered: Number(paymentSummary.amountTendered || 0),
+        changeDue: Number(paymentSummary.change || 0),
+        processingFee: Number(paymentSummary.processingFee || 0),
+      });
+      if (!result?.success) {
+        showDismissibleToast(result?.error || "Failed to complete sale");
+        return { success: false };
+      }
+
+      await prepareQrCounterOrdersAfterPay(result.orders);
+      toast.success("Sale completed");
+      await loadHeldOrders();
+      return { success: true };
+    } catch (error) {
+      showDismissibleToast(error?.message || "Failed to complete sale");
+      return { success: false };
+    } finally {
+      setIsCompletingSale(false);
+    }
+  }
+
+  async function handleTableQrCompleteSale(paymentSummary) {
+    const result = await persistTableQrSale(paymentSummary);
+    if (!result?.success) return;
+    setTenderTarget(null);
+  }
+
+  function handleTableQrFinishPaidSale() {
+    setTenderTarget(null);
   }
 
   async function handleSendToKitchen() {
@@ -1228,6 +1362,25 @@ export default function PosTableMap() {
         showLoadOrder={showLoadOrder}
         showPay={showPay}
         showSendToKitchen={showSendToKitchen}
+      />
+
+      <PosPaymentDrawer
+        isOpen={Boolean(tenderTarget)}
+        onClose={() => {
+          if (isCompletingSale) return;
+          setTenderTarget(null);
+        }}
+        amountDue={Number(tenderTarget?.amountDue || 0)}
+        onCompleteSale={handleTableQrCompleteSale}
+        onPersistSale={persistTableQrSale}
+        onFinishPaidSale={handleTableQrFinishPaidSale}
+        isCompletingSale={isCompletingSale}
+        hideReceiptActions
+        tyroCardEnabled={tyroCardEnabled}
+        tyroConfig={tyroPayments}
+        linklyCardEnabled={linklyCardEnabled}
+        linklyConfig={linklyPayments}
+        onOpenCashDrawer={handleOpenCashDrawer}
       />
 
       <DeleteOrderDrawer
