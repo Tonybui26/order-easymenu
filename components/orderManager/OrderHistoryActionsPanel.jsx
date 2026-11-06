@@ -27,7 +27,7 @@ const PRINT_ACTIONS = [
   },
   {
     id: "print-receipt",
-    label: "Print Receipt",
+    label: "Print Invoice",
     icon: Receipt,
     className: "bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white",
   },

@@ -797,7 +797,7 @@ function FinaliseSaleStep({
               onClick={() => onPrintReceipt?.(paymentSummary)}
               className="min-h-[4.25rem] rounded-lg bg-[#E7AB94] px-3 text-sm font-bold uppercase tracking-wide text-[#984B23] transition-colors hover:bg-[#E7AB94] active:bg-[#E7AB94] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isPrintingReceipt ? "Printing…" : "Print Receipt"}
+              {isPrintingReceipt ? "Printing…" : "Print Invoice"}
             </button>
             <button
               type="button"
