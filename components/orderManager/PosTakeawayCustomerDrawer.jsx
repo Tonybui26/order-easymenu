@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import InputText from "@/components/InputText";
 import SideDrawer from "./SideDrawer";
 
@@ -13,7 +13,11 @@ function Field({
   required = false,
   error = "",
   autoComplete,
+  autoCapitalize,
+  enterKeyHint,
   inputMode,
+  inputRef,
+  onKeyDown,
   placeholder,
 }) {
   return (
@@ -23,14 +27,20 @@ function Field({
         {required ? <span className="text-red-600"> *</span> : null}
       </span>
       <InputText
+        ref={inputRef}
         id={id}
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         autoComplete={autoComplete}
+        autoCapitalize={autoCapitalize}
+        enterKeyHint={enterKeyHint}
         inputMode={inputMode}
+        onKeyDown={onKeyDown}
         placeholder={placeholder}
-        className={error ? "border-red-400 focus:ring-red-200" : undefined}
+        className={
+          error ? "border-red-400 text-base focus:ring-red-200" : "text-base"
+        }
       />
       {error ? (
         <span className="mt-1 block text-xs font-medium text-red-600">
@@ -48,6 +58,29 @@ function requirementSubtitle(requireName, requirePhone) {
   return undefined;
 }
 
+function firstRequiredField(requireName, requirePhone, name, phone) {
+  if (requireName && !String(name || "").trim()) return "name";
+  if (requirePhone && !String(phone || "").trim()) return "phone";
+  if (requireName) return "name";
+  if (requirePhone) return "phone";
+  return null;
+}
+
+function placeCaret(input) {
+  const length = input.value.length;
+  try {
+    input.setSelectionRange(length, length);
+  } catch {
+    // Some input types reject a selection range.
+  }
+}
+
+function focusInput(input) {
+  if (!input || document.activeElement === input) return;
+  input.focus({ preventScroll: true });
+  placeCaret(input);
+}
+
 /**
  * Customer details for the current POS check.
  * Takeaway can require a name, a phone number, or both, based on POS settings.
@@ -55,6 +88,7 @@ function requirementSubtitle(requireName, requirePhone) {
 export default function PosTakeawayCustomerDrawer({
   isOpen,
   onClose,
+  onCancel,
   onConfirm,
   requireName = false,
   requirePhone = false,
@@ -67,7 +101,22 @@ export default function PosTakeawayCustomerDrawer({
   const [email, setEmail] = useState("");
   const [nameError, setNameError] = useState("");
   const [phoneError, setPhoneError] = useState("");
+  const nameInputRef = useRef(null);
+  const phoneInputRef = useRef(null);
   const hasRequiredField = requireName || requirePhone;
+
+  function focusRequiredField(nameValue = name, phoneValue = phone) {
+    const field = firstRequiredField(
+      requireName,
+      requirePhone,
+      nameValue,
+      phoneValue,
+    );
+    if (!field) return;
+    const input =
+      field === "phone" ? phoneInputRef.current : nameInputRef.current;
+    focusInput(input);
+  }
 
   useEffect(() => {
     if (!isOpen) return;
@@ -77,6 +126,12 @@ export default function PosTakeawayCustomerDrawer({
     setNameError("");
     setPhoneError("");
   }, [isOpen, initialName, initialPhone, initialEmail]);
+
+  function handleNameKeyDown(event) {
+    if (event.key !== "Enter" || !requirePhone) return;
+    event.preventDefault();
+    focusInput(phoneInputRef.current);
+  }
 
   function handleSubmit(event) {
     event?.preventDefault?.();
@@ -97,7 +152,10 @@ export default function PosTakeawayCustomerDrawer({
     } else {
       setPhoneError("");
     }
-    if (hasError) return;
+    if (hasError) {
+      focusRequiredField(nextName, nextPhone);
+      return;
+    }
 
     onConfirm?.({
       name: nextName,
@@ -106,10 +164,24 @@ export default function PosTakeawayCustomerDrawer({
     });
   }
 
+  function handleCancel() {
+    if (hasRequiredField) {
+      onCancel?.();
+      return;
+    }
+    onClose?.();
+  }
+
   return (
     <SideDrawer
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={hasRequiredField ? undefined : onClose}
+      showCloseButton={!hasRequiredField}
+      onEntered={
+        hasRequiredField
+          ? () => focusRequiredField(initialName, initialPhone)
+          : undefined
+      }
       title={hasRequiredField ? "Takeaway customer" : "Customer info"}
       subtitle={requirementSubtitle(requireName, requirePhone)}
       side="left"
@@ -119,7 +191,7 @@ export default function PosTakeawayCustomerDrawer({
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleCancel}
             className="min-h-[48px] flex-1 rounded-lg border border-neutral-200 bg-white text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-50"
           >
             Cancel
@@ -147,6 +219,10 @@ export default function PosTakeawayCustomerDrawer({
           required={requireName}
           error={nameError}
           autoComplete="name"
+          autoCapitalize="words"
+          enterKeyHint={requirePhone ? "next" : "done"}
+          inputRef={nameInputRef}
+          onKeyDown={handleNameKeyDown}
           placeholder={requireName ? undefined : "Guest"}
         />
         <Field
@@ -158,7 +234,9 @@ export default function PosTakeawayCustomerDrawer({
           required={requirePhone}
           error={phoneError}
           autoComplete="tel"
+          enterKeyHint="done"
           inputMode="tel"
+          inputRef={phoneInputRef}
         />
         <Field
           id="takeaway-customer-email"

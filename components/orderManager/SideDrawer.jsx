@@ -41,6 +41,10 @@ export default function SideDrawer({
   /** Backdrop z-index; panel uses backdrop + 10. */
   zIndex = 60,
   closeDisabled = false,
+  /** When false, hide the close control and ignore backdrop taps. */
+  showCloseButton = true,
+  /** Called once the open animation has settled. */
+  onEntered,
   /** When false, no title bar — children fill the panel (e.g. POS keypad). */
   showHeader = true,
   ariaLabel,
@@ -50,8 +54,13 @@ export default function SideDrawer({
   const titleId = `${reactId}-title`;
   const [portalReady, setPortalReady] = useState(false);
   const backdropPointerDownRef = useRef(false);
+  const onEnteredRef = useRef(onEntered);
+  const hasEnteredRef = useRef(false);
   const isLeft = side === "left";
   const drawerKey = contentKey || `${reactId}-drawer`;
+  const canDismiss = showCloseButton && !closeDisabled;
+
+  onEnteredRef.current = onEntered;
 
   const panelVariants = {
     open: { x: 0 },
@@ -63,13 +72,22 @@ export default function SideDrawer({
   }, []);
 
   useEffect(() => {
-    if (!isOpen) backdropPointerDownRef.current = false;
+    if (isOpen) return;
+    backdropPointerDownRef.current = false;
+    hasEnteredRef.current = false;
   }, [isOpen]);
 
   if (!portalReady) return null;
 
   function handleClose() {
-    if (!closeDisabled) onClose?.();
+    if (!canDismiss) return;
+    onClose?.();
+  }
+
+  function handleOpenAnimationComplete(definition) {
+    if (definition !== "open" || hasEnteredRef.current) return;
+    hasEnteredRef.current = true;
+    onEnteredRef.current?.();
   }
 
   function handleBackdropClick() {
@@ -97,15 +115,23 @@ export default function SideDrawer({
         >
           <motion.button
             type="button"
-            aria-label={ariaLabel ? `Close ${ariaLabel}` : "Close drawer"}
+            aria-label={
+              canDismiss
+                ? ariaLabel
+                  ? `Close ${ariaLabel}`
+                  : "Close drawer"
+                : undefined
+            }
+            aria-hidden={canDismiss ? undefined : true}
             className="absolute inset-0 bg-black/30"
             variants={BACKDROP_VARIANTS}
             transition={{ duration: 0.18, ease: "easeOut" }}
             onPointerDown={() => {
+              if (!canDismiss) return;
               backdropPointerDownRef.current = true;
             }}
             onClick={handleBackdropClick}
-            disabled={closeDisabled}
+            disabled={!canDismiss}
           />
 
           <motion.aside
@@ -123,6 +149,7 @@ export default function SideDrawer({
             style={{ zIndex: 10 }}
             variants={panelVariants}
             transition={{ type: "spring", damping: 28, stiffness: 280 }}
+            onAnimationComplete={handleOpenAnimationComplete}
           >
             <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <motion.div
@@ -132,7 +159,7 @@ export default function SideDrawer({
                 }}
                 transition={{ duration: 0.22, ease: "easeOut" }}
                 className={cn(
-                  "flex min-h-0 min-w-0 flex-1 flex-col origin-center",
+                  "flex min-h-0 min-w-0 flex-1 origin-center flex-col",
                   bodyOverlay && "pointer-events-none",
                 )}
               >
@@ -154,27 +181,29 @@ export default function SideDrawer({
                         </p>
                       ) : null}
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {headerActions}
-                      <button
-                        type="button"
-                        onClick={handleClose}
-                        disabled={closeDisabled}
-                        className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100 disabled:opacity-50"
-                        aria-label="Close"
-                      >
-                        <X size={18} />
-                      </button>
-                    </div>
+                    {headerActions || showCloseButton ? (
+                      <div className="flex shrink-0 items-center gap-2">
+                        {headerActions}
+                        {showCloseButton ? (
+                          <button
+                            type="button"
+                            onClick={handleClose}
+                            disabled={closeDisabled}
+                            className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100 disabled:opacity-50"
+                            aria-label="Close"
+                          >
+                            <X size={18} />
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 
                 <div
                   className={cn(
                     "min-h-0 flex-1 overflow-y-auto",
-                    showHeader
-                      ? bodyClassName
-                      : "flex min-h-0 flex-1 flex-col",
+                    showHeader ? bodyClassName : "flex min-h-0 flex-1 flex-col",
                     !showHeader && bodyClassName,
                   )}
                 >

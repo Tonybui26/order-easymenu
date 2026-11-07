@@ -1375,6 +1375,10 @@ export default function PosTerminal() {
     setPendingTakeaway(null);
   }
 
+  function handleTakeawayCustomerCancel() {
+    handleLogoHome();
+  }
+
   function nudgeTableFieldForMissingOrderType() {
     setIsOrderTypeMissing(true);
     setTableFieldShakeKey((key) => key + 1);
@@ -2847,6 +2851,7 @@ export default function PosTerminal() {
             <PosTakeawayCustomerDrawer
               isOpen={isTakeawayCustomerDrawerOpen}
               onClose={handleTakeawayCustomerClose}
+              onCancel={handleTakeawayCustomerCancel}
               onConfirm={handleTakeawayCustomerConfirm}
               requireName={
                 (Boolean(pendingTakeaway) ||
