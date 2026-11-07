@@ -1719,6 +1719,7 @@ export default function PosTerminal() {
           lines: unsentLines,
           orderType: resolvedOrderType,
           tableNumber: resolvedTableNumber,
+          isBuzzer: isTakeawayBuzzer,
           menuContent,
         });
 
@@ -2683,6 +2684,7 @@ export default function PosTerminal() {
         orderId,
         orderType: resolvedOrderType,
         tableNumber: resolvedTableNumber,
+        isBuzzer: isTakeawayBuzzer,
         cancelReason: reason,
         customerName,
         customerPhone,
