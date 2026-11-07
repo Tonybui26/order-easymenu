@@ -33,6 +33,7 @@ import { ModifierChoicesGrouped } from "@/lib/utils/modifierDisplay";
 import { getCustomerDisplayName } from "@/lib/helper/printNameAlias";
 import { cn } from "@/lib/helper";
 import { isOrderPaidForFulfillment } from "@/lib/helper/orderPaymentStatus";
+import { isBuzzerTakeawayHeldOrder } from "@/lib/pos/posHeldOrder";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import OrderCardMoreInfo from "./OrderCardMoreInfo";
@@ -254,6 +255,27 @@ export default function OrderCard({
   const isTableOrder = isDineIn;
   const pickUpTable = getOrderTableNumber(order.table);
   const pickupTitle = kitchenDisplayEnabled ? "Takeaway" : "Pick-up";
+  const isBuzzerStart =
+    String(order?.source || "").trim() === "pos" &&
+    isBuzzerTakeawayHeldOrder(order);
+  const kdsBuzzerNumber = isBuzzerStart
+    ? pickUpTable
+    : String(order?.buzzerNumber || "").trim() || null;
+  const kdsSourceBadge =
+    kdsBuzzerNumber && sourceBadge
+      ? { label: "Buzzer", className: "bg-[#ec7439] text-white" }
+      : sourceBadge;
+  const kdsTitle =
+    isBuzzerStart && isTableOrder
+      ? "Dine-in"
+      : isPickUp && pickUpTable
+        ? pickupTitle
+        : null;
+  const kdsSubtitle = kdsBuzzerNumber
+    ? `Buzzer ${kdsBuzzerNumber}`
+    : isPickUp && pickUpTable
+      ? `Table ${pickUpTable}`
+      : null;
   const orderTitle = isTableOrder
     ? `Table ${order.table}`
     : isDelivery
@@ -769,7 +791,10 @@ export default function OrderCard({
                 <div
                   className={
                     isKdsTicket
-                      ? "flex min-w-0 max-w-[60%] shrink-0 items-center"
+                      ? cn(
+                          "flex min-w-0 shrink-0 items-center",
+                          kdsBuzzerNumber ? "max-w-[80%]" : "max-w-[60%]",
+                        )
                       : "flex items-center"
                   }
                 >
@@ -796,8 +821,13 @@ export default function OrderCard({
                       }
                     >
                       {isKdsTicket ? (
-                        <span className="truncate whitespace-nowrap">
-                          {isPickUp && pickUpTable ? pickupTitle : orderTitle}
+                        <span
+                          className={cn(
+                            "whitespace-nowrap",
+                            kdsBuzzerNumber ? "shrink-0" : "truncate",
+                          )}
+                        >
+                          {kdsTitle || orderTitle}
                         </span>
                       ) : (
                         orderTitle
@@ -807,20 +837,27 @@ export default function OrderCard({
                           Pre-order
                         </span>
                       ) : null}
-                      {isKdsTicket && sourceBadge ? (
+                      {isKdsTicket && kdsSourceBadge ? (
                         <span
                           className={cn(
                             "inline-block shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide",
-                            sourceBadge.className,
+                            kdsSourceBadge.className,
                           )}
                         >
-                          {sourceBadge.label}
+                          {kdsSourceBadge.label}
                         </span>
                       ) : null}
                     </h3>
-                    {isKdsTicket && isPickUp && pickUpTable ? (
-                      <p className="mt-0.5 text-xs font-semibold leading-none text-gray-500">
-                        Table {pickUpTable}
+                    {isKdsTicket && kdsSubtitle ? (
+                      <p
+                        className={cn(
+                          "mt-0.5 text-xs leading-none",
+                          kdsBuzzerNumber
+                            ? "font-bold text-gray-800"
+                            : "font-semibold text-gray-500",
+                        )}
+                      >
+                        {kdsSubtitle}
                       </p>
                     ) : null}
                     {!isKdsTicket ? (
