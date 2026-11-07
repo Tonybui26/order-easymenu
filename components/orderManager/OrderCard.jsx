@@ -776,7 +776,7 @@ export default function OrderCard({
                     >
                       {isKdsTicket ? (
                         <span className="truncate whitespace-nowrap">
-                          {orderTitle}
+                          {isPickUp && pickUpTable ? pickupTitle : orderTitle}
                         </span>
                       ) : (
                         orderTitle
@@ -797,6 +797,11 @@ export default function OrderCard({
                         </span>
                       ) : null}
                     </h3>
+                    {isKdsTicket && isPickUp && pickUpTable ? (
+                      <p className="mt-0.5 text-xs font-semibold leading-none text-gray-500">
+                        Table {pickUpTable}
+                      </p>
+                    ) : null}
                     {!isKdsTicket ? (
                     <p className="mt-0.5 flex flex-wrap items-center gap-1.5 font-medium text-gray-500">
                       <span>#{order._id.slice(-6).toUpperCase()}</span>
