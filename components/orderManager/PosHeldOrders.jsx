@@ -33,6 +33,7 @@ import {
   isPosDineInHeldOrder,
   isPickupOrDeliveryHeldOrder,
   isPosSourceHeldOrder,
+  isQrHeldAwaitingPaymentToPrepare,
   isUnpaidCounterSelfOrder,
   resolveHeldAggregateStatus,
 } from "@/lib/pos/posHeldOrder";
@@ -767,6 +768,35 @@ export default function PosHeldOrders() {
   }
 
   const openCount = heldOrders.length;
+  const paymentRequiredOrders = heldOrders.filter(
+    isQrHeldAwaitingPaymentToPrepare,
+  );
+  const otherHeldOrders = heldOrders.filter(
+    (order) => !isQrHeldAwaitingPaymentToPrepare(order),
+  );
+
+  function renderHeldCard(order) {
+    const isPosOrder = isPosSourceHeldOrder(order);
+    const HeldCard = isPosOrder ? PosHeldOrderCard : SelfOrderingHeldOrderCard;
+    return (
+      <li key={order.id} className="min-w-0">
+        <HeldCard
+          order={order}
+          onSelect={handleSelectHeldOrder}
+          onPrepare={isPosOrder ? undefined : handlePrepareHeldOrder}
+          onReady={handleReadyHeldOrder}
+          onPay={handlePayHeldOrder}
+          onAllItemsServed={handleAllItemsServedHeldOrder}
+          onComplete={handleCompleteHeldOrder}
+          onPrintBill={handlePrintBillHeldOrder}
+          onReprintOrder={handleReprintHeldOrder}
+          onDelete={handleDeleteHeldOrder}
+          onCancel={handleCancelHeldOrder}
+          isProcessing={processingCheckId === order.id}
+        />
+      </li>
+    );
+  }
 
   const undeliveredTicketCount = getTicketIdsNotDelivered(drawerHeldOrder).length;
   const needsServe =
@@ -824,34 +854,18 @@ export default function PosHeldOrders() {
                     </div>
                   </div>
                 ) : (
-                  <ul className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                    {heldOrders.map((order) => {
-                      const isPosOrder = isPosSourceHeldOrder(order);
-                      const HeldCard = isPosOrder
-                        ? PosHeldOrderCard
-                        : SelfOrderingHeldOrderCard;
-                      return (
-                        <li key={order.id} className="min-w-0">
-                          <HeldCard
-                            order={order}
-                            onSelect={handleSelectHeldOrder}
-                            onPrepare={
-                              isPosOrder ? undefined : handlePrepareHeldOrder
-                            }
-                            onReady={handleReadyHeldOrder}
-                            onPay={handlePayHeldOrder}
-                            onAllItemsServed={handleAllItemsServedHeldOrder}
-                            onComplete={handleCompleteHeldOrder}
-                            onPrintBill={handlePrintBillHeldOrder}
-                            onReprintOrder={handleReprintHeldOrder}
-                            onDelete={handleDeleteHeldOrder}
-                            onCancel={handleCancelHeldOrder}
-                            isProcessing={processingCheckId === order.id}
-                          />
-                        </li>
-                      );
-                    })}
-                  </ul>
+                  <div className="space-y-8">
+                    {paymentRequiredOrders.length > 0 ? (
+                      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                        {paymentRequiredOrders.map(renderHeldCard)}
+                      </ul>
+                    ) : null}
+                    {otherHeldOrders.length > 0 ? (
+                      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                        {otherHeldOrders.map(renderHeldCard)}
+                      </ul>
+                    ) : null}
+                  </div>
                 )}
               </div>
             </div>

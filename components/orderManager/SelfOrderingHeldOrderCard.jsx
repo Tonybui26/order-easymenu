@@ -19,7 +19,9 @@ import {
   getSelfOrderingHeldCardActions,
   getSelfOrderingHeldStatusLabel,
   isPosDineInHeldOrder,
+  isQrHeldAwaitingPaymentToPrepare,
   isTakeawayPickupHeldOrder,
+  QR_AWAITING_PAYMENT_STATUS_LABEL,
 } from "@/lib/pos/posHeldOrder";
 import { isKitchenPrintingEnabled } from "@/lib/pos/kitchenPrintingConfig";
 import { useMenuContext } from "@/components/context/MenuContext";
@@ -174,6 +176,7 @@ export default function SelfOrderingHeldOrderCard({
     completeLabel,
   } = getSelfOrderingHeldCardActions(order);
   const hasActions = showPrepare || showReady || showPay || showComplete;
+  const awaitingPaymentToPrepare = isQrHeldAwaitingPaymentToPrepare(order);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -306,13 +309,17 @@ export default function SelfOrderingHeldOrderCard({
                   <span
                     className={cn(
                       "rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide",
-                      primaryStatus === "ready" ||
-                        primaryStatus === "delivered"
-                        ? "bg-green-100 text-green-800"
-                        : "bg-blue-100 text-blue-800",
+                      awaitingPaymentToPrepare
+                        ? "bg-amber-100 text-amber-900"
+                        : primaryStatus === "ready" ||
+                            primaryStatus === "delivered"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-blue-100 text-blue-800",
                     )}
                   >
-                    {getSelfOrderingHeldStatusLabel(primaryStatus)}
+                    {awaitingPaymentToPrepare
+                      ? QR_AWAITING_PAYMENT_STATUS_LABEL
+                      : getSelfOrderingHeldStatusLabel(primaryStatus)}
                   </span>
                 ) : null}
               </div>
