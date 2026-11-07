@@ -90,6 +90,7 @@ export default function PosTakeawayCustomerDrawer({
   onClose,
   onCancel,
   onConfirm,
+  locked = false,
   requireName = false,
   requirePhone = false,
   initialName = "",
@@ -104,6 +105,7 @@ export default function PosTakeawayCustomerDrawer({
   const nameInputRef = useRef(null);
   const phoneInputRef = useRef(null);
   const hasRequiredField = requireName || requirePhone;
+  const isLocked = locked || hasRequiredField;
 
   function focusRequiredField(nameValue = name, phoneValue = phone) {
     const field = firstRequiredField(
@@ -165,7 +167,7 @@ export default function PosTakeawayCustomerDrawer({
   }
 
   function handleCancel() {
-    if (hasRequiredField) {
+    if (isLocked) {
       onCancel?.();
       return;
     }
@@ -175,8 +177,8 @@ export default function PosTakeawayCustomerDrawer({
   return (
     <SideDrawer
       isOpen={isOpen}
-      onClose={hasRequiredField ? undefined : onClose}
-      showCloseButton={!hasRequiredField}
+      onClose={isLocked ? undefined : onClose}
+      showCloseButton={!isLocked}
       onEntered={
         hasRequiredField
           ? () => focusRequiredField(initialName, initialPhone)
@@ -201,7 +203,7 @@ export default function PosTakeawayCustomerDrawer({
             form="pos-takeaway-customer-form"
             className="min-h-[48px] flex-1 rounded-lg bg-[#984B28] text-sm font-semibold text-white transition-colors hover:bg-[#7f3f22]"
           >
-            {hasRequiredField ? "Continue" : "Save"}
+            {isLocked ? "Continue" : "Save"}
           </button>
         </div>
       }

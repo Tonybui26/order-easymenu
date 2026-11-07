@@ -58,7 +58,10 @@ import {
   planPosResumeApply,
   posCartLineReactKey,
 } from "@/lib/pos/posResumeOrder";
-import { isCounterPayment, isPayLaterAtCounterEnabled } from "@/lib/helper/payLater";
+import {
+  isCounterPayment,
+  isPayLaterAtCounterEnabled,
+} from "@/lib/helper/payLater";
 import { calculatePosSurcharge } from "@/lib/pos/posSurcharges";
 import { startedAtForTableNames } from "@/lib/pos/tableOpenDuration";
 import { printHeldCheckKitchenOnPrepare } from "@/lib/pos/posHeldOrderPrint";
@@ -69,6 +72,8 @@ import {
 import PosTableEntryDrawer from "./PosTableEntryDrawer";
 import PosDiscountDrawer from "./PosDiscountDrawer";
 import PosTakeawayCustomerDrawer from "./PosTakeawayCustomerDrawer";
+import PosTakeawayChoiceDrawer from "./PosTakeawayChoiceDrawer";
+import PosTakeawayBuzzerDrawer from "./PosTakeawayBuzzerDrawer";
 import PosPaymentDrawer from "./PosPaymentDrawer";
 import PosOrderPanelFooter from "./PosOrderPanelFooter";
 import PosItemCustomizePanel from "./PosItemCustomizePanel";
@@ -88,7 +93,11 @@ import DismissibleToast, {
 import { printKitchenOrder } from "@/lib/helper/printKitchenOrder";
 import { buildTaxInvoiceReceiptFromPosCheck } from "@/lib/printers/receipt/buildTaxInvoiceReceiptFromPosCheck";
 import { printTaxInvoiceReceipt } from "@/lib/printers/printTaxInvoiceReceipt";
-import { resolvePosConfig, getPosHomePath, isRestaurantModeEnabled } from "@/lib/pos/posConfig";
+import {
+  resolvePosConfig,
+  getPosHomePath,
+  isRestaurantModeEnabled,
+} from "@/lib/pos/posConfig";
 import {
   isTyroPosCardReady,
   isLinklyPosCardReady,
@@ -424,6 +433,10 @@ export default function PosTerminal() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [pendingTakeaway, setPendingTakeaway] = useState(null);
+  const [isTakeawayChoiceOpen, setIsTakeawayChoiceOpen] = useState(false);
+  const [isTakeawayBuzzerDrawerOpen, setIsTakeawayBuzzerDrawerOpen] =
+    useState(false);
+  const [isTakeawayBuzzer, setIsTakeawayBuzzer] = useState(false);
   const [isTakeawayCustomerDrawerOpen, setIsTakeawayCustomerDrawerOpen] =
     useState(false);
   const [customizingItem, setCustomizingItem] = useState(null);
@@ -473,10 +486,12 @@ export default function PosTerminal() {
     posConfig.takeawayRequireCustomerDetails && posConfig.takeawayRequireName,
   );
   const takeawayRequirePhone = Boolean(
-    posConfig.takeawayRequireCustomerDetails &&
-      posConfig.takeawayRequirePhone,
+    posConfig.takeawayRequireCustomerDetails && posConfig.takeawayRequirePhone,
   );
   const takeawayDetailsRequired = takeawayRequireName || takeawayRequirePhone;
+  const takeawayStartChoiceRequired =
+    Boolean(posConfig.takeawayRequireBuzzer) &&
+    Boolean(posConfig.takeawayRequireCustomerDetails);
 
   useEffect(() => {
     if (!isTrainingMode || !resumeParam) return;
@@ -612,8 +627,7 @@ export default function PosTerminal() {
         );
         if (cancelled) return;
 
-        const networkFailed =
-          !result?.success || !result.orders?.length;
+        const networkFailed = !result?.success || !result.orders?.length;
         if (networkFailed) {
           if (painted) {
             if (
@@ -690,6 +704,11 @@ export default function PosTerminal() {
     if (!fromParam) return;
     if (fromParam === "takeaway" && !dataLoaded) return;
     router.replace("/pos");
+    if (fromParam === "takeaway" && takeawayStartChoiceRequired) {
+      setPendingTakeaway({ tableNumber: "" });
+      setIsTakeawayChoiceOpen(true);
+      return;
+    }
     if (fromParam === "takeaway" && takeawayDetailsRequired) {
       setPendingTakeaway({ tableNumber: "" });
       setIsTakeawayCustomerDrawerOpen(true);
@@ -705,6 +724,7 @@ export default function PosTerminal() {
     router,
     dataLoaded,
     takeawayDetailsRequired,
+    takeawayStartChoiceRequired,
   ]);
 
   useEffect(() => {
@@ -746,9 +766,7 @@ export default function PosTerminal() {
     isTableNumberLocked || (isResumedCheck && Boolean(resolvedTableNumber));
   const isTableFieldLocked = isViewOnly;
   const awaitingOrderType = !resolvedOrderType && !isTableFieldLocked;
-  const hasCustomerInfo = Boolean(
-    customerName.trim() || customerPhone.trim(),
-  );
+  const hasCustomerInfo = Boolean(customerName.trim() || customerPhone.trim());
 
   const tableLabel = (() => {
     if (!resolvedOrderType) {
@@ -763,6 +781,9 @@ export default function PosTerminal() {
       return `BUZZER: ${resolvedTableNumber || "--"}`;
     }
     if (resolvedOrderType === "takeaway") {
+      if (isTakeawayBuzzer && resolvedTableNumber) {
+        return `BUZZER: ${resolvedTableNumber}`;
+      }
       if (customerName.trim()) return `TAKEAWAY: ${customerName.trim()}`;
       return `TAKEAWAY${resolvedTableNumber ? `: ${resolvedTableNumber}` : ""}`;
     }
@@ -775,7 +796,12 @@ export default function PosTerminal() {
   const tableOpenStartedAt = useMemo(() => {
     if (!tableTimerEnabled || resolvedOrderType !== "dine-in") return null;
     return startedAtForTableNames(openTableRounds, resolvedTableNames);
-  }, [tableTimerEnabled, resolvedOrderType, openTableRounds, resolvedTableNames]);
+  }, [
+    tableTimerEnabled,
+    resolvedOrderType,
+    openTableRounds,
+    resolvedTableNames,
+  ]);
 
   useEffect(() => {
     if (!tableTimerEnabled) {
@@ -1042,7 +1068,10 @@ export default function PosTerminal() {
     }
 
     closeCustomization();
-    const variantMap = buildDefaultVariantSelections(item, globalVariants || {});
+    const variantMap = buildDefaultVariantSelections(
+      item,
+      globalVariants || {},
+    );
     const modifierMap = buildDefaultModifierSelections(
       item,
       globalModifiers || {},
@@ -1331,9 +1360,13 @@ export default function PosTerminal() {
 
     if (nextOrderType === "takeaway") {
       const tableRef = String(nextTableNumber || "").trim();
-      if (hasTakeawayTableReference(tableRef) || !takeawayDetailsRequired) {
+      if (
+        hasTakeawayTableReference(tableRef) ||
+        (!takeawayDetailsRequired && !takeawayStartChoiceRequired)
+      ) {
         setTableNumber(tableRef);
         setOrderType("takeaway");
+        setIsTakeawayBuzzer(false);
         setIsOrderTypeMissing(false);
         setPendingTakeaway(null);
         return;
@@ -1341,6 +1374,10 @@ export default function PosTerminal() {
       setPendingTakeaway({
         tableNumber: nextTableNumber || "",
       });
+      if (takeawayStartChoiceRequired && !hasTakeawayTableReference(tableRef)) {
+        setIsTakeawayChoiceOpen(true);
+        return;
+      }
       setIsTakeawayCustomerDrawerOpen(true);
       return;
     }
@@ -1362,11 +1399,13 @@ export default function PosTerminal() {
     setCustomerName(String(name || "").trim());
     setCustomerPhone(String(phone || "").trim());
     setCustomerEmail(String(email || "").trim());
+    setIsTakeawayBuzzer(false);
     if (pending) {
       setOrderType("takeaway");
       setIsOrderTypeMissing(false);
     }
     setIsTakeawayCustomerDrawerOpen(false);
+    setIsTakeawayChoiceOpen(false);
     setPendingTakeaway(null);
   }
 
@@ -1376,7 +1415,54 @@ export default function PosTerminal() {
   }
 
   function handleTakeawayCustomerCancel() {
+    if (takeawayStartChoiceRequired && pendingTakeaway) {
+      setIsTakeawayCustomerDrawerOpen(false);
+      setIsTakeawayChoiceOpen(true);
+      return;
+    }
     handleLogoHome();
+  }
+
+  function handleTakeawayChoiceCancel() {
+    const hasStartedOrder =
+      cartLines.length > 0 ||
+      Boolean(activeOrderId) ||
+      checkOrderIds.length > 0;
+    setIsTakeawayChoiceOpen(false);
+    setIsTakeawayBuzzerDrawerOpen(false);
+    setIsTakeawayCustomerDrawerOpen(false);
+    if (hasStartedOrder) {
+      setPendingTakeaway(null);
+      return;
+    }
+    handleLogoHome();
+  }
+
+  function handleChooseTakeawayCustomer() {
+    setIsTakeawayChoiceOpen(false);
+    setIsTakeawayCustomerDrawerOpen(true);
+  }
+
+  function handleChooseTakeawayBuzzer() {
+    setIsTakeawayChoiceOpen(false);
+    setIsTakeawayBuzzerDrawerOpen(true);
+  }
+
+  function handleTakeawayBuzzerCancel() {
+    setIsTakeawayBuzzerDrawerOpen(false);
+    setIsTakeawayChoiceOpen(true);
+  }
+
+  function handleTakeawayBuzzerConfirm(number) {
+    const buzzer = String(number || "").trim();
+    if (!buzzer) return;
+    setTableNumber(buzzer);
+    setOrderType("takeaway");
+    setIsTakeawayBuzzer(true);
+    setIsOrderTypeMissing(false);
+    setIsTakeawayBuzzerDrawerOpen(false);
+    setIsTakeawayChoiceOpen(false);
+    setPendingTakeaway(null);
   }
 
   function nudgeTableFieldForMissingOrderType() {
@@ -1451,6 +1537,9 @@ export default function PosTerminal() {
     setCustomerPhone("");
     setCustomerEmail("");
     setIsTakeawayCustomerDrawerOpen(false);
+    setIsTakeawayChoiceOpen(false);
+    setIsTakeawayBuzzerDrawerOpen(false);
+    setIsTakeawayBuzzer(false);
     setPendingTakeaway(null);
     setCheckDiscount(null);
     setIsDiscountDrawerOpen(false);
@@ -1612,7 +1701,8 @@ export default function PosTerminal() {
       setPendingTakeaway({
         tableNumber: resolvedTableNumber || "",
       });
-      setIsTakeawayCustomerDrawerOpen(true);
+      if (takeawayStartChoiceRequired) setIsTakeawayChoiceOpen(true);
+      else setIsTakeawayCustomerDrawerOpen(true);
       return {
         success: false,
         validationBlocked: true,
@@ -1823,7 +1913,9 @@ export default function PosTerminal() {
     }
   }
 
-  async function sendQrCounterOrdersToKitchen({ showSuccessToast = true } = {}) {
+  async function sendQrCounterOrdersToKitchen({
+    showSuccessToast = true,
+  } = {}) {
     if (isViewOnly) {
       return { success: false, error: "Order is view only" };
     }
@@ -1952,17 +2044,16 @@ export default function PosTerminal() {
 
       void (async () => {
         try {
-          await printHeldCheckKitchenOnPrepare(
-            [...byId.values()],
-            prepareIds,
-            {
-              storeProfile,
-              itemGroups,
-              menuConfig,
-            },
-          );
+          await printHeldCheckKitchenOnPrepare([...byId.values()], prepareIds, {
+            storeProfile,
+            itemGroups,
+            menuConfig,
+          });
         } catch (printError) {
-          console.error("[pos] Kitchen print for unpaid QR failed:", printError);
+          console.error(
+            "[pos] Kitchen print for unpaid QR failed:",
+            printError,
+          );
         }
       })();
 
@@ -2103,7 +2194,10 @@ export default function PosTerminal() {
     }
   }
 
-  async function persistOfflineSale(paymentSummary, { orderIdsToComplete, hasUnsentToSend }) {
+  async function persistOfflineSale(
+    paymentSummary,
+    { orderIdsToComplete, hasUnsentToSend },
+  ) {
     const mongoId = (id) => /^[a-f0-9]{24}$/i.test(String(id || "").trim());
     const localIds = new Set();
     const serverIds = new Set(orderIdsToComplete.filter(mongoId));
@@ -2202,7 +2296,7 @@ export default function PosTerminal() {
       };
     }
 
-      return { success: true, pendingSync: true, localIds: [...localIds] };
+    return { success: true, pendingSync: true, localIds: [...localIds] };
   }
 
   async function prepareQrCounterOrdersAfterPay(orders) {
@@ -2433,6 +2527,9 @@ export default function PosTerminal() {
     setCustomerPhone("");
     setCustomerEmail("");
     setIsTakeawayCustomerDrawerOpen(false);
+    setIsTakeawayChoiceOpen(false);
+    setIsTakeawayBuzzerDrawerOpen(false);
+    setIsTakeawayBuzzer(false);
     setPendingTakeaway(null);
     setIsTablePrefilled(false);
     tablePrefilledRef.current = null;
@@ -2773,14 +2870,10 @@ export default function PosTerminal() {
                     `Reprinted · TxnRef ${linklyFailedOutcome.txnRef || "—"}`,
                   );
                 } else {
-                  showDismissibleToast(
-                    result?.message || "Reprint failed",
-                  );
+                  showDismissibleToast(result?.message || "Reprint failed");
                 }
               } catch (error) {
-                showDismissibleToast(
-                  error?.message || "Reprint failed",
-                );
+                showDismissibleToast(error?.message || "Reprint failed");
               } finally {
                 setIsLinklyReprintPending(false);
               }
@@ -2848,11 +2941,25 @@ export default function PosTerminal() {
               onConfirm={handleKeypadConfirm}
             />
 
+            <PosTakeawayChoiceDrawer
+              isOpen={isTakeawayChoiceOpen}
+              onCancel={handleTakeawayChoiceCancel}
+              onChooseCustomer={handleChooseTakeawayCustomer}
+              onChooseBuzzer={handleChooseTakeawayBuzzer}
+            />
+
+            <PosTakeawayBuzzerDrawer
+              isOpen={isTakeawayBuzzerDrawerOpen}
+              onCancel={handleTakeawayBuzzerCancel}
+              onConfirm={handleTakeawayBuzzerConfirm}
+            />
+
             <PosTakeawayCustomerDrawer
               isOpen={isTakeawayCustomerDrawerOpen}
               onClose={handleTakeawayCustomerClose}
               onCancel={handleTakeawayCustomerCancel}
               onConfirm={handleTakeawayCustomerConfirm}
+              locked={Boolean(pendingTakeaway)}
               requireName={
                 (Boolean(pendingTakeaway) ||
                   (resolvedOrderType === "takeaway" &&
