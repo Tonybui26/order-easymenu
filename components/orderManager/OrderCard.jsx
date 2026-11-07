@@ -269,28 +269,8 @@ export default function OrderCard({
     );
   };
 
-  // Helper functions for item completion tracking
   const toggleItemCompletion = (itemIndex) => {
-    // Call parent function to update tracking state
     onToggleItemCompletion(order._id, itemIndex);
-
-    // Check if all items are completed after this toggle
-    const newCompleted = completedItems.includes(itemIndex)
-      ? completedItems.filter((i) => i !== itemIndex)
-      : [...completedItems, itemIndex];
-
-    if (newCompleted.length === order.items.length) {
-      // Auto-update order status based on order type
-      if (showDeliverButton) {
-        console.log("delivering");
-        onDeliver();
-      } else {
-        if (showReadyButton) {
-          console.log("readying");
-          onReady();
-        }
-      }
-    }
   };
 
   const isItemCompleted = (itemIndex) => completedItems.includes(itemIndex);

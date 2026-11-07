@@ -6,6 +6,7 @@ import {
   fetchOrders,
   fetchCompletedOrders,
   updateOrderStatus,
+  updateOrderItemKdsDone,
   updateOrderPaymentStatus,
   markOrderPayLater,
   createPrintJobsForOrder,
@@ -22,6 +23,13 @@ import {
 import { isPendingCounterOrderForCollection } from "@/lib/helper/orderCollectAmount";
 import { isOrderPaidForFulfillment } from "@/lib/helper/orderPaymentStatus";
 import { summarizeCompletedOrderRefunds } from "@/lib/helper/completedOrderRefunds";
+import {
+  applyPendingKdsDone,
+  applyPendingKdsDoneToOrder,
+  getKdsDoneItemIndexes,
+  getStatusAfterAllItemsDone,
+  hasPendingKdsUpdate,
+} from "@/lib/helper/kdsItemProgress";
 import { buildCancelOrderTarget } from "@/lib/helper/buildCancelOrderTarget";
 import {
   getUnpaidOrdersByTable,
@@ -192,6 +200,11 @@ export default function LiveOrderTerminal() {
   const lastPollTimeRef = useRef(null);
   const hasShownConnectedToastRef = useRef(false); // Track if we've shown the connected toast
   const isPollingInProgressRef = useRef(false); // Prevent concurrent polling instances
+  /** In-flight kitchen ticks so a poll cannot wipe a tap before it saves. */
+  const pendingKdsRef = useRef(new Map());
+  const pendingKdsSeqRef = useRef(0);
+  const kdsAppliedSeqRef = useRef(new Map());
+  const kdsToggleInFlightRef = useRef(new Set());
 
   const {
     storeProfile,
@@ -254,7 +267,12 @@ export default function LiveOrderTerminal() {
       const data = await fetchOrders();
       const activeOrders = filterOrdersForActiveList(data, menuConfig);
 
-      setOrders(activeOrders);
+      const nextOrders = applyPendingKdsDone(
+        activeOrders,
+        pendingKdsRef.current,
+      );
+      ordersRef.current = nextOrders;
+      setOrders(nextOrders);
 
       // Successful fetch is the source of truth for connection status.
       const hadErrors = consecutiveErrorsRef.current > 0;
@@ -705,7 +723,12 @@ export default function LiveOrderTerminal() {
       try {
         const data = await fetchOrders();
         const activeOrders = filterOrdersForActiveList(data, menuConfig);
-        setOrders(activeOrders);
+        const nextOrders = applyPendingKdsDone(
+          activeOrders,
+          pendingKdsRef.current,
+        );
+        ordersRef.current = nextOrders;
+        setOrders(nextOrders);
         console.log("activeOrders initial", activeOrders);
         replaceDismissedOrderIds(activeOrders.map((order) => order._id));
         setLoading(false);
@@ -1133,12 +1156,18 @@ export default function LiveOrderTerminal() {
     try {
       const updatedOrder = await updateOrderStatus(orderId, newStatus, options);
 
-      // Update local state
-      setOrders((prevOrders) =>
-        prevOrders.map((order) =>
-          order._id === orderId ? updatedOrder : order,
-        ),
+      // Update local state. Keep any kitchen tick that is still saving.
+      const nextOrder = applyPendingKdsDoneToOrder(
+        updatedOrder,
+        pendingKdsRef.current,
       );
+      setOrders((prevOrders) => {
+        const next = prevOrders.map((order) =>
+          order._id === orderId ? nextOrder : order,
+        );
+        ordersRef.current = next;
+        return next;
+      });
 
       // Hardcoded for creating print jobs when order status is changed to "preparing" - Now I want to temporary disable this feature
       const createPrintJobs = false;
@@ -1653,33 +1682,124 @@ export default function LiveOrderTerminal() {
   } = useDismissibleToastQueue();
   const [retryingPrintToastId, setRetryingPrintToastId] = useState(null);
 
-  // Item tracking state - persists across view mode changes
-  const [orderItemTracking, setOrderItemTracking] = useState({});
-
   // Track orders that are currently being processed to prevent double-clicks
   const [processingOrders, setProcessingOrders] = useState(new Set());
+  // Line ticks outside Kitchen Display stay on this screen only.
+  const [orderItemTracking, setOrderItemTracking] = useState({});
 
-  // Item tracking management functions
-  const toggleItemCompletion = (orderId, itemIndex) => {
-    setOrderItemTracking((prev) => {
-      const orderTracking = prev[orderId] || [];
-      const newCompleted = orderTracking.includes(itemIndex)
-        ? orderTracking.filter((i) => i !== itemIndex)
-        : [...orderTracking, itemIndex];
+  const getCompletedItems = (order) => {
+    if (kitchenDisplayEnabled) return getKdsDoneItemIndexes(order);
+    return orderItemTracking[order?._id] || [];
+  };
 
-      return {
+  const toggleItemCompletion = async (orderId, itemIndex) => {
+    const order = ordersRef.current.find((entry) => entry._id === orderId);
+    const item = order?.items?.[itemIndex];
+    const itemId = item?._id ? String(item._id) : "";
+    if (!order || order.status !== "preparing") return;
+
+    if (!kitchenDisplayEnabled) {
+      const current = orderItemTracking[orderId] || [];
+      const nextCompleted = current.includes(itemIndex)
+        ? current.filter((index) => index !== itemIndex)
+        : [...current, itemIndex];
+      setOrderItemTracking((prev) => ({
         ...prev,
-        [orderId]: newCompleted,
-      };
-    });
-  };
+        [orderId]: nextCompleted,
+      }));
 
-  const getCompletedItems = (orderId) => {
-    return orderItemTracking[orderId] || [];
-  };
+      if (nextCompleted.length !== (order.items?.length || 0)) return;
 
-  const isItemCompleted = (orderId, itemIndex) => {
-    return getCompletedItems(orderId).includes(itemIndex);
+      const bumpStatus = getStatusAfterAllItemsDone({
+        ...order,
+        items: order.items.map((line, index) => ({
+          ...line,
+          kdsDone: nextCompleted.includes(index),
+        })),
+      });
+      if (!bumpStatus) return;
+
+      const bumped = await handleStatusUpdate(orderId, bumpStatus);
+      if (!bumped) {
+        toast.error(
+          "Couldn't move this order on. Untick the line, then tick it again.",
+        );
+      }
+      return;
+    }
+
+    if (!itemId) return;
+
+    const key = `${orderId}:${itemId}`;
+    if (kdsToggleInFlightRef.current.has(key)) return;
+    kdsToggleInFlightRef.current.add(key);
+
+    const nextDone = !item.kdsDone;
+    const seq = pendingKdsSeqRef.current + 1;
+    pendingKdsSeqRef.current = seq;
+    pendingKdsRef.current.set(key, { done: nextDone, seq });
+
+    const withItemDone = (list, done) =>
+      list.map((entry) => {
+        if (entry._id !== orderId) return entry;
+        return {
+          ...entry,
+          items: entry.items.map((line) =>
+            String(line._id) === itemId ? { ...line, kdsDone: done } : line,
+          ),
+        };
+      });
+
+    const optimistic = withItemDone(ordersRef.current, nextDone);
+    ordersRef.current = optimistic;
+    setOrders(optimistic);
+
+    try {
+      const updatedOrder = await updateOrderItemKdsDone(
+        orderId,
+        itemId,
+        nextDone,
+      );
+      if ((kdsAppliedSeqRef.current.get(key) || 0) > seq) return;
+
+      kdsAppliedSeqRef.current.set(key, seq);
+      const current = pendingKdsRef.current.get(key);
+      if (current?.seq === seq) pendingKdsRef.current.delete(key);
+
+      const serverItem = updatedOrder?.items?.find(
+        (line) => String(line._id) === itemId,
+      );
+      const savedDone = serverItem ? Boolean(serverItem.kdsDone) : nextDone;
+      const savedList = withItemDone(ordersRef.current, savedDone);
+      ordersRef.current = savedList;
+      setOrders(savedList);
+
+      const savedOrder = savedList.find((entry) => entry._id === orderId);
+      if (savedOrder && !hasPendingKdsUpdate(pendingKdsRef.current, orderId)) {
+        const bumpStatus = getStatusAfterAllItemsDone(savedOrder);
+        if (bumpStatus) {
+          const bumped = await handleStatusUpdate(orderId, bumpStatus);
+          if (!bumped) {
+            toast.error(
+              "Couldn't move this order on. Untick the line, then tick it again.",
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Failed to save kitchen item:", error);
+      if ((kdsAppliedSeqRef.current.get(key) || 0) > seq) return;
+      const current = pendingKdsRef.current.get(key);
+      if (!current || current.seq === seq) {
+        if (current?.seq === seq) pendingKdsRef.current.delete(key);
+        const reverted = withItemDone(ordersRef.current, !nextDone);
+        ordersRef.current = reverted;
+        setOrders(reverted);
+      }
+      toast.error("Couldn't save that item. Try again.");
+    } finally {
+      kdsToggleInFlightRef.current.delete(key);
+    }
   };
 
   const showCustomToast = (message, type = "error", retry = null) => {
@@ -2172,7 +2292,7 @@ export default function LiveOrderTerminal() {
                       key={order._id}
                       order={order}
                       viewMode={viewMode}
-                      completedItems={getCompletedItems(order._id)}
+                      completedItems={getCompletedItems(order)}
                       onToggleItemCompletion={toggleItemCompletion}
                       onPrepare={() => {}} // No action needed for completed orders
                       onAccept={() => {}}
@@ -2256,7 +2376,7 @@ export default function LiveOrderTerminal() {
                   key={order._id}
                   order={order}
                   viewMode={viewMode}
-                  completedItems={getCompletedItems(order._id)}
+                  completedItems={getCompletedItems(order)}
                   onToggleItemCompletion={toggleItemCompletion}
                   onPrepare={() => {
                     // Change: counter pending orders should go straight to preparing
