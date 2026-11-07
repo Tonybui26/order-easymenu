@@ -6,7 +6,6 @@ import {
   CircleDollarSign,
   Clock3,
   FileText,
-  Info,
   MoreHorizontal,
   Printer,
   User,
@@ -64,7 +63,9 @@ function heldCardPrimaryLabel(order) {
 }
 
 function heldCardSecondaryLabel(order) {
-  if (!isPosDineInHeldOrder(order)) return null;
+  if (!isPosDineInHeldOrder(order) && !isTakeawayPickupHeldOrder(order)) {
+    return null;
+  }
 
   const orderIds = Array.isArray(order?.orderIds) ? order.orderIds : [];
   if (orderIds.length <= 1) return null;
@@ -80,37 +81,6 @@ function heldCardTypeLabel(order) {
 function customerLabel(order) {
   const name = String(order?.customerName || "").trim();
   return name || "Guest";
-}
-
-function formatOrderIdLabel(orderId) {
-  const id = String(orderId ?? "").trim();
-  if (!id) return null;
-  return `#${id.slice(-6).toUpperCase()}`;
-}
-
-function orderNumberLabel(order) {
-  const orderIds = Array.isArray(order?.orderIds) ? order.orderIds : null;
-  if (orderIds?.length) {
-    if (orderIds.length === 1) {
-      return formatOrderIdLabel(orderIds[0]) || "#—";
-    }
-    const labels = orderIds
-      .slice(0, 2)
-      .map((id) => formatOrderIdLabel(id))
-      .filter(Boolean);
-    if (orderIds.length > 2) {
-      return `${labels.join(", ")} +${orderIds.length - 2}`;
-    }
-    return labels.join(", ");
-  }
-
-  if (order?.orderNumber != null && order.orderNumber !== "") {
-    return `#${order.orderNumber}`;
-  }
-  if (order?._id || order?.id) {
-    return formatOrderIdLabel(order._id || order.id) || "#—";
-  }
-  return "#—";
 }
 
 function aggregateStatusLabel(heldOrder, status) {
@@ -324,33 +294,18 @@ export default function PosHeldOrderCard({
                   {formatOrderClock(order?.createdAt || heldAt)}
                 </span>
               </span>
-              <span className="inline-flex min-w-0 items-center gap-1.5">
-                {isTakeawayPickupHeldOrder(order) ? (
-                  <Info
-                    size={14}
-                    strokeWidth={2}
-                    className="shrink-0 opacity-70"
-                    aria-hidden
-                  />
-                ) : (
+              {isTakeawayPickupHeldOrder(order) ? null : (
+                <span className="inline-flex min-w-0 items-center gap-1.5">
                   <User
                     size={14}
                     strokeWidth={2}
                     className="shrink-0 opacity-70"
                   />
-                )}
-                <span
-                  className={cn(
-                    "truncate font-medium text-neutral-700",
-                    isTakeawayPickupHeldOrder(order) &&
-                      "font-mono tabular-nums tracking-tight",
-                  )}
-                >
-                  {isTakeawayPickupHeldOrder(order)
-                    ? orderNumberLabel(order)
-                    : customerLabel(order)}
+                  <span className="truncate font-medium text-neutral-700">
+                    {customerLabel(order)}
+                  </span>
                 </span>
-              </span>
+              )}
             </div>
           </div>
 
