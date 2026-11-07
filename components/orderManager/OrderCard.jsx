@@ -405,6 +405,8 @@ export default function OrderCard({
   const hidePreparingBumpButtons =
     kitchenDisplayEnabled && order.status === "preparing";
   const isKdsPreparing = kitchenDisplayEnabled && viewMode === "preparing";
+  const isKdsCompleted = kitchenDisplayEnabled && viewMode === "kdsCompleted";
+  const isKdsTicket = isKdsPreparing || isKdsCompleted;
   const displayReadyButton = showReadyButton && !hidePreparingBumpButtons;
   const displayDeliverButton = showDeliverButton && !hidePreparingBumpButtons;
 
@@ -648,13 +650,30 @@ export default function OrderCard({
                 {prepareLabel}
               </div>
             ) : null}
+            {isKdsCompleted ? (
+              <div
+                className={`flex w-full shrink-0 items-center justify-center py-1.5 text-sm font-bold ${
+                  order.status === "delivered"
+                    ? "bg-green-200 text-green-950"
+                    : order.status === "ready"
+                      ? "bg-amber-100 text-amber-950"
+                      : "bg-red-100 text-red-950"
+                }`}
+              >
+                {order.status === "delivered"
+                  ? "Completed"
+                  : order.status === "ready"
+                    ? "Ready"
+                    : "Cancelled"}
+              </div>
+            ) : null}
             <div
               className={
-                isKdsPreparing ? "shrink-0 px-3 pb-1 pt-2" : "p-4 pb-2"
+                isKdsTicket ? "shrink-0 px-3 pb-1 pt-2" : "p-4 pb-2"
               }
             >
               {/* show me a order status banner here and it only visible in order completed mode */}
-              {(viewMode === "completed" || viewMode === "kdsCompleted") && (
+              {viewMode === "completed" && (
                 <div
                   className={`mb-1 inline-block rounded-md border p-2 ${
                     order.status === "delivered"
@@ -718,14 +737,14 @@ export default function OrderCard({
               </div>
               <div
                 className={
-                  isKdsPreparing
+                  isKdsTicket
                     ? "flex min-w-0 items-center justify-between gap-2"
                     : "flex items-start justify-between"
                 }
               >
                 <div
                   className={
-                    isKdsPreparing
+                    isKdsTicket
                       ? "flex min-w-0 max-w-[60%] shrink-0 items-center"
                       : "flex items-center"
                   }
@@ -744,15 +763,15 @@ export default function OrderCard({
                       />
                     )}
                   </div>
-                  <div className={isKdsPreparing ? "min-w-0 w-full" : undefined}>
+                  <div className={isKdsTicket ? "min-w-0 w-full" : undefined}>
                     <h3
                       className={
-                        isKdsPreparing
+                        isKdsTicket
                           ? "flex min-w-0 items-center gap-2 text-lg font-bold leading-tight text-gray-800"
                           : "text-2xl font-extrabold leading-tight text-gray-800"
                       }
                     >
-                      {isKdsPreparing ? (
+                      {isKdsTicket ? (
                         <span className="truncate whitespace-nowrap">
                           {orderTitle}
                         </span>
@@ -764,7 +783,7 @@ export default function OrderCard({
                           Pre-order
                         </span>
                       ) : null}
-                      {isKdsPreparing && sourceBadge ? (
+                      {isKdsTicket && sourceBadge ? (
                         <span
                           className={cn(
                             "inline-block shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide",
@@ -775,7 +794,7 @@ export default function OrderCard({
                         </span>
                       ) : null}
                     </h3>
-                    {!isKdsPreparing ? (
+                    {!isKdsTicket ? (
                     <p className="mt-0.5 flex flex-wrap items-center gap-1.5 font-medium text-gray-500">
                       <span>#{order._id.slice(-6).toUpperCase()}</span>
                       {sourceBadge ? (
@@ -790,9 +809,10 @@ export default function OrderCard({
                       ) : null}
                     </p>
                     ) : null}
+                    {!(isKdsTicket && !isDelivery) ? (
                     <div className="mt-1 flex flex-col items-start gap-1">
                       {/* Pickup / delivery expected time */}
-                      {!isTableOrder && !(isKdsPreparing && !isDelivery) && (
+                      {!isTableOrder && !(isKdsTicket && !isDelivery) && (
                         <div className="text-xs text-gray-600">
                           {isPreorder ? (
                             <span className="mb-1 hidden rounded-full bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-800">
@@ -822,7 +842,7 @@ export default function OrderCard({
                         </div>
                       )}
                       {/* Preparing: live elapsed timer (held-orders style). Else: placed ago. */}
-                      {!isKdsPreparing &&
+                      {!isKdsTicket &&
                         !scheduledExpectedLabel &&
                         (viewMode === "preparing" ? (
                           <div
@@ -851,6 +871,7 @@ export default function OrderCard({
                           </div>
                         ))}
                     </div>
+                    ) : null}
                     {/* Total + optional surcharge breakdown for pay-at-counter hidden temporarily */}
                     {isCounterPayment(order.paymentMethod) && (
                       <div className="hidden rounded-lg bg-gray-100 text-sm text-gray-600">
@@ -870,7 +891,7 @@ export default function OrderCard({
 
                 <div
                   className={
-                    isKdsPreparing ? "min-w-0 flex-1 text-right" : "text-right"
+                    isKdsTicket ? "min-w-0 flex-1 text-right" : "text-right"
                   }
                 >
                   {/* Order Status - Temporary hidden - list status include: pending, confirmed, preparing, ready, delivered, cancelled */}
@@ -888,24 +909,24 @@ export default function OrderCard({
                   </div>
                   {/* Customer info */}
                   {order.customerName && (
-                    <div className={isKdsPreparing ? "min-w-0" : "rounded-xl"}>
+                    <div className={isKdsTicket ? "min-w-0" : "rounded-xl"}>
                       <div
                         className={
-                          isKdsPreparing
+                          isKdsTicket
                             ? "min-w-0"
                             : "flex items-center justify-between"
                         }
                       >
                         <div
                           className={
-                            isKdsPreparing
+                            isKdsTicket
                               ? "min-w-0"
                               : "flex min-w-0 flex-1 flex-col items-end"
                           }
                         >
                           <p
                             className={
-                              isKdsPreparing
+                              isKdsTicket
                                 ? "block w-full truncate text-right text-lg font-bold text-gray-800"
                                 : "truncate text-2xl font-extrabold text-gray-800"
                             }

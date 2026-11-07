@@ -608,7 +608,9 @@ export default function LiveOrderTerminal() {
     kdsFinishedRequestRef.current = requestId;
     try {
       const { startDateUTC, endDateUTC } = localDayIsoRange(new Date());
-      const data = await fetchCompletedOrders(startDateUTC, endDateUTC);
+      const data = await fetchCompletedOrders(startDateUTC, endDateUTC, null, {
+        includeUnpaid: true,
+      });
       if (kdsFinishedRequestRef.current !== requestId) return;
       setKdsFinishedOrders(data.orders || []);
     } catch (error) {
@@ -1548,6 +1550,33 @@ export default function LiveOrderTerminal() {
     setAvailablePrinters([]);
   };
 
+  // Kitchen Display completed tab follows order status, including delivered
+  // tickets that are still unpaid. Ready takeaway stays here for handover.
+  const getKdsCompletedOrders = () => {
+    const sortOldestFirst = (list) =>
+      [...list].sort(
+        (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
+      );
+
+    const readyTakeaway = sortOldestFirst(
+      orders.filter(
+        (order) => order.status === "ready" && isTakeawayOrder(order),
+      ),
+    );
+    const deliveredLive = orders.filter((order) => order.status === "delivered");
+    const seen = new Set(
+      [...readyTakeaway, ...deliveredLive].map((order) => String(order._id)),
+    );
+    const finished = kdsFinishedOrders.filter(
+      (order) => !seen.has(String(order._id)),
+    );
+
+    return [
+      ...readyTakeaway,
+      ...sortOldestFirst([...deliveredLive, ...finished]),
+    ];
+  };
+
   // Filter orders based on view mode
   const getFilteredOrders = () => {
     function sortOldestFirst(list) {
@@ -1612,16 +1641,7 @@ export default function LiveOrderTerminal() {
         orders.filter((order) => order.status === "ready"),
       );
     } else if (viewMode === "kdsCompleted") {
-      const readyTakeaway = sortOldestFirst(
-        orders.filter(
-          (order) => order.status === "ready" && isTakeawayOrder(order),
-        ),
-      );
-      const readyIds = new Set(readyTakeaway.map((order) => String(order._id)));
-      const finished = kdsFinishedOrders.filter(
-        (order) => !readyIds.has(String(order._id)),
-      );
-      return [...readyTakeaway, ...finished];
+      return getKdsCompletedOrders();
     } else if (viewMode === "completed") {
       return orders.filter((order) => order.status === "delivered");
     } else if (viewMode === "productAvailability") {
@@ -1665,9 +1685,7 @@ export default function LiveOrderTerminal() {
     (order) => order.status === "preparing",
   ).length;
   const readyCount = orders.filter((order) => order.status === "ready").length;
-  const kdsCompletedCount =
-    orders.filter((order) => order.status === "ready" && isTakeawayOrder(order))
-      .length + kdsFinishedOrders.length;
+  const kdsCompletedCount = getKdsCompletedOrders().length;
   const completedCount = completedOrders.length;
   const completedRefundSummary = useMemo(
     () => summarizeCompletedOrderRefunds(completedOrders),
@@ -2369,7 +2387,8 @@ export default function LiveOrderTerminal() {
                 })()}
               </p>
             </div>
-          ) : kitchenDisplayEnabled && viewMode === "preparing" ? (
+          ) : kitchenDisplayEnabled &&
+            (viewMode === "preparing" || viewMode === "kdsCompleted") ? (
             <div className="flex items-start gap-3 overflow-x-auto">
               {filteredOrders.map((order) => (
                 <div
