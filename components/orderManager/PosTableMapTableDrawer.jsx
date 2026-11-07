@@ -15,6 +15,12 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/helper";
 import { isKitchenPrintingEnabled } from "@/lib/pos/kitchenPrintingConfig";
+import {
+  computeTimedServiceCharge,
+  formatServiceMinutes,
+  formatTimedServiceRate,
+  resolveSoleTableTimedService,
+} from "@/lib/pos/timedServiceConfig";
 import { useMenuContext } from "@/components/context/MenuContext";
 import PosActionButton from "./PosActionButton";
 import SideDrawer from "./SideDrawer";
@@ -233,6 +239,23 @@ function PreviewSectionsList({ sections }) {
   return <ul className="space-y-3">{nodes}</ul>;
 }
 
+function TimedServiceRunningPanel({ service }) {
+  const rate = formatTimedServiceRate(service);
+
+  return (
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+      <p className="text-xl font-bold leading-tight text-neutral-950">
+        {service.name} in use
+      </p>
+      {rate ? (
+        <p className="mt-1 text-sm font-semibold tabular-nums text-emerald-800">
+          {rate}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function sectionLinesTotal(lines = []) {
   return (
     Math.round(
@@ -308,12 +331,17 @@ export default function PosTableMapTableDrawer({
   emptySubtitle = "Open check on this table",
   manualMode = null,
   openedAt = null,
+  serviceStartedAt = null,
   onOpenTable,
   onCloseTable,
   onNewOrder,
 }) {
-  const { menuConfig } = useMenuContext();
+  const { menuConfig, timedServices } = useMenuContext();
   const kitchenPrintingEnabled = isKitchenPrintingEnabled(menuConfig);
+  const soleTimedService = resolveSoleTableTimedService(
+    menuConfig,
+    timedServices,
+  );
   const [showMoreActions, setShowMoreActions] = useState(false);
   // Keep last open snapshot so SideDrawer can play its exit animation after
   // the parent clears tableName / heldOrder on close.
@@ -338,8 +366,21 @@ export default function PosTableMapTableDrawer({
       emptySubtitle,
       manualMode,
       openedAt,
+      serviceStartedAt,
     };
   }
+
+  const snapServiceStartedAt = openSnapshotRef.current?.serviceStartedAt;
+  const activeTimedService =
+    soleTimedService && snapServiceStartedAt ? soleTimedService : null;
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!isOpen || !activeTimedService) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [isOpen, activeTimedService]);
 
   useEffect(() => {
     if (!isOpen) setShowMoreActions(false);
@@ -365,6 +406,26 @@ export default function PosTableMapTableDrawer({
     0,
   );
 
+  const serviceCharge = activeTimedService
+    ? computeTimedServiceCharge(activeTimedService, snapServiceStartedAt, now)
+    : null;
+  const serviceAmount = serviceCharge?.amount || 0;
+  const ordersTotal =
+    displayHeldOrder?.total != null
+      ? Number(displayHeldOrder.total)
+      : displayPreviewSections.reduce(
+          (sum, section) => sum + Number(section.total || 0),
+          0,
+        );
+  const ordersAmountDue =
+    displayHeldOrder?.amountDue != null
+      ? Number(displayHeldOrder.amountDue)
+      : displayPreviewSections.reduce(
+          (sum, section) =>
+            section.allPaid ? sum : sum + Number(section.total || 0),
+          0,
+        );
+
   const ticketCount = displayHeldOrder?.orderIds?.length || 0;
   const allPaid = Boolean(displayHeldOrder?.allPaid);
   // Unpaid: All Served (optional tracking) can show with Pay together.
@@ -378,7 +439,7 @@ export default function PosTableMapTableDrawer({
       : !displayShowComplete;
   const subtitleParts = [];
   if (displayHeldOrder?.total != null) {
-    subtitleParts.push(formatMoney(displayHeldOrder.total));
+    subtitleParts.push(formatMoney(Number(displayHeldOrder.total) + serviceAmount));
   }
   if (ticketCount > 1) {
     subtitleParts.push(`${ticketCount} tickets`);
@@ -423,7 +484,7 @@ export default function PosTableMapTableDrawer({
         </PosActionButton>
       )}
       <PosActionButton tone="blue" disabled={isProcessing} onClick={onNewOrder}>
-        New order
+        Add order
       </PosActionButton>
     </div>
   ) : null;
@@ -614,7 +675,10 @@ export default function PosTableMapTableDrawer({
             </ul>
           </div>
         ) : null}
-        {displayManualMode ? (
+        {activeTimedService &&
+        (displayManualMode === "occupied" || !displayManualMode) ? (
+          <TimedServiceRunningPanel service={activeTimedService} />
+        ) : displayManualMode ? (
           <p className="rounded-xl border border-neutral-100 bg-white px-3 py-4 text-sm text-neutral-600">
             {displayManualMode === "occupied"
               ? "Occupied, with no order yet. Add an order when guests are ready, or close the table."
@@ -648,6 +712,17 @@ export default function PosTableMapTableDrawer({
         !displayPreviewLoading &&
         !displayPreviewError ? (
           <div className="space-y-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5">
+            {serviceCharge ? (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm text-neutral-600">
+                  {activeTimedService.name} ·{" "}
+                  {formatServiceMinutes(serviceCharge.minutes)}
+                </span>
+                <span className="text-sm font-semibold tabular-nums text-neutral-900">
+                  {formatMoney(serviceCharge.amount)}
+                </span>
+              </div>
+            ) : null}
             {displaySurchargeLines.map((line) => (
               <div
                 key={line.label}
@@ -664,14 +739,7 @@ export default function PosTableMapTableDrawer({
                 {displayTotalLabel}
               </span>
               <span className="text-sm font-bold tabular-nums text-neutral-900">
-                {formatMoney(
-                  displayHeldOrder?.total != null
-                    ? displayHeldOrder.total
-                    : displayPreviewSections.reduce(
-                        (sum, section) => sum + Number(section.total || 0),
-                        0,
-                      ),
-                )}
+                {formatMoney(ordersTotal + serviceAmount)}
               </span>
             </div>
             <div className="flex items-center justify-between gap-2 border-t border-neutral-200/80 pt-2">
@@ -679,17 +747,7 @@ export default function PosTableMapTableDrawer({
                 Total due
               </span>
               <span className="text-sm font-bold tabular-nums text-amber-900">
-                {formatMoney(
-                  displayHeldOrder?.amountDue != null
-                    ? displayHeldOrder.amountDue
-                    : displayPreviewSections.reduce(
-                        (sum, section) =>
-                          section.allPaid
-                            ? sum
-                            : sum + Number(section.total || 0),
-                        0,
-                      ),
-                )}
+                {formatMoney(ordersAmountDue + serviceAmount)}
               </span>
             </div>
           </div>

@@ -337,18 +337,22 @@ export default function PosTableMap() {
     }
   }, [tableTimerEnabled]);
 
-  const drawerOpenedAt = useMemo(() => {
+  const drawerRoundStartedAt = useMemo(() => {
     if (!tableTimerEnabled || !drawerTableName) return null;
     const names = drawerHeldOrder
       ? heldEntryTableNames(drawerHeldOrder)
       : [drawerTableName];
-    const fromRound = startedAtForTableNames(
+    return startedAtForTableNames(
       openTableRounds,
       names.length ? names : [drawerTableName],
     );
-    if (fromRound) return fromRound;
-    return drawerHeldOrder?.heldAt || drawerHeldOrder?.createdAt || null;
   }, [tableTimerEnabled, drawerTableName, drawerHeldOrder, openTableRounds]);
+
+  const drawerOpenedAt = useMemo(() => {
+    if (!tableTimerEnabled || !drawerTableName) return null;
+    if (drawerRoundStartedAt) return drawerRoundStartedAt;
+    return drawerHeldOrder?.heldAt || drawerHeldOrder?.createdAt || null;
+  }, [tableTimerEnabled, drawerTableName, drawerHeldOrder, drawerRoundStartedAt]);
 
   const loadTodayBookings = useCallback(async () => {
     if (!bookingEnabled) {
@@ -1577,6 +1581,7 @@ export default function PosTableMap() {
             : undefined
         }
         openedAt={drawerOpenedAt}
+        serviceStartedAt={drawerRoundStartedAt}
         onOpenTable={handleOpenTableManually}
         onCloseTable={handleCloseTableManually}
         onNewOrder={() => openNewOrderForTable(drawerTableName)}

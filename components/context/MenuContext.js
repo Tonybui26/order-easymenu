@@ -85,6 +85,9 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
   const [itemGroups, setItemGroups] = useState(
     (menuData && menuData.itemGroups) || [],
   );
+  const [timedServices, setTimedServices] = useState(
+    (menuData && menuData.timedServices) || [],
+  );
   const [posLayouts, setPosLayouts] = useState(
     (menuData && menuData.posLayouts) || [],
   );
@@ -108,6 +111,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
       setGlobalModifiers(data.globalModifiers || {});
       setGlobalVariants(data.globalVariants || {});
       setItemGroups(data.itemGroups || []);
+      setTimedServices(data.timedServices || []);
       setPosLayouts(data.posLayouts || []);
       setPosTableMaps(data.posTableMaps || []);
       setPosSurcharges(data.posSurcharges || []);
@@ -522,6 +526,7 @@ export const MenuContextProvider = ({ children, data: menuData }) => {
         patchModifierOptionAvailable,
         refreshMenuAvailability,
         itemGroups,
+        timedServices,
         posLayouts,
         posTableMaps,
         posSurcharges,
