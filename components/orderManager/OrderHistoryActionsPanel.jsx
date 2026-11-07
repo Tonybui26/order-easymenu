@@ -203,10 +203,13 @@ export default function OrderHistoryActionsPanel({
                 const disabled =
                   isProcessing &&
                   (action.id === "print-bill" || action.id === "print-receipt");
+                const refundAndCancelTogether =
+                  visibleActions.some((item) => item.id === "refund") &&
+                  visibleActions.some((item) => item.id === "delete");
                 const spansFullWidth =
                   action.id === "send-refund-confirmation" ||
-                  action.id === "refund" ||
-                  action.id === "delete" ||
+                  ((action.id === "refund" || action.id === "delete") &&
+                    !refundAndCancelTogether) ||
                   (action.id === "email-receipt" && visibleActions.length === 1);
 
                 return (
