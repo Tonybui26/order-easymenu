@@ -1490,7 +1490,7 @@ export default function PosTableMap() {
                   />
                   <span>QR order</span>
                 </div>
-                {isPayFirstMode ? (
+                {isPayFirstMode && storeProfile?.paymentMethods?.cash?.enabled ? (
                   <div className="flex items-center gap-1.5 text-xs font-medium text-white/90">
                     <span
                       className="size-2.5 shrink-0 rounded-full bg-red-600 ring-2 ring-white/80"
