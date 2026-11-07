@@ -434,6 +434,7 @@ export default function PosTerminal() {
   const [customerEmail, setCustomerEmail] = useState("");
   const [pendingTakeaway, setPendingTakeaway] = useState(null);
   const [isTakeawayChoiceOpen, setIsTakeawayChoiceOpen] = useState(false);
+  const [choiceOrderType, setChoiceOrderType] = useState("dine-in");
   const [isTakeawayBuzzerDrawerOpen, setIsTakeawayBuzzerDrawerOpen] =
     useState(false);
   const [isTakeawayBuzzer, setIsTakeawayBuzzer] = useState(false);
@@ -707,6 +708,7 @@ export default function PosTerminal() {
     router.replace("/pos");
     if (fromParam === "takeaway" && takeawayStartChoiceRequired) {
       setPendingTakeaway({ tableNumber: "" });
+      setChoiceOrderType("dine-in");
       setIsTakeawayChoiceOpen(true);
       return;
     }
@@ -776,6 +778,9 @@ export default function PosTerminal() {
       return "DINE IN or TAKE AWAY";
     }
     if (resolvedOrderType === "dine-in") {
+      if (isTakeawayBuzzer && resolvedTableNumber) {
+        return `DINE IN: ${resolvedTableNumber}`;
+      }
       return `TABLE: ${resolvedTableNumber || "--"}`;
     }
     if (resolvedOrderType === "buzzer") {
@@ -1376,6 +1381,7 @@ export default function PosTerminal() {
         tableNumber: nextTableNumber || "",
       });
       if (takeawayStartChoiceRequired && !hasTakeawayTableReference(tableRef)) {
+        setChoiceOrderType("dine-in");
         setIsTakeawayChoiceOpen(true);
         return;
       }
@@ -1386,6 +1392,11 @@ export default function PosTerminal() {
     setTableNumber(nextTableNumber || "");
     setOrderType(nextOrderType || null);
     if (nextOrderType) setIsOrderTypeMissing(false);
+  }
+
+  function selectedStartOrderType() {
+    if (!posConfig.dineInUseBuzzer) return "takeaway";
+    return choiceOrderType === "dine-in" ? "dine-in" : "takeaway";
   }
 
   function handleOpenCustomerInfo() {
@@ -1402,7 +1413,7 @@ export default function PosTerminal() {
     setCustomerEmail(String(email || "").trim());
     setIsTakeawayBuzzer(false);
     if (pending) {
-      setOrderType("takeaway");
+      setOrderType(selectedStartOrderType());
       setIsOrderTypeMissing(false);
     }
     setIsTakeawayCustomerDrawerOpen(false);
@@ -1458,7 +1469,7 @@ export default function PosTerminal() {
     const buzzer = String(number || "").trim();
     if (!buzzer) return;
     setTableNumber(buzzer);
-    setOrderType("takeaway");
+    setOrderType(selectedStartOrderType());
     setIsTakeawayBuzzer(true);
     setIsOrderTypeMissing(false);
     setIsTakeawayBuzzerDrawerOpen(false);
@@ -1761,7 +1772,9 @@ export default function PosTerminal() {
       if (customerName.trim()) payload.customerName = customerName.trim();
       if (customerPhone.trim()) payload.customerPhone = customerPhone.trim();
       if (customerEmail.trim()) payload.customerEmail = customerEmail.trim();
-      if (mappedOrderType === "pick-up") payload.isBuzzer = isTakeawayBuzzer;
+      if (isTakeawayBuzzer || mappedOrderType === "pick-up") {
+        payload.isBuzzer = isTakeawayBuzzer;
+      }
 
       // Pay-with-server-QR must create a real Mongo fire so batch complete can
       // settle QR + POS together (offline outbox would leave QR unpaid).
@@ -2947,6 +2960,9 @@ export default function PosTerminal() {
 
             <PosTakeawayChoiceDrawer
               isOpen={isTakeawayChoiceOpen}
+              showOrderTypeChoice={Boolean(posConfig.dineInUseBuzzer)}
+              orderType={choiceOrderType}
+              onOrderTypeChange={setChoiceOrderType}
               onCancel={handleTakeawayChoiceCancel}
               onChooseCustomer={handleChooseTakeawayCustomer}
               onChooseBuzzer={handleChooseTakeawayBuzzer}
