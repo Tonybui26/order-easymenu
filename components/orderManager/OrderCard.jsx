@@ -221,6 +221,10 @@ export default function OrderCard({
   const timeAgo = formatDistanceToNow(new Date(order.createdAt), {
     addSuffix: true,
   });
+  const orderPlacedTime = new Date(order.createdAt).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
 
   const prepareMs = order.createdAt
     ? prepareNow - new Date(order.createdAt).getTime()
@@ -1121,7 +1125,9 @@ export default function OrderCard({
             <div className="h-px bg-gray-300"></div>
 
             {/* Order Items */}
-            <div className="p-4 pb-6 pt-2 xl:p-6">
+            <div
+              className={`p-4 pt-2 xl:p-6 ${canRecallKdsTicket ? "pb-2" : "pb-6"}`}
+            >
               {/* Progress indicator - only show when order is preparing */}
               {order.status === "preparing" ? (
                 <div className="mb-4">
@@ -1317,17 +1323,20 @@ export default function OrderCard({
                   </p>
                 </div>
               )}
-              {canRecallKdsTicket ? (
-                <button
-                  type="button"
-                  onClick={() => onRecallKdsTicket(order._id)}
-                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-neutral-200 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-100 active:bg-neutral-200"
-                >
-                  <Undo2 className="h-4 w-4" strokeWidth={2.5} />
-                  Recall ticket
-                </button>
-              ) : null}
             </div>
+            {canRecallKdsTicket ? (
+              <button
+                type="button"
+                onClick={() => onRecallKdsTicket(order._id)}
+                className="relative flex w-full items-center justify-center gap-1.5 bg-neutral-200 py-1.5 text-sm font-bold text-neutral-950 hover:bg-neutral-300 active:bg-neutral-400"
+              >
+                <span className="absolute left-2 text-xs font-semibold tabular-nums">
+                  {orderPlacedTime}
+                </span>
+                <Undo2 className="h-3.5 w-3.5" strokeWidth={2.5} />
+                Recall ticket
+              </button>
+            ) : null}
           </div>
         </motion.div>
 

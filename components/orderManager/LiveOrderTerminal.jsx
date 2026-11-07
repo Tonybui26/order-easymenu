@@ -1575,20 +1575,13 @@ export default function LiveOrderTerminal() {
   };
 
   // Kitchen Display completed tab follows order status, including delivered
-  // tickets that are still unpaid. Ready takeaway stays here for handover.
+  // tickets that are still unpaid. Newest order first, including ready takeaway.
   const getKdsCompletedOrders = () => {
-    const sortOldestFirst = (list) =>
-      [...list].sort(
-        (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
-      );
-
-    const readyTakeaway = sortOldestFirst(
-      orders.filter(
-        (order) =>
-          order.status === "ready" &&
-          isTakeawayOrder(order) &&
-          hasVisibleKdsCompletedLine(order),
-      ),
+    const readyTakeaway = orders.filter(
+      (order) =>
+        order.status === "ready" &&
+        isTakeawayOrder(order) &&
+        hasVisibleKdsCompletedLine(order),
     );
     const deliveredLive = orders.filter(
       (order) =>
@@ -1603,10 +1596,9 @@ export default function LiveOrderTerminal() {
         (order.status === "cancelled" || hasVisibleKdsCompletedLine(order)),
     );
 
-    return [
-      ...readyTakeaway,
-      ...sortOldestFirst([...deliveredLive, ...finished]),
-    ];
+    return [...readyTakeaway, ...deliveredLive, ...finished].sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+    );
   };
 
   // Filter orders based on view mode
