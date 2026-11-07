@@ -1248,22 +1248,29 @@ export default function PosTableMap() {
         ? tableNames.join(", ")
         : String(order?.table || drawerTableName || "").trim();
     const taxInvoiceNo = String(order?.taxInvoiceNo || "").trim();
+    const isPaid =
+      order?.posAllPaid === true ||
+      (isPosSourceHeldOrder(order) && order.allPaid) ||
+      (posOrderIds.length === 0 && Boolean(order?.allPaid));
     const title = table
-      ? `Delete Table ${table}`
+      ? `Cancel Table ${table}`
       : taxInvoiceNo
-        ? `Delete invoice ${taxInvoiceNo}`
-        : "Delete held check";
+        ? `Cancel invoice ${taxInvoiceNo}`
+        : "Cancel held check";
 
     const subtitleParts = [];
     if (ticketIds.length > 1) {
       subtitleParts.push(`${ticketIds.length} tickets`);
     }
     if (order?.total != null) {
-      subtitleParts.push(`$${Number(order.total).toFixed(2)} unpaid`);
+      subtitleParts.push(
+        `$${Number(order.total).toFixed(2)} ${isPaid ? "paid" : "unpaid"}`,
+      );
     }
-    if (drawerEntryHasQrContext(order)) {
+    if (drawerEntryHasQrContext(order) && posOrderIds.length > 0) {
       subtitleParts.push("POS tickets only");
     }
+    if (isPaid) subtitleParts.push("Refund manually if needed");
 
     return {
       id: order.id,
@@ -1271,19 +1278,26 @@ export default function PosTableMap() {
       subtitle: subtitleParts.join(" · ") || "This will cancel the open check.",
       orderIds: ticketIds,
       ticketCount: ticketIds.length,
+      keepLabel: "Keep order",
+      confirmLabel: "Confirm cancel",
+      processingLabel: "Cancelling…",
+      otherPlaceholder: "Describe why this order is being cancelled",
+      warningMessage: isPaid
+        ? "This order is already paid. You'll need to process a refund manually. This will cancel the order and cannot be undone."
+        : `This will cancel ${
+            ticketIds.length === 1
+              ? "this order"
+              : `these ${ticketIds.length} tickets`
+          }. This action cannot be undone.`,
     };
   }
 
   function handleDeleteOrder() {
     if (!drawerHeldOrder || isProcessing || isDeleting) return;
 
-    const posOrderIds = getDrawerPosOrderIds(drawerHeldOrder);
-    const posAllPaid =
-      drawerHeldOrder?.posAllPaid === true ||
-      (isPosSourceHeldOrder(drawerHeldOrder) && drawerHeldOrder.allPaid);
-
-    if (posOrderIds.length === 0 || posAllPaid) {
-      showDismissibleToast("Paid checks cannot be deleted");
+    const ticketIds = buildTableDeleteTarget(drawerHeldOrder).orderIds;
+    if (ticketIds.length === 0) {
+      showDismissibleToast("No tickets on this check");
       return;
     }
 
@@ -1304,14 +1318,14 @@ export default function PosTableMap() {
         requireCancelReason: true,
       });
       if (!result?.success) {
-        showDismissibleToast(result?.error || "Failed to delete check");
+        showDismissibleToast(result?.error || "Failed to cancel order");
         return;
       }
 
       toast.success(
         deleteTarget.orderIds.length === 1
-          ? "Held order deleted"
-          : "Held check deleted",
+          ? "Order cancelled"
+          : "Check cancelled",
       );
       setDeleteDrawerOpen(false);
       setDeleteTarget(null);
@@ -1319,7 +1333,7 @@ export default function PosTableMap() {
       await loadHeldOrders();
       await loadOpenTableRounds();
     } catch (error) {
-      showDismissibleToast(error?.message || "Failed to delete check");
+      showDismissibleToast(error?.message || "Failed to cancel order");
     } finally {
       setIsDeleting(false);
       setIsProcessing(false);

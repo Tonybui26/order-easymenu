@@ -672,40 +672,8 @@ export default function PosHeldOrders() {
     }
   }
 
-  function buildHeldDeleteTarget(order) {
-    const ticketIds = getAllTicketIds(order);
-    const table = String(order?.table || "").trim();
-    const taxInvoiceNo = String(order?.taxInvoiceNo || "").trim();
-    const title = table
-      ? `Delete Table ${table}`
-      : taxInvoiceNo
-        ? `Delete invoice ${taxInvoiceNo}`
-        : "Delete held check";
-
-    const subtitleParts = [];
-    if (ticketIds.length > 1) {
-      subtitleParts.push(`${ticketIds.length} tickets`);
-    }
-    if (order?.total != null) {
-      subtitleParts.push(`$${Number(order.total).toFixed(2)} unpaid`);
-    }
-
-    return {
-      id: order.id,
-      title,
-      subtitle: subtitleParts.join(" · ") || "This will cancel the open check.",
-      orderIds: ticketIds,
-      ticketCount: ticketIds.length,
-    };
-  }
-
   function handleDeleteHeldOrder(order) {
     if (!order?.id || processingCheckId || isDeleting) return;
-
-    if (order.allPaid) {
-      showDismissibleToast("Paid checks cannot be deleted");
-      return;
-    }
 
     const ticketIds = getAllTicketIds(order);
     if (ticketIds.length === 0) {
@@ -713,7 +681,7 @@ export default function PosHeldOrders() {
       return;
     }
 
-    setDeleteTarget(buildHeldDeleteTarget(order));
+    setDeleteTarget(buildHeldCheckCancelTarget(order));
     setDeleteDrawerOpen(true);
   }
 
@@ -777,21 +745,21 @@ export default function PosHeldOrders() {
         requireCancelReason: true,
       });
       if (!result?.success) {
-        showDismissibleToast(result?.error || "Failed to delete check");
+        showDismissibleToast(result?.error || "Failed to cancel order");
         return;
       }
 
       toast.success(
         deleteTarget.orderIds.length === 1
-          ? "Held order deleted"
-          : "Held check deleted",
+          ? "Order cancelled"
+          : "Check cancelled",
       );
       setDeleteDrawerOpen(false);
       setDeleteTarget(null);
       clearHeldDrawer();
       await loadHeldOrders({ silent: true });
     } catch (error) {
-      showDismissibleToast(error?.message || "Failed to delete check");
+      showDismissibleToast(error?.message || "Failed to cancel order");
     } finally {
       setIsDeleting(false);
       setProcessingCheckId(null);

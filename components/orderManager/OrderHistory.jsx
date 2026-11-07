@@ -530,12 +530,23 @@ export default function OrderHistory() {
   function handleDelete(row) {
     if (isProcessing || !row?.orderIds?.length) return;
 
+    const isPaid = (row.orders || []).some(
+      (order) => String(order?.paymentStatus || "").trim() === "paid",
+    );
+
     setDeleteTarget({
       id: row.id,
-      title: `Delete order ${row.invoice}`,
+      title: `Cancel order ${row.invoice}`,
       subtitle: row.drawerSubtitle,
       orderIds: row.orderIds,
       ticketCount: row.orderIds.length,
+      keepLabel: "Keep order",
+      confirmLabel: "Confirm cancel",
+      processingLabel: "Cancelling…",
+      otherPlaceholder: "Describe why this order is being cancelled",
+      warningMessage: isPaid
+        ? "This order is already paid. You'll need to process a refund manually. This will cancel the order and cannot be undone."
+        : undefined,
     });
     setDeleteDrawerOpen(true);
     closeActionsPanel();
@@ -554,14 +565,14 @@ export default function OrderHistory() {
       }
       toast.success(
         deleteTarget.orderIds.length === 1
-          ? "Order deleted"
-          : `${deleteTarget.orderIds.length} tickets deleted`,
+          ? "Order cancelled"
+          : `${deleteTarget.orderIds.length} tickets cancelled`,
       );
       setDeleteDrawerOpen(false);
       setDeleteTarget(null);
       await loadOrders();
     } catch (error) {
-      toast.error(error?.message || "Failed to delete order");
+      toast.error(error?.message || "Failed to cancel order");
     } finally {
       setIsProcessing(false);
     }

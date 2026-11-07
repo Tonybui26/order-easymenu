@@ -8,8 +8,8 @@ import {
   Receipt,
   RotateCcw,
   Send,
-  Trash2,
   X,
+  XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/helper";
 import {
@@ -57,8 +57,8 @@ const DESTRUCTIVE_ACTIONS = [
   },
   {
     id: "delete",
-    label: "Delete",
-    icon: Trash2,
+    label: "Cancel",
+    icon: XCircle,
     className: "bg-red-600 hover:bg-red-700 active:bg-red-800 text-white",
   },
 ];
@@ -99,9 +99,7 @@ function buildVisibleActions(row) {
   if (row?.primaryAction === "refund") {
     actions.push(DESTRUCTIVE_ACTIONS.find((action) => action.id === "refund"));
   }
-  if (row?.primaryAction === "delete") {
-    actions.push(DESTRUCTIVE_ACTIONS.find((action) => action.id === "delete"));
-  }
+  actions.push(DESTRUCTIVE_ACTIONS.find((action) => action.id === "delete"));
 
   return actions;
 }

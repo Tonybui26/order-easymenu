@@ -9,8 +9,8 @@ import {
   FolderOpen,
   Loader2,
   Printer,
-  Trash2,
   UtensilsCrossed,
+  XCircle,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/helper";
@@ -260,8 +260,8 @@ const TABLE_MORE_ACTIONS = [
   },
   {
     id: "delete",
-    label: "Delete",
-    icon: Trash2,
+    label: "Cancel",
+    icon: XCircle,
     tone: "red",
   },
 ];
@@ -397,7 +397,7 @@ export default function PosTableMapTableDrawer({
   ].filter(Boolean).length;
 
   const visibleMoreActions = TABLE_MORE_ACTIONS.filter((action) => {
-    if (action.id === "delete") return !allPaid;
+    if (action.id === "delete") return hasTickets;
     if (action.id === "print-bill") return hasTickets;
     if (action.id === "reprint-order") return kitchenPrintingEnabled;
     return true;

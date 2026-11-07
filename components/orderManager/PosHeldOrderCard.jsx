@@ -9,8 +9,8 @@ import {
   Info,
   MoreHorizontal,
   Printer,
-  Trash2,
   User,
+  XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/helper";
 import HeldOrderChannelBadge from "./HeldOrderChannelBadge";
@@ -132,8 +132,8 @@ const HELD_MORE_ACTIONS = [
   },
   {
     id: "delete",
-    label: "Delete",
-    icon: Trash2,
+    label: "Cancel",
+    icon: XCircle,
     tone: "red",
   },
 ];
@@ -180,7 +180,6 @@ export default function PosHeldOrderCard({
   const holdLabel = formatHoldDuration(Number.isFinite(heldMs) ? heldMs : 0);
   const isLongHold = heldMs >= 15 * 60 * 1000;
   const visibleMoreActions = HELD_MORE_ACTIONS.filter((action) => {
-    if (action.id === "delete") return !order?.allPaid;
     if (action.id === "reprint-order") return kitchenPrintingEnabled;
     return true;
   });
