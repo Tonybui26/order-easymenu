@@ -400,15 +400,18 @@ export default function OrderCard({
   })();
 
   // Kitchen Display: last ticked line already bumps a preparing ticket.
-  // Keep these flags for that auto-bump. Hide the buttons so staff cannot skip unticked lines.
-  // Complete stays visible once a takeaway ticket is ready (handover, not cooking).
+  // Hide those buttons so staff cannot skip unticked lines.
+  // The completed tab is for viewing finished takeaway tickets, so Complete stays off there.
   const hidePreparingBumpButtons =
     kitchenDisplayEnabled && order.status === "preparing";
   const isKdsPreparing = kitchenDisplayEnabled && viewMode === "preparing";
   const isKdsCompleted = kitchenDisplayEnabled && viewMode === "kdsCompleted";
   const isKdsTicket = isKdsPreparing || isKdsCompleted;
   const displayReadyButton = showReadyButton && !hidePreparingBumpButtons;
-  const displayDeliverButton = showDeliverButton && !hidePreparingBumpButtons;
+  const displayDeliverButton =
+    showDeliverButton &&
+    !hidePreparingBumpButtons &&
+    !(isKdsCompleted && isPickUp);
 
   // 6. MARK AS PAID BUTTON
   const showMarkAsPaidButton = (() => {
