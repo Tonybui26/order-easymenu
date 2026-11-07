@@ -19,6 +19,7 @@ import {
   EyeOff,
   Users,
   ChevronDown,
+  Undo2,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { sendOrderReceiptEmail } from "@/lib/api/fetchApi";
@@ -162,6 +163,8 @@ export default function OrderCard({
   viewMode,
   completedItems = [],
   onToggleItemCompletion,
+  onRecallKdsItem,
+  onRecallKdsTicket,
   isProcessing = false,
   onPrint,
 }) {
@@ -407,6 +410,14 @@ export default function OrderCard({
   const isKdsPreparing = kitchenDisplayEnabled && viewMode === "preparing";
   const isKdsCompleted = kitchenDisplayEnabled && viewMode === "kdsCompleted";
   const isKdsTicket = isKdsPreparing || isKdsCompleted;
+  const showOnlyRecalledLines =
+    isKdsPreparing &&
+    (order.status === "ready" || order.status === "delivered");
+  const canRecallKdsTicket =
+    isKdsCompleted &&
+    (order.status === "ready" || order.status === "delivered") &&
+    typeof onRecallKdsItem === "function" &&
+    typeof onRecallKdsTicket === "function";
   const displayReadyButton = showReadyButton && !hidePreparingBumpButtons;
   const displayDeliverButton =
     showDeliverButton &&
@@ -634,24 +645,30 @@ export default function OrderCard({
           <div>
             {/* Header */}
             {isKdsPreparing ? (
-              <div
-                className={`flex w-full shrink-0 items-center justify-center gap-1.5 py-1.5 font-mono text-sm font-bold tabular-nums tracking-tight ${
-                  isLongPrepare
-                    ? "bg-amber-100 text-amber-950"
-                    : "bg-neutral-200 text-neutral-950"
-                }`}
-                aria-label={`Preparing for ${prepareLabel}`}
-              >
-                <span
-                  className={`size-1.5 shrink-0 rounded-full ${
+              showOnlyRecalledLines ? (
+                <div className="flex w-full shrink-0 items-center justify-center bg-neutral-200 py-1.5 text-sm font-bold text-neutral-950">
+                  Recalled
+                </div>
+              ) : (
+                <div
+                  className={`flex w-full shrink-0 items-center justify-center gap-1.5 py-1.5 font-mono text-sm font-bold tabular-nums tracking-tight ${
                     isLongPrepare
-                      ? "bg-amber-500"
-                      : "animate-pulse bg-emerald-500"
+                      ? "bg-amber-100 text-amber-950"
+                      : "bg-neutral-200 text-neutral-950"
                   }`}
-                  aria-hidden
-                />
-                {prepareLabel}
-              </div>
+                  aria-label={`Preparing for ${prepareLabel}`}
+                >
+                  <span
+                    className={`size-1.5 shrink-0 rounded-full ${
+                      isLongPrepare
+                        ? "bg-amber-500"
+                        : "animate-pulse bg-emerald-500"
+                    }`}
+                    aria-hidden
+                  />
+                  {prepareLabel}
+                </div>
+              )
             ) : null}
             {isKdsCompleted ? (
               <div
@@ -1135,8 +1152,17 @@ export default function OrderCard({
               )}
 
               <div className="space-y-1">
-                {order.items.map((item, index) => {
-                  const canMarkItemDone = order.status === "preparing";
+                {(order.items || [])
+                  .map((item, index) => ({ item, index }))
+                  .filter(({ item }) => {
+                    if (showOnlyRecalledLines) return item?.kdsDone === false;
+                    if (canRecallKdsTicket) return item?.kdsDone !== false;
+                    return true;
+                  })
+                  .map(({ item, index }) => {
+                  const canMarkItemDone =
+                    order.status === "preparing" ||
+                    (showOnlyRecalledLines && item?.kdsDone === false);
                   const itemDone = isItemCompleted(index);
                   return (
                     <div
@@ -1174,7 +1200,11 @@ export default function OrderCard({
                       }`}
                     >
                       <div
-                        className={`flex flex-1 items-start ${order.status !== "preparing" ? "space-x-5" : "space-x-2"}`}
+                        className={`flex flex-1 items-start ${isKdsTicket ? "min-w-0" : ""} ${
+                          order.status !== "preparing" && !showOnlyRecalledLines
+                            ? "space-x-5"
+                            : "space-x-2"
+                        }`}
                       >
                         {/* Completion checkbox - only show when order is preparing */}
                         {canMarkItemDone && (
@@ -1211,6 +1241,8 @@ export default function OrderCard({
                         <div className="min-w-0 flex-1">
                           <p
                             className={`text-base font-bold xl:text-base ${
+                              isKdsTicket ? "truncate" : ""
+                            } ${
                               itemDone && canMarkItemDone
                                 ? "text-gray-500 line-through"
                                 : "text-gray-800"
@@ -1256,6 +1288,19 @@ export default function OrderCard({
                           ${(item.price * item.quantity).toFixed(2)}
                         </p>
                       )}
+                      {canRecallKdsTicket && item?._id ? (
+                        <button
+                          type="button"
+                          aria-label={`Recall ${getCustomerDisplayName(item.name)}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onRecallKdsItem(order._id, String(item._id));
+                          }}
+                          className="ml-1 flex size-7 shrink-0 items-center justify-center rounded-full text-neutral-600 hover:bg-neutral-100 active:bg-neutral-200"
+                        >
+                          <Undo2 className="h-3.5 w-3.5" strokeWidth={2.5} />
+                        </button>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -1272,6 +1317,16 @@ export default function OrderCard({
                   </p>
                 </div>
               )}
+              {canRecallKdsTicket ? (
+                <button
+                  type="button"
+                  onClick={() => onRecallKdsTicket(order._id)}
+                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-neutral-200 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-100 active:bg-neutral-200"
+                >
+                  <Undo2 className="h-4 w-4" strokeWidth={2.5} />
+                  Recall ticket
+                </button>
+              ) : null}
             </div>
           </div>
         </motion.div>

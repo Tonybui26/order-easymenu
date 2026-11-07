@@ -7,6 +7,7 @@ import {
   fetchCompletedOrders,
   updateOrderStatus,
   updateOrderItemKdsDone,
+  recallKdsOrder,
   updateOrderPaymentStatus,
   markOrderPayLater,
   createPrintJobsForOrder,
@@ -26,9 +27,14 @@ import { summarizeCompletedOrderRefunds } from "@/lib/helper/completedOrderRefun
 import {
   applyPendingKdsDone,
   applyPendingKdsDoneToOrder,
+  buildRecalledOrder,
+  mergeRecalledOrder,
   getKdsDoneItemIndexes,
   getStatusAfterAllItemsDone,
   hasPendingKdsUpdate,
+  hasVisibleKdsCompletedLine,
+  isKdsPreparingListOrder,
+  overlayInFlightKds,
 } from "@/lib/helper/kdsItemProgress";
 import { buildCancelOrderTarget } from "@/lib/helper/buildCancelOrderTarget";
 import {
@@ -205,6 +211,9 @@ export default function LiveOrderTerminal() {
   const pendingKdsSeqRef = useRef(0);
   const kdsAppliedSeqRef = useRef(new Map());
   const kdsToggleInFlightRef = useRef(new Set());
+  /** Whole-ticket recall holds status at preparing until the server agrees. */
+  const pendingKdsStatusRef = useRef(new Map());
+  const kdsRecallInFlightRef = useRef(new Set());
 
   const {
     storeProfile,
@@ -267,9 +276,11 @@ export default function LiveOrderTerminal() {
       const data = await fetchOrders();
       const activeOrders = filterOrdersForActiveList(data, menuConfig);
 
-      const nextOrders = applyPendingKdsDone(
+      const nextOrders = overlayInFlightKds(
         activeOrders,
+        ordersRef.current,
         pendingKdsRef.current,
+        pendingKdsStatusRef.current,
       );
       ordersRef.current = nextOrders;
       setOrders(nextOrders);
@@ -612,7 +623,18 @@ export default function LiveOrderTerminal() {
         includeUnpaid: true,
       });
       if (kdsFinishedRequestRef.current !== requestId) return;
-      setKdsFinishedOrders(data.orders || []);
+      const overlaid = applyPendingKdsDone(
+        data.orders || [],
+        pendingKdsRef.current,
+      );
+      setKdsFinishedOrders(
+        overlaid.filter((order) => {
+          const pendingStatus = pendingKdsStatusRef.current.get(
+            String(order._id),
+          );
+          return pendingStatus?.status !== "preparing";
+        }),
+      );
     } catch (error) {
       console.error("Error fetching kitchen completed orders:", error);
     }
@@ -725,9 +747,11 @@ export default function LiveOrderTerminal() {
       try {
         const data = await fetchOrders();
         const activeOrders = filterOrdersForActiveList(data, menuConfig);
-        const nextOrders = applyPendingKdsDone(
+        const nextOrders = overlayInFlightKds(
           activeOrders,
+          ordersRef.current,
           pendingKdsRef.current,
+          pendingKdsStatusRef.current,
         );
         ordersRef.current = nextOrders;
         setOrders(nextOrders);
@@ -1560,15 +1584,23 @@ export default function LiveOrderTerminal() {
 
     const readyTakeaway = sortOldestFirst(
       orders.filter(
-        (order) => order.status === "ready" && isTakeawayOrder(order),
+        (order) =>
+          order.status === "ready" &&
+          isTakeawayOrder(order) &&
+          hasVisibleKdsCompletedLine(order),
       ),
     );
-    const deliveredLive = orders.filter((order) => order.status === "delivered");
+    const deliveredLive = orders.filter(
+      (order) =>
+        order.status === "delivered" && hasVisibleKdsCompletedLine(order),
+    );
     const seen = new Set(
       [...readyTakeaway, ...deliveredLive].map((order) => String(order._id)),
     );
     const finished = kdsFinishedOrders.filter(
-      (order) => !seen.has(String(order._id)),
+      (order) =>
+        !seen.has(String(order._id)) &&
+        (order.status === "cancelled" || hasVisibleKdsCompletedLine(order)),
     );
 
     return [
@@ -1634,7 +1666,11 @@ export default function LiveOrderTerminal() {
       );
     } else if (viewMode === "preparing") {
       return sortOldestFirst(
-        orders.filter((order) => order.status === "preparing"),
+        orders.filter((order) =>
+          kitchenDisplayEnabled
+            ? isKdsPreparingListOrder(order)
+            : order.status === "preparing",
+        ),
       );
     } else if (viewMode === "ready") {
       return sortOldestFirst(
@@ -1681,8 +1717,10 @@ export default function LiveOrderTerminal() {
     );
   }).length;
 
-  const preparingCount = orders.filter(
-    (order) => order.status === "preparing",
+  const preparingCount = orders.filter((order) =>
+    kitchenDisplayEnabled
+      ? isKdsPreparingListOrder(order)
+      : order.status === "preparing",
   ).length;
   const readyCount = orders.filter((order) => order.status === "ready").length;
   const kdsCompletedCount = getKdsCompletedOrders().length;
@@ -1714,7 +1752,11 @@ export default function LiveOrderTerminal() {
     const order = ordersRef.current.find((entry) => entry._id === orderId);
     const item = order?.items?.[itemIndex];
     const itemId = item?._id ? String(item._id) : "";
-    if (!order || order.status !== "preparing") return;
+    const isRecalledLine =
+      kitchenDisplayEnabled &&
+      (order?.status === "ready" || order?.status === "delivered") &&
+      item?.kdsDone === false;
+    if (!order || (order.status !== "preparing" && !isRecalledLine)) return;
 
     if (!kitchenDisplayEnabled) {
       const current = orderItemTracking[orderId] || [];
@@ -1759,7 +1801,7 @@ export default function LiveOrderTerminal() {
 
     const withItemDone = (list, done) =>
       list.map((entry) => {
-        if (entry._id !== orderId) return entry;
+        if (String(entry._id) !== String(orderId)) return entry;
         return {
           ...entry,
           items: entry.items.map((line) =>
@@ -1771,6 +1813,7 @@ export default function LiveOrderTerminal() {
     const optimistic = withItemDone(ordersRef.current, nextDone);
     ordersRef.current = optimistic;
     setOrders(optimistic);
+    setKdsFinishedOrders((current) => withItemDone(current, nextDone));
 
     try {
       const updatedOrder = await updateOrderItemKdsDone(
@@ -1791,6 +1834,7 @@ export default function LiveOrderTerminal() {
       const savedList = withItemDone(ordersRef.current, savedDone);
       ordersRef.current = savedList;
       setOrders(savedList);
+      setKdsFinishedOrders((current) => withItemDone(current, savedDone));
 
       const savedOrder = savedList.find((entry) => entry._id === orderId);
       if (savedOrder && !hasPendingKdsUpdate(pendingKdsRef.current, orderId)) {
@@ -1813,10 +1857,148 @@ export default function LiveOrderTerminal() {
         const reverted = withItemDone(ordersRef.current, !nextDone);
         ordersRef.current = reverted;
         setOrders(reverted);
+        setKdsFinishedOrders((current) => withItemDone(current, !nextDone));
       }
       toast.error("Couldn't save that item. Try again.");
     } finally {
       kdsToggleInFlightRef.current.delete(key);
+    }
+  };
+
+  const recallKds = async (orderId, { scope, itemId }) => {
+    const orderKey = String(orderId);
+    if (kdsRecallInFlightRef.current.has(orderKey)) return;
+
+    const activeOrder = ordersRef.current.find(
+      (entry) => String(entry._id) === orderKey,
+    );
+    const finishedOrder = kdsFinishedOrders.find(
+      (entry) => String(entry._id) === orderKey,
+    );
+    const lineStillCompleted = (order) =>
+      order?.items?.some(
+        (item) =>
+          String(item?._id) === String(itemId) && item?.kdsDone !== false,
+      );
+    const source =
+      (scope === "item" &&
+      lineStillCompleted(finishedOrder) &&
+      !lineStillCompleted(activeOrder)
+        ? finishedOrder
+        : null) ||
+      activeOrder ||
+      finishedOrder;
+    if (!source || !["ready", "delivered"].includes(source.status)) return;
+    if (scope === "item" && !itemId) return;
+
+    kdsRecallInFlightRef.current.add(orderKey);
+    const previousOrder = source;
+    const wasInActive = ordersRef.current.some(
+      (entry) => String(entry._id) === orderKey,
+    );
+    const hadFinished = kdsFinishedOrders.some(
+      (entry) => String(entry._id) === orderKey,
+    );
+    const recalled = buildRecalledOrder(source, { scope, itemId });
+    const seq = pendingKdsSeqRef.current + 1;
+    pendingKdsSeqRef.current = seq;
+
+    for (const item of recalled.items || []) {
+      if (!item?._id) continue;
+      if (scope === "ticket" || String(item._id) === String(itemId)) {
+        pendingKdsRef.current.set(`${orderId}:${item._id}`, {
+          done: false,
+          seq,
+        });
+      }
+    }
+    if (recalled.status === "preparing") {
+      pendingKdsStatusRef.current.set(orderKey, { status: "preparing", seq });
+    }
+
+    const putOrder = (list, order) => {
+      if (!list.some((entry) => String(entry._id) === orderKey)) {
+        return [order, ...list];
+      }
+      return list.map((entry) =>
+        String(entry._id) === orderKey ? order : entry,
+      );
+    };
+
+    const nextOrders = putOrder(ordersRef.current, recalled);
+    ordersRef.current = nextOrders;
+    setOrders(nextOrders);
+    setKdsFinishedOrders((current) => {
+      if (recalled.status === "preparing") {
+        return current.filter((entry) => String(entry._id) !== orderKey);
+      }
+      return putOrder(current, recalled);
+    });
+
+    const clearThisRecall = () => {
+      for (const item of recalled.items || []) {
+        if (!item?._id) continue;
+        const key = `${orderId}:${item._id}`;
+        const entry = pendingKdsRef.current.get(key);
+        if (entry?.seq === seq) pendingKdsRef.current.delete(key);
+      }
+      const statusEntry = pendingKdsStatusRef.current.get(orderKey);
+      if (statusEntry?.seq === seq) pendingKdsStatusRef.current.delete(orderKey);
+    };
+
+    try {
+      const updatedOrder = await recallKdsOrder(orderId, { scope, itemId });
+      const newerStatus = pendingKdsStatusRef.current.get(orderKey);
+      const mergedRecall = mergeRecalledOrder(previousOrder, updatedOrder, {
+        scope,
+        itemId,
+      });
+      const merged = {
+        ...mergedRecall,
+        status:
+          mergedRecall.status === "preparing" &&
+          newerStatus &&
+          newerStatus.seq > seq
+            ? newerStatus.status
+            : mergedRecall.status,
+        items: (mergedRecall.items || []).map((item) => {
+          const entry = pendingKdsRef.current.get(`${orderId}:${item._id}`);
+          if (entry && entry.seq > seq) return { ...item, kdsDone: entry.done };
+          return item;
+        }),
+      };
+      const savedOrders = putOrder(ordersRef.current, merged);
+      ordersRef.current = savedOrders;
+      setOrders(savedOrders);
+      setKdsFinishedOrders((current) => {
+        if (merged.status === "preparing") {
+          return current.filter((entry) => String(entry._id) !== orderKey);
+        }
+        return putOrder(current, merged);
+      });
+    } catch (error) {
+      console.error("Failed to recall kitchen ticket:", error);
+      clearThisRecall();
+      if (wasInActive) {
+        const restored = putOrder(ordersRef.current, previousOrder);
+        ordersRef.current = restored;
+        setOrders(restored);
+      } else {
+        const restored = ordersRef.current.filter(
+          (entry) => String(entry._id) !== orderKey,
+        );
+        ordersRef.current = restored;
+        setOrders(restored);
+      }
+      setKdsFinishedOrders((current) => {
+        if (!hadFinished) {
+          return current.filter((entry) => String(entry._id) !== orderKey);
+        }
+        return putOrder(current, previousOrder);
+      });
+      toast.error("Couldn't recall that. Try again.");
+    } finally {
+      kdsRecallInFlightRef.current.delete(orderKey);
     }
   };
 
@@ -2400,6 +2582,15 @@ export default function LiveOrderTerminal() {
                     viewMode={viewMode}
                     completedItems={getCompletedItems(order)}
                     onToggleItemCompletion={toggleItemCompletion}
+                    onRecallKdsItem={(recalledOrderId, recalledItemId) =>
+                      recallKds(recalledOrderId, {
+                        scope: "item",
+                        itemId: recalledItemId,
+                      })
+                    }
+                    onRecallKdsTicket={(recalledOrderId) =>
+                      recallKds(recalledOrderId, { scope: "ticket" })
+                    }
                     onPrepare={() => {
                       const newStatus =
                         isCounterPayment(order.paymentMethod) &&
