@@ -593,6 +593,7 @@ export default function PosTerminal() {
       setCustomerPhone(plan.customerPhone);
       setCustomerEmail(plan.customerEmail);
       setOrderType(plan.orderType);
+      setIsTakeawayBuzzer(Boolean(plan.isBuzzer));
       setIsCheckPaid(false);
       setIsResumedCheck(true);
       setCheckDiscount(plan.checkDiscount);
@@ -1759,6 +1760,7 @@ export default function PosTerminal() {
       if (customerName.trim()) payload.customerName = customerName.trim();
       if (customerPhone.trim()) payload.customerPhone = customerPhone.trim();
       if (customerEmail.trim()) payload.customerEmail = customerEmail.trim();
+      if (mappedOrderType === "pick-up") payload.isBuzzer = isTakeawayBuzzer;
 
       // Pay-with-server-QR must create a real Mongo fire so batch complete can
       // settle QR + POS together (offline outbox would leave QR unpaid).
