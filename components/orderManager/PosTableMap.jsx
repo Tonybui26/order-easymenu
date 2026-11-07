@@ -185,6 +185,11 @@ export default function PosTableMap() {
   const isPayFirstMode = Boolean(
     resolvePosConfig(menuConfig).payFirstModeEnabled,
   );
+  const takeawayButtonLabel =
+    resolvePosConfig(menuConfig).dineInUseBuzzer &&
+    resolvePosConfig(menuConfig).takeawayRequireBuzzer
+      ? "Takeaway / Dine-in"
+      : "Takeaway";
   const tyroPayments = useMemo(
     () => resolvePosPaymentsConfig(menuConfig).tyro,
     [menuConfig],
@@ -1439,7 +1444,7 @@ export default function PosTableMap() {
                   className="flex min-h-[44px] items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10 xl:text-base"
                 >
                   <ShoppingBag className="size-4 shrink-0" aria-hidden />
-                  Takeaway
+                  {takeawayButtonLabel}
                 </button>
                 <button
                   type="button"
