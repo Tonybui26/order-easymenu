@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Check, Plus, UserRoundPen } from "lucide-react";
+import { BellRing, Check, Plus, UserRoundPen } from "lucide-react";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
@@ -438,6 +438,9 @@ export default function PosTerminal() {
   const [isTakeawayBuzzerDrawerOpen, setIsTakeawayBuzzerDrawerOpen] =
     useState(false);
   const [isTakeawayBuzzer, setIsTakeawayBuzzer] = useState(false);
+  const [ticketBuzzerNumber, setTicketBuzzerNumber] = useState("");
+  const [isTicketBuzzerDrawerOpen, setIsTicketBuzzerDrawerOpen] =
+    useState(false);
   const [isTakeawayCustomerDrawerOpen, setIsTakeawayCustomerDrawerOpen] =
     useState(false);
   const [customizingItem, setCustomizingItem] = useState(null);
@@ -770,6 +773,10 @@ export default function PosTerminal() {
   const isTableFieldLocked = isViewOnly;
   const awaitingOrderType = !resolvedOrderType && !isTableFieldLocked;
   const hasCustomerInfo = Boolean(customerName.trim() || customerPhone.trim());
+  const showTicketBuzzerButton =
+    Boolean(posConfig.dineInUseBuzzer) &&
+    resolvedOrderType === "dine-in" &&
+    !isTakeawayBuzzer;
 
   const tableLabel = (() => {
     if (!resolvedOrderType) {
@@ -1552,6 +1559,8 @@ export default function PosTerminal() {
     setIsTakeawayChoiceOpen(false);
     setIsTakeawayBuzzerDrawerOpen(false);
     setIsTakeawayBuzzer(false);
+    setTicketBuzzerNumber("");
+    setIsTicketBuzzerDrawerOpen(false);
     setPendingTakeaway(null);
     setCheckDiscount(null);
     setIsDiscountDrawerOpen(false);
@@ -1775,6 +1784,9 @@ export default function PosTerminal() {
       if (isTakeawayBuzzer || mappedOrderType === "pick-up") {
         payload.isBuzzer = isTakeawayBuzzer;
       }
+      if (showTicketBuzzerButton && ticketBuzzerNumber) {
+        payload.buzzerNumber = ticketBuzzerNumber;
+      }
 
       // Pay-with-server-QR must create a real Mongo fire so batch complete can
       // settle QR + POS together (offline outbox would leave QR unpaid).
@@ -1798,6 +1810,7 @@ export default function PosTerminal() {
         }
 
         if (result.posCheckId) setPosCheckId(result.posCheckId);
+        setTicketBuzzerNumber("");
         setCartLines((prev) =>
           prev.map((line) =>
             sentLineIds.has(line.lineId)
@@ -1850,6 +1863,7 @@ export default function PosTerminal() {
         String(result.order?.posCheckId || "").trim() || posCheckId;
 
       setActiveOrderId(newOrderId);
+      setTicketBuzzerNumber("");
       if (nextCheckId) setPosCheckId(nextCheckId);
       const nextTaxInvoiceNo = String(result.order?.taxInvoiceNo || "").trim();
       if (nextTaxInvoiceNo) setTaxInvoiceNo(nextTaxInvoiceNo);
@@ -2546,6 +2560,8 @@ export default function PosTerminal() {
     setIsTakeawayChoiceOpen(false);
     setIsTakeawayBuzzerDrawerOpen(false);
     setIsTakeawayBuzzer(false);
+    setTicketBuzzerNumber("");
+    setIsTicketBuzzerDrawerOpen(false);
     setPendingTakeaway(null);
     setIsTablePrefilled(false);
     tablePrefilledRef.current = null;
@@ -2935,6 +2951,24 @@ export default function PosTerminal() {
                   <TableOpenTimerBadge startedAt={tableOpenStartedAt} />
                 ) : null}
               </motion.button>
+              {showTicketBuzzerButton ? (
+                <button
+                  type="button"
+                  aria-label={
+                    ticketBuzzerNumber
+                      ? `Buzzer ${ticketBuzzerNumber}`
+                      : "Buzzer"
+                  }
+                  onClick={() => setIsTicketBuzzerDrawerOpen(true)}
+                  className="flex w-[52px] shrink-0 items-center justify-center rounded-md bg-white text-neutral-700 shadow-[0_0_0_1px_#d4d4d4] transition-colors hover:bg-neutral-50 active:bg-neutral-100"
+                >
+                  <BellRing
+                    size={22}
+                    strokeWidth={1.5}
+                    className={cn(ticketBuzzerNumber && "text-[#984B28]")}
+                  />
+                </button>
+              ) : null}
               <button
                 type="button"
                 aria-label="Customer info"
@@ -2972,6 +3006,15 @@ export default function PosTerminal() {
               isOpen={isTakeawayBuzzerDrawerOpen}
               onCancel={handleTakeawayBuzzerCancel}
               onConfirm={handleTakeawayBuzzerConfirm}
+            />
+
+            <PosTakeawayBuzzerDrawer
+              isOpen={isTicketBuzzerDrawerOpen}
+              onCancel={() => setIsTicketBuzzerDrawerOpen(false)}
+              onConfirm={(number) => {
+                setTicketBuzzerNumber(number);
+                setIsTicketBuzzerDrawerOpen(false);
+              }}
             />
 
             <PosTakeawayCustomerDrawer
