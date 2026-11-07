@@ -15,8 +15,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/helper";
 import { isKitchenPrintingEnabled } from "@/lib/pos/kitchenPrintingConfig";
+import { mergeReceiptSurchargeLines } from "@/lib/pos/posSurcharges";
 import {
   computeTimedServiceCharge,
+  computeTimedServiceSurcharge,
   formatServiceMinutes,
   formatTimedServiceRate,
   resolveSoleTableTimedService,
@@ -332,11 +334,13 @@ export default function PosTableMapTableDrawer({
   manualMode = null,
   openedAt = null,
   serviceStartedAt = null,
+  serviceChargeDue = false,
   onOpenTable,
   onCloseTable,
   onNewOrder,
 }) {
-  const { menuConfig, timedServices } = useMenuContext();
+  const { menuConfig, timedServices, posSurcharges, storeProfile } =
+    useMenuContext();
   const kitchenPrintingEnabled = isKitchenPrintingEnabled(menuConfig);
   const soleTimedService = resolveSoleTableTimedService(
     menuConfig,
@@ -367,6 +371,7 @@ export default function PosTableMapTableDrawer({
       manualMode,
       openedAt,
       serviceStartedAt,
+      serviceChargeDue,
     };
   }
 
@@ -406,10 +411,34 @@ export default function PosTableMapTableDrawer({
     0,
   );
 
-  const serviceCharge = activeTimedService
-    ? computeTimedServiceCharge(activeTimedService, snapServiceStartedAt, now)
-    : null;
-  const serviceAmount = serviceCharge?.amount || 0;
+  const serviceCharge =
+    activeTimedService && snap.serviceChargeDue
+      ? computeTimedServiceCharge(activeTimedService, snapServiceStartedAt, now)
+      : null;
+  const serviceSurcharge = computeTimedServiceSurcharge(
+    serviceCharge?.amount || 0,
+    { posSurcharges, storeProfile, at: now },
+  );
+  // Time plus the surcharges on it, as charged when staff tap Pay.
+  const serviceAmount =
+    Math.round(
+      ((serviceCharge?.amount || 0) + serviceSurcharge.totalSurchargeAmount) *
+        100,
+    ) / 100;
+  const summarySurchargeLines = serviceSurcharge.surcharges.length
+    ? mergeReceiptSurchargeLines([
+        {
+          surcharges: [
+            ...displaySurchargeLines.map((line) => ({
+              amount: line.amount,
+              description: line.label,
+            })),
+            ...serviceSurcharge.surcharges,
+          ],
+        },
+      ])
+    : displaySurchargeLines;
+  const showServicePay = displayManualMode === "occupied" && Boolean(serviceCharge);
   const ordersTotal =
     displayHeldOrder?.total != null
       ? Number(displayHeldOrder.total)
@@ -458,13 +487,29 @@ export default function PosTableMapTableDrawer({
   ].filter(Boolean).length;
 
   const visibleMoreActions = TABLE_MORE_ACTIONS.filter((action) => {
+    if (showServicePay) return action.id === "print-bill";
+    if (displayManualMode) return false;
     if (action.id === "delete") return hasTickets;
     if (action.id === "print-bill") return hasTickets;
     if (action.id === "reprint-order") return kitchenPrintingEnabled;
     return true;
   });
 
-  const manualActions = displayManualMode ? (
+  const manualActions = showServicePay ? (
+    <div className="grid grid-cols-2 gap-2">
+      <PosActionButton
+        tone="red"
+        icon={CircleDollarSign}
+        disabled={isProcessing}
+        onClick={onPay}
+      >
+        Pay
+      </PosActionButton>
+      <PosActionButton tone="blue" disabled={isProcessing} onClick={onNewOrder}>
+        Add order
+      </PosActionButton>
+    </div>
+  ) : displayManualMode ? (
     <div className="grid gap-2">
       {displayManualMode === "occupied" ? (
         <PosActionButton
@@ -504,11 +549,16 @@ export default function PosTableMapTableDrawer({
     </button>
   ) : null;
 
-  const actionButtons = manualActions
-    ? manualActions
-    : footerPrimaryCount > 0 || visibleMoreActions.length > 0 ? (
+  const actionButtons =
+    manualActions && !showServicePay
+      ? manualActions
+      : manualActions ||
+          footerPrimaryCount > 0 ||
+          visibleMoreActions.length > 0 ? (
     <div className="flex flex-col gap-2">
-      {footerPrimaryCount > 0 ? (
+      {manualActions ? (
+        manualActions
+      ) : footerPrimaryCount > 0 ? (
         <div
           className={cn(
             "grid gap-2",
@@ -573,7 +623,7 @@ export default function PosTableMapTableDrawer({
               ? "text-neutral-900 hover:text-neutral-950"
               : "text-neutral-700 hover:text-neutral-800",
             actionsDisabled && "cursor-not-allowed opacity-50",
-            footerPrimaryCount === 0 && "border-t-0 pt-0",
+            footerPrimaryCount === 0 && !manualActions && "border-t-0 pt-0",
           )}
         >
           <span
@@ -708,7 +758,7 @@ export default function PosTableMapTableDrawer({
             )}
           </>
         ) : null}
-        {previewLineCount > 0 &&
+        {(previewLineCount > 0 || (displayManualMode && serviceCharge)) &&
         !displayPreviewLoading &&
         !displayPreviewError ? (
           <div className="space-y-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5">
@@ -723,7 +773,7 @@ export default function PosTableMapTableDrawer({
                 </span>
               </div>
             ) : null}
-            {displaySurchargeLines.map((line) => (
+            {summarySurchargeLines.map((line) => (
               <div
                 key={line.label}
                 className="flex items-center justify-between gap-2"

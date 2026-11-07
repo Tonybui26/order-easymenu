@@ -15,6 +15,7 @@ import {
   fetchManualOpenTables,
   openManualTable,
   closeManualTable,
+  payTableTimedService,
   mergePosTables,
   unmergePosTables,
   markOrderPayLater,
@@ -86,6 +87,13 @@ import {
 import { resolvePosConfig } from "@/lib/pos/posConfig";
 import { startedAtForTableNames } from "@/lib/pos/tableOpenDuration";
 import {
+  computeTimedServiceCharge,
+  buildTimedServiceBillOrder,
+  computeTimedServiceSurcharge,
+  isTableServicePaid,
+  resolveSoleTableTimedService,
+} from "@/lib/pos/timedServiceConfig";
+import {
   isLinklyPosCardReady,
   isTyroPosCardReady,
   resolvePosPaymentsConfig,
@@ -133,8 +141,15 @@ function shouldPrepareOrderAfterPosPay(order) {
 export default function PosTableMap() {
   const { navigate, isPending } = usePosNavigate();
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
-  const { posTableMaps, storeProfile, menuConfig, itemGroups, menuContent } =
-    useMenuContext();
+  const {
+    posTableMaps,
+    storeProfile,
+    menuConfig,
+    itemGroups,
+    menuContent,
+    timedServices,
+    posSurcharges,
+  } = useMenuContext();
   const legendStatuses = useMemo(() => getPosTableMapLegendStatuses(), []);
   const mergeStoreKey = storeProfile?.menuLink || "default";
   const {
@@ -347,6 +362,28 @@ export default function PosTableMap() {
       names.length ? names : [drawerTableName],
     );
   }, [tableTimerEnabled, drawerTableName, drawerHeldOrder, openTableRounds]);
+
+  const tableTimedService = useMemo(
+    () => resolveSoleTableTimedService(menuConfig, timedServices),
+    [menuConfig, timedServices],
+  );
+
+  const drawerServiceChargeDue = useMemo(() => {
+    if (!tableTimedService || !drawerRoundStartedAt) return false;
+    const names = drawerHeldOrder
+      ? heldEntryTableNames(drawerHeldOrder)
+      : [drawerTableName];
+    return !isTableServicePaid(
+      openTableRounds,
+      names.length ? names : [drawerTableName],
+    );
+  }, [
+    tableTimedService,
+    drawerRoundStartedAt,
+    drawerHeldOrder,
+    drawerTableName,
+    openTableRounds,
+  ]);
 
   const drawerOpenedAt = useMemo(() => {
     if (!tableTimerEnabled || !drawerTableName) return null;
@@ -914,7 +951,50 @@ export default function PosTableMap() {
     );
   }
 
+  function handlePayTableTime() {
+    if (kitchenInProgress) {
+      showDismissibleToast(
+        `Mark all served before paying for ${tableTimedService.name} time`,
+      );
+      return;
+    }
+
+    const chargedAt = Date.now();
+    const charge = computeTimedServiceCharge(
+      tableTimedService,
+      drawerRoundStartedAt,
+      chargedAt,
+    );
+    const { totalSurchargeAmount } = computeTimedServiceSurcharge(
+      charge.amount,
+      { posSurcharges, storeProfile, at: chargedAt },
+    );
+    const orderIds = drawerHeldOrder
+      ? getDrawerPayableOrderIds(drawerHeldOrder)
+      : [];
+    const ordersDue = orderIds.length
+      ? Number(drawerHeldOrder?.amountDue ?? 0)
+      : 0;
+
+    setTenderTarget({
+      orderIds,
+      amountDue:
+        Math.round((ordersDue + charge.amount + totalSurchargeAmount) * 100) /
+        100,
+      tableTime: {
+        table: drawerTableName,
+        chargedAt: new Date(chargedAt).toISOString(),
+      },
+    });
+    handleCloseDrawer();
+  }
+
   function handlePay() {
+    if (drawerServiceChargeDue) {
+      handlePayTableTime();
+      return;
+    }
+
     const payableOrderIds = getDrawerPayableOrderIds(drawerHeldOrder);
     if (payableOrderIds.length === 0) {
       showDismissibleToast("This check is already paid");
@@ -976,8 +1056,40 @@ export default function PosTableMap() {
     }
   }
 
+  async function persistTableTimeSale(target, paymentSummary) {
+    setIsCompletingSale(true);
+    try {
+      const result = await payTableTimedService({
+        table: target.tableTime.table,
+        chargedAt: target.tableTime.chargedAt,
+        orderIds: target.orderIds,
+        method: paymentSummary.method,
+        amountTendered: Number(paymentSummary.amountTendered || 0),
+        changeDue: Number(paymentSummary.change || 0),
+        processingFee: Number(paymentSummary.processingFee || 0),
+      });
+      if (!result?.success) {
+        showDismissibleToast(result?.error || "Failed to complete sale");
+        return { success: false };
+      }
+
+      toast.success("Sale completed");
+      await loadHeldOrders();
+      await loadOpenTableRounds();
+      return { success: true };
+    } catch (error) {
+      showDismissibleToast(error?.message || "Failed to complete sale");
+      return { success: false };
+    } finally {
+      setIsCompletingSale(false);
+    }
+  }
+
   async function persistTableQrSale(paymentSummary) {
     const target = tenderTarget;
+    if (target?.tableTime && paymentSummary?.method) {
+      return persistTableTimeSale(target, paymentSummary);
+    }
     if (!target?.orderIds?.length) {
       return { success: false, error: "No order to pay" };
     }
@@ -1148,7 +1260,47 @@ export default function PosTableMap() {
     return orders;
   }
 
+  function buildDrawerTimeBillOrder() {
+    if (!drawerServiceChargeDue) return null;
+    const names = drawerHeldOrder
+      ? heldEntryTableNames(drawerHeldOrder)
+      : [drawerTableName];
+    return buildTimedServiceBillOrder({
+      service: tableTimedService,
+      startedAt: drawerRoundStartedAt,
+      tableNames: names.length ? names : [drawerTableName],
+      posSurcharges,
+      storeProfile,
+    });
+  }
+
+  async function handlePrintTimeBill() {
+    const timeOrder = buildDrawerTimeBillOrder();
+    if (!timeOrder || isProcessing) return;
+
+    setIsProcessing(true);
+    try {
+      const printResult = await printBillForHeldCheck([timeOrder], {
+        storeProfile,
+        menuConfig,
+      });
+      if (printResult.success) {
+        toast.success(printResult.message || "Bill printed");
+      } else {
+        showDismissibleToast(printResult.message || "Failed to print bill");
+      }
+    } catch (error) {
+      showDismissibleToast(error?.message || "Failed to print bill");
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
   async function handlePrintBill() {
+    if (!drawerHeldOrder && drawerServiceChargeDue) {
+      await handlePrintTimeBill();
+      return;
+    }
     if (!drawerHeldOrder?.orderIds?.length || isProcessing) return;
 
     const printInvoice = Boolean(drawerHeldOrder.allPaid);
@@ -1187,7 +1339,9 @@ export default function PosTableMap() {
         return;
       }
 
-      const printResult = await printBillForHeldCheck(posOrders, {
+      const timeOrder = buildDrawerTimeBillOrder();
+      const billOrders = timeOrder ? [...posOrders, timeOrder] : posOrders;
+      const printResult = await printBillForHeldCheck(billOrders, {
         storeProfile,
         menuConfig,
       });
@@ -1388,16 +1542,22 @@ export default function PosTableMap() {
 
   const kitchenInProgress = hasTableMapKitchenInProgress(drawerHeldOrder);
   // Pending/confirmed QR has not been sent to kitchen — All Served N/A.
-  const showAllServed =
-    kitchenInProgress && !Boolean(drawerHeldOrder?.allPaid);
-  const showComplete =
-    kitchenInProgress && Boolean(drawerHeldOrder?.allPaid);
+  // Unpaid table time keeps the check open: All Served + Pay, never Complete.
+  const isCheckFullyPaid =
+    Boolean(drawerHeldOrder?.allPaid) && !drawerServiceChargeDue;
+  const showAllServed = kitchenInProgress && !isCheckFullyPaid;
+  const showComplete = kitchenInProgress && isCheckFullyPaid;
   // Always allow Open so staff can add more on a paid-but-not-complete table.
   const showLoadOrder = Boolean(drawerHeldOrder?.orderIds?.length);
-  const { showPay, showSendToKitchen } = resolveTableMapDrawerPaymentActions(
+  const paymentActions = resolveTableMapDrawerPaymentActions(
     drawerHeldOrder,
     menuConfig,
   );
+  // Table time: Pay appears only once everything is served.
+  const showPay = drawerServiceChargeDue
+    ? !kitchenInProgress
+    : paymentActions.showPay;
+  const { showSendToKitchen } = paymentActions;
   const mapFloorColor = isMergeMode
     ? TABLE_MAP_MERGE_FLOOR_COLOR
     : TABLE_MAP_FLOOR_COLOR;
@@ -1582,6 +1742,7 @@ export default function PosTableMap() {
         }
         openedAt={drawerOpenedAt}
         serviceStartedAt={drawerRoundStartedAt}
+        serviceChargeDue={drawerServiceChargeDue}
         onOpenTable={handleOpenTableManually}
         onCloseTable={handleCloseTableManually}
         onNewOrder={() => openNewOrderForTable(drawerTableName)}
