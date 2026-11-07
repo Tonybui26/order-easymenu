@@ -48,7 +48,7 @@ function getOrderTableNumber(table) {
 
 /**
  * Source badge for POS-enabled stores.
- * POS = counter POS ticket; QR = table QR scan; Online = storefront pickup/delivery without table.
+ * POS = counter POS ticket; QR = table QR scan; WEB = storefront pickup/delivery without table.
  */
 function getOrderSourceBadge(order) {
   const source = String(order?.source || "qr").trim();
@@ -68,7 +68,7 @@ function getOrderSourceBadge(order) {
   }
 
   return {
-    label: "Online",
+    label: "WEB",
     className: "bg-sky-100 text-sky-800",
   };
 }
@@ -404,6 +404,7 @@ export default function OrderCard({
   // Complete stays visible once a takeaway ticket is ready (handover, not cooking).
   const hidePreparingBumpButtons =
     kitchenDisplayEnabled && order.status === "preparing";
+  const isKdsPreparing = kitchenDisplayEnabled && viewMode === "preparing";
   const displayReadyButton = showReadyButton && !hidePreparingBumpButtons;
   const displayDeliverButton = showDeliverButton && !hidePreparingBumpButtons;
 
@@ -627,7 +628,31 @@ export default function OrderCard({
         >
           <div>
             {/* Header */}
-            <div className="p-4 pb-2">
+            {isKdsPreparing ? (
+              <div
+                className={`flex w-full shrink-0 items-center justify-center gap-1.5 py-1.5 font-mono text-sm font-bold tabular-nums tracking-tight ${
+                  isLongPrepare
+                    ? "bg-amber-100 text-amber-950"
+                    : "bg-neutral-200 text-neutral-950"
+                }`}
+                aria-label={`Preparing for ${prepareLabel}`}
+              >
+                <span
+                  className={`size-1.5 shrink-0 rounded-full ${
+                    isLongPrepare
+                      ? "bg-amber-500"
+                      : "animate-pulse bg-emerald-500"
+                  }`}
+                  aria-hidden
+                />
+                {prepareLabel}
+              </div>
+            ) : null}
+            <div
+              className={
+                isKdsPreparing ? "shrink-0 px-3 pb-1 pt-2" : "p-4 pb-2"
+              }
+            >
               {/* show me a order status banner here and it only visible in order completed mode */}
               {(viewMode === "completed" || viewMode === "kdsCompleted") && (
                 <div
@@ -691,8 +716,20 @@ export default function OrderCard({
                   </div>
                 </div>
               </div>
-              <div className="flex items-start justify-between">
-                <div className="flex items-center">
+              <div
+                className={
+                  isKdsPreparing
+                    ? "flex min-w-0 items-center justify-between gap-2"
+                    : "flex items-start justify-between"
+                }
+              >
+                <div
+                  className={
+                    isKdsPreparing
+                      ? "flex min-w-0 max-w-[60%] shrink-0 items-center"
+                      : "flex items-center"
+                  }
+                >
                   {/* temp hide */}
                   <div className="hidden h-12 w-12 items-center justify-center rounded-2xl bg-gray-50">
                     {isTableOrder ? (
@@ -707,15 +744,38 @@ export default function OrderCard({
                       />
                     )}
                   </div>
-                  <div>
-                    <h3 className="text-2xl font-extrabold leading-tight text-gray-800">
-                      {orderTitle}
+                  <div className={isKdsPreparing ? "min-w-0 w-full" : undefined}>
+                    <h3
+                      className={
+                        isKdsPreparing
+                          ? "flex min-w-0 items-center gap-2 text-lg font-bold leading-tight text-gray-800"
+                          : "text-2xl font-extrabold leading-tight text-gray-800"
+                      }
+                    >
+                      {isKdsPreparing ? (
+                        <span className="truncate whitespace-nowrap">
+                          {orderTitle}
+                        </span>
+                      ) : (
+                        orderTitle
+                      )}
                       {isPreorder ? (
-                        <span className="mb-1 ml-2 inline-block rounded-full bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-800">
+                        <span className="mb-1 ml-2 inline-block shrink-0 rounded-full bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-800">
                           Pre-order
                         </span>
                       ) : null}
+                      {isKdsPreparing && sourceBadge ? (
+                        <span
+                          className={cn(
+                            "inline-block shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide",
+                            sourceBadge.className,
+                          )}
+                        >
+                          {sourceBadge.label}
+                        </span>
+                      ) : null}
                     </h3>
+                    {!isKdsPreparing ? (
                     <p className="mt-0.5 flex flex-wrap items-center gap-1.5 font-medium text-gray-500">
                       <span>#{order._id.slice(-6).toUpperCase()}</span>
                       {sourceBadge ? (
@@ -729,9 +789,10 @@ export default function OrderCard({
                         </span>
                       ) : null}
                     </p>
+                    ) : null}
                     <div className="mt-1 flex flex-col items-start gap-1">
                       {/* Pickup / delivery expected time */}
-                      {!isTableOrder && (
+                      {!isTableOrder && !(isKdsPreparing && !isDelivery) && (
                         <div className="text-xs text-gray-600">
                           {isPreorder ? (
                             <span className="mb-1 hidden rounded-full bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-800">
@@ -761,7 +822,8 @@ export default function OrderCard({
                         </div>
                       )}
                       {/* Preparing: live elapsed timer (held-orders style). Else: placed ago. */}
-                      {!scheduledExpectedLabel &&
+                      {!isKdsPreparing &&
+                        !scheduledExpectedLabel &&
                         (viewMode === "preparing" ? (
                           <div
                             className={cn(
@@ -806,7 +868,11 @@ export default function OrderCard({
                   </div>
                 </div>
 
-                <div className="text-right">
+                <div
+                  className={
+                    isKdsPreparing ? "min-w-0 flex-1 text-right" : "text-right"
+                  }
+                >
                   {/* Order Status - Temporary hidden - list status include: pending, confirmed, preparing, ready, delivered, cancelled */}
                   <div
                     className={`hidden items-center gap-1.5 rounded-full border ${getStatusStyle(order.status).border} px-2 py-1 text-xs font-semibold ${getStatusStyle(order.status).background}`}
@@ -822,10 +888,28 @@ export default function OrderCard({
                   </div>
                   {/* Customer info */}
                   {order.customerName && (
-                    <div className="rounded-xl">
-                      <div className="flex items-center justify-between">
-                        <div className="flex min-w-0 flex-1 flex-col items-end">
-                          <p className="truncate text-2xl font-extrabold text-gray-800">
+                    <div className={isKdsPreparing ? "min-w-0" : "rounded-xl"}>
+                      <div
+                        className={
+                          isKdsPreparing
+                            ? "min-w-0"
+                            : "flex items-center justify-between"
+                        }
+                      >
+                        <div
+                          className={
+                            isKdsPreparing
+                              ? "min-w-0"
+                              : "flex min-w-0 flex-1 flex-col items-end"
+                          }
+                        >
+                          <p
+                            className={
+                              isKdsPreparing
+                                ? "block w-full truncate text-right text-lg font-bold text-gray-800"
+                                : "truncate text-2xl font-extrabold text-gray-800"
+                            }
+                          >
                             {order.customerName}
                           </p>
                         </div>
@@ -1067,14 +1151,19 @@ export default function OrderCard({
                         {canMarkItemDone && (
                           <span
                             aria-hidden
-                            className={`mt-0.5 flex size-5 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors xl:size-6 ${
+                            className={`mt-0.5 flex flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                              isKdsPreparing ? "size-3.5" : "size-5 xl:size-6"
+                            } ${
                               itemDone
                                 ? "border-green-500 bg-green-500 text-white"
                                 : "border-gray-300"
                             }`}
                           >
                             {itemDone && (
-                              <Check className="h-3 w-3" strokeWidth={2} />
+                              <Check
+                                className={isKdsPreparing ? "h-2 w-2" : "h-3 w-3"}
+                                strokeWidth={isKdsPreparing ? 3 : 2}
+                              />
                             )}
                           </span>
                         )}

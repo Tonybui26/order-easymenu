@@ -2369,6 +2369,43 @@ export default function LiveOrderTerminal() {
                 })()}
               </p>
             </div>
+          ) : kitchenDisplayEnabled && viewMode === "preparing" ? (
+            <div className="flex items-start gap-3 overflow-x-auto">
+              {filteredOrders.map((order) => (
+                <div
+                  key={order._id}
+                  className="w-64 max-w-[85vw] shrink-0"
+                >
+                  <OrderCard
+                    order={order}
+                    viewMode={viewMode}
+                    completedItems={getCompletedItems(order)}
+                    onToggleItemCompletion={toggleItemCompletion}
+                    onPrepare={() => {
+                      const newStatus =
+                        isCounterPayment(order.paymentMethod) &&
+                        order.status === "pending" &&
+                        !order.isPreorder
+                          ? "preparing"
+                          : "preparing";
+                      handleStatusUpdate(order._id, newStatus);
+                    }}
+                    onAccept={() => handleStatusUpdate(order._id, "accepted")}
+                    onReady={() => handleStatusUpdate(order._id, "ready")}
+                    onDeliver={() =>
+                      handleStatusUpdate(order._id, "delivered")
+                    }
+                    onCancel={() => handleCancelOrder(order)}
+                    onMarkAsPaid={(orderId) => handleMarkAsPaid(orderId)}
+                    onRefundSuccess={handleRefundSuccess}
+                    onPrint={handleOpenPrinterSelection}
+                    showMarkAsPaid={true}
+                    payLaterEnabled={payLaterAtCounterEnabled}
+                    isProcessing={processingOrders.has(order._id)}
+                  />
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 lg:grid-cols-3 xl:gap-6">
               {filteredOrders.map((order) => (
