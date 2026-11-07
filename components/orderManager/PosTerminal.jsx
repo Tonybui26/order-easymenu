@@ -2960,13 +2960,15 @@ export default function PosTerminal() {
                       : "Buzzer"
                   }
                   onClick={() => setIsTicketBuzzerDrawerOpen(true)}
-                  className="flex w-[52px] shrink-0 items-center justify-center rounded-md bg-white text-neutral-700 shadow-[0_0_0_1px_#d4d4d4] transition-colors hover:bg-neutral-50 active:bg-neutral-100"
+                  className="flex min-w-[52px] shrink-0 items-center justify-center rounded-md bg-white text-neutral-700 shadow-[0_0_0_1px_#d4d4d4] transition-colors hover:bg-neutral-50 active:bg-neutral-100"
                 >
-                  <BellRing
-                    size={22}
-                    strokeWidth={1.5}
-                    className={cn(ticketBuzzerNumber && "text-[#984B28]")}
-                  />
+                  {ticketBuzzerNumber ? (
+                    <span className="truncate px-1 text-base font-bold tabular-nums text-[#984B28]">
+                      {ticketBuzzerNumber}
+                    </span>
+                  ) : (
+                    <BellRing size={22} strokeWidth={1.5} />
+                  )}
                 </button>
               ) : null}
               <button
