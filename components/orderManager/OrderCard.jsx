@@ -96,7 +96,7 @@ const ORDER_CARD_SLIDE_TRANSITION = {
 function OrderCardFooterTrigger({ title, isOpen, onClick, className = "" }) {
   return (
     <div className={className}>
-      <div className="px-4 py-1 xl:px-6">
+      <div className="px-4 py-1">
         <button
           type="button"
           onClick={onClick}
@@ -1163,10 +1163,25 @@ export default function OrderCard({
 
             {/* Order Items */}
             <div
-              className={`p-4 pt-2 xl:p-6 ${canRecallKdsTicket ? "pb-2" : "pb-6"}`}
+              className={`p-4 pt-2 ${canRecallKdsTicket ? "pb-2" : "pb-6"}`}
             >
               {/* Progress indicator - only show when order is preparing */}
               {order.status === "preparing" ? (
+                isKdsTicket ? (
+                  <div className="mb-3 flex items-center gap-2">
+                    <div className="h-2 min-w-0 flex-1 rounded-full bg-gray-200">
+                      <div
+                        className="h-2 rounded-full bg-green-500 transition-all duration-300"
+                        style={{
+                          width: `${order.items.length ? (completedItems.length / order.items.length) * 100 : 0}%`,
+                        }}
+                      />
+                    </div>
+                    <span className="shrink-0 text-xs font-semibold tabular-nums text-gray-600">
+                      {completedItems.length}/{order.items.length}
+                    </span>
+                  </div>
+                ) : (
                 <div className="mb-4">
                   <div className="mb-2 flex items-center justify-between text-sm text-gray-600">
                     <span>Kitchen Progress</span>
@@ -1183,6 +1198,7 @@ export default function OrderCard({
                     ></div>
                   </div>
                 </div>
+                )
               ) : (
                 <div className="mb-4 hidden items-center justify-between">
                   <div className="flex items-center space-x-2">
@@ -1234,7 +1250,7 @@ export default function OrderCard({
                             }
                           : undefined
                       }
-                      className={`flex items-start justify-between py-1.5 transition-all duration-200 xl:py-2 ${
+                      className={`flex items-start justify-between py-1.5 transition-all duration-200 ${
                         itemDone && canMarkItemDone ? "opacity-60" : ""
                       } ${
                         canMarkItemDone
@@ -1390,7 +1406,7 @@ export default function OrderCard({
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={ORDER_CARD_SLIDE_TRANSITION}
-              className="absolute inset-x-0 bottom-0 z-20 max-h-[min(70vh,85%)] overflow-y-auto border-t border-neutral-100 bg-white px-4 py-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] xl:px-6"
+              className="absolute inset-x-0 bottom-0 z-20 max-h-[min(70vh,85%)] overflow-y-auto border-t border-neutral-100 bg-white px-4 py-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]"
             >
               <OrderCardMoreInfo
                 order={order}
