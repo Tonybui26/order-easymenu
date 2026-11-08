@@ -4,8 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { TriangleAlert } from "lucide-react";
 
-/** Temporary: keep the update banner visible for UI review. Set back to false. */
-const FORCE_SHOW_VERSION_BANNER = true;
+/** Set true only to preview the banner without a new build. */
+const FORCE_SHOW_VERSION_BANNER = false;
 
 export default function VersionBanner() {
   const pathname = usePathname();
