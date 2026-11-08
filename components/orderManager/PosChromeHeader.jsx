@@ -147,11 +147,11 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
                 <span className="absolute -right-1 -top-1 flex size-3 items-center justify-center">
                   <span
                     aria-hidden
-                    className="absolute size-3 rounded-full border-2 border-emerald-400 [animation:held-alert-wave_1.4s_ease-out_infinite]"
+                    className="absolute size-3 rounded-full border-2 border-amber-400 [animation:held-alert-wave_1.4s_ease-out_infinite]"
                   />
                   <span
                     aria-hidden
-                    className="relative size-2.5 rounded-full bg-emerald-400"
+                    className="relative size-2.5 rounded-full bg-amber-400"
                   />
                 </span>
               )}
