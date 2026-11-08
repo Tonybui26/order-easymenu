@@ -1284,8 +1284,6 @@ export default function OrderCard({
                         <div className="min-w-0 flex-1">
                           <p
                             className={`text-base font-bold xl:text-base ${
-                              isKdsTicket ? "truncate" : ""
-                            } ${
                               itemDone && canMarkItemDone
                                 ? "text-gray-500 line-through"
                                 : "text-gray-800"
