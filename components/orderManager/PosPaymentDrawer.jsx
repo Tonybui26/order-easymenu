@@ -804,7 +804,7 @@ function FinaliseSaleStep({
             training check.
           </p>
         ) : hideReceiptActions ? null : (
-          <div className="mt-5 grid w-full max-w-sm grid-cols-2 gap-3">
+          <div className="mt-5 w-full max-w-sm">
             <button
               type="button"
               disabled={isPrintingReceipt || isCompletingSale}
@@ -814,15 +814,9 @@ function FinaliseSaleStep({
                   onInvoicePrinted?.();
                 }
               }}
-              className="min-h-[4.25rem] rounded-lg bg-[#E7AB94] px-3 text-sm font-bold uppercase tracking-wide text-[#984B23] transition-colors hover:bg-[#E7AB94] active:bg-[#E7AB94] disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-[4.25rem] w-full rounded-lg bg-[#E7AB94] px-3 text-sm font-bold uppercase tracking-wide text-[#984B23] transition-colors hover:bg-[#E7AB94] active:bg-[#E7AB94] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isPrintingReceipt ? "Printing…" : "Print Invoice"}
-            </button>
-            <button
-              type="button"
-              className="min-h-[4.25rem] rounded-lg bg-[#E7AB94] px-3 text-sm font-bold uppercase tracking-wide text-[#984B23] transition-colors hover:bg-[#E7AB94] active:bg-[#E7AB94]"
-            >
-              Email Receipt
             </button>
           </div>
         )}
