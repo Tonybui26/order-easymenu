@@ -136,18 +136,24 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
                 }
                 if (href) navigate(href);
               }}
-              className={`relative flex size-10 items-center justify-center rounded-xl transition-colors active:bg-black/25 sm:size-11 ${
+              className={`relative flex size-10 items-center justify-center rounded-xl border border-transparent transition-colors active:bg-black/25 sm:size-11 ${
                 isActive
                   ? "bg-brand_accent/25 text-brand_accent"
                   : "bg-brand_accent/10 text-white"
-              } ${showAlert ? "border-2 border-brand_accent" : "border border-transparent"}`}
+              }`}
             >
               <Icon size={24} strokeWidth={1.5} />
               {showAlert && (
-                <span
-                  aria-hidden
-                  className="absolute -right-1 -top-1 size-3 rounded-full bg-emerald-400 ring-2 ring-[#301C0F]"
-                />
+                <span className="absolute -right-1 -top-1 flex size-3 items-center justify-center">
+                  <span
+                    aria-hidden
+                    className="absolute size-3 rounded-full border-2 border-emerald-400 [animation:held-alert-wave_1.4s_ease-out_infinite]"
+                  />
+                  <span
+                    aria-hidden
+                    className="relative size-2.5 rounded-full bg-emerald-400"
+                  />
+                </span>
               )}
             </button>
           );
