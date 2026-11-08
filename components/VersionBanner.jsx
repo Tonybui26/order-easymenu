@@ -4,9 +4,12 @@ import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { RefreshCw, X } from "lucide-react";
 
+/** Temporary: keep the update banner visible for UI review. Set back to false. */
+const FORCE_SHOW_VERSION_BANNER = true;
+
 export default function VersionBanner() {
   const pathname = usePathname();
-  const [showBanner, setShowBanner] = useState(false);
+  const [showBanner, setShowBanner] = useState(FORCE_SHOW_VERSION_BANNER);
   const [isDismissed, setIsDismissed] = useState(false);
   const initialBuildIdRef = useRef(null);
   const pollIntervalRef = useRef(null);
@@ -39,8 +42,9 @@ export default function VersionBanner() {
       }
       // Show banner if build ID changed and not dismissed
       if (
-        currentBuildId !== initialBuildIdRef.current &&
-        !isDismissedRef.current
+        FORCE_SHOW_VERSION_BANNER ||
+        (currentBuildId !== initialBuildIdRef.current &&
+          !isDismissedRef.current)
       ) {
         setShowBanner(true);
       }
@@ -80,7 +84,7 @@ export default function VersionBanner() {
     return null;
   }
 
-  if (!showBanner) {
+  if (!showBanner && !FORCE_SHOW_VERSION_BANNER) {
     return null;
   }
 
