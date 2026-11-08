@@ -1283,7 +1283,7 @@ export default function OrderCard({
 
                         <div className="min-w-0 flex-1">
                           <p
-                            className={`text-base font-bold xl:text-base ${
+                            className={`text-base font-bold ${
                               itemDone && canMarkItemDone
                                 ? "text-gray-500 line-through"
                                 : "text-gray-800"
@@ -1291,6 +1291,13 @@ export default function OrderCard({
                           >
                             {getCustomerDisplayName(item.name)}
                           </p>
+                          {isKdsTicket &&
+                          isTableOrder &&
+                          item?.isTakeaway === true ? (
+                            <span className="mt-1 inline-flex rounded-full bg-darken_primary px-2 py-px text-[10px] font-bold uppercase tracking-wide text-white">
+                              Takeaway
+                            </span>
+                          ) : null}
                           {item.selectedVariants &&
                             item.selectedVariants.length > 0 && (
                               <p className="text-sm font-medium text-gray-700">
