@@ -1,5 +1,6 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { usePosNavigate } from "@/components/context/PosNavigateContext";
@@ -16,6 +17,11 @@ import PosHeaderNavMenu from "./PosHeaderNavMenu";
 import PosHeaderUserPanel from "./PosHeaderUserPanel";
 import Logo from "../../public/images/logo.svg";
 import { reloadAppWithCatalogSync } from "@/lib/localDb/catalogForceSync";
+import {
+  getHeldOffTableAlert,
+  getHeldOffTableAlertServer,
+  subscribeHeldOffTableAlert,
+} from "@/lib/pos/heldOffTableAlert";
 
 const POS_HEADER_ACTIONS = [
   {
@@ -62,6 +68,11 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
   const searchParams = useSearchParams();
   const { menuConfig } = useMenuContext();
   const posEnabled = Boolean(menuConfig?.posEnabled);
+  const hasOffTableHeld = useSyncExternalStore(
+    subscribeHeldOffTableAlert,
+    getHeldOffTableAlert,
+    getHeldOffTableAlertServer,
+  );
   const homePath = posEnabled ? getPosHomePath(menuConfig) : "/";
   const logoAriaLabel =
     homePath === POS_TABLE_MAP_PATH ? "Table map" : "Point of sale";
@@ -106,6 +117,7 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
               : href &&
                 (pathname === href ||
                   (href !== "/" && pathname?.startsWith(href)));
+          const showAlert = id === "held" && hasOffTableHeld;
 
           return (
             <button
@@ -124,13 +136,19 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
                 }
                 if (href) navigate(href);
               }}
-              className={`flex size-10 items-center justify-center rounded-xl transition-colors active:bg-black/25 sm:size-11 ${
+              className={`relative flex size-10 items-center justify-center rounded-xl transition-colors active:bg-black/25 sm:size-11 ${
                 isActive
                   ? "bg-brand_accent/25 text-brand_accent"
                   : "bg-brand_accent/10 text-white"
-              }`}
+              } ${showAlert ? "border-2 border-brand_accent" : "border border-transparent"}`}
             >
               <Icon size={24} strokeWidth={1.5} />
+              {showAlert && (
+                <span
+                  aria-hidden
+                  className="absolute -right-1 -top-1 size-3 rounded-full bg-emerald-400 ring-2 ring-[#301C0F]"
+                />
+              )}
             </button>
           );
         })}
