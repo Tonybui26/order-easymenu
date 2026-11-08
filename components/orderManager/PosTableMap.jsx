@@ -173,6 +173,7 @@ export default function PosTableMap() {
   const [drawerHeldOrder, setDrawerHeldOrder] = useState(null);
   const [tenderTarget, setTenderTarget] = useState(null);
   const [isCompletingSale, setIsCompletingSale] = useState(false);
+  const [isPrintingReceipt, setIsPrintingReceipt] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [previewSections, setPreviewSections] = useState([]);
   const [previewSurchargeLines, setPreviewSurchargeLines] = useState([]);
@@ -189,6 +190,8 @@ export default function PosTableMap() {
   const [navigatingTableNames, setNavigatingTableNames] = useState([]);
   /** @type {React.MutableRefObject<Map<string, object[]>>} */
   const resumeOrdersCacheRef = useRef(new Map());
+  /** Paid table-time sale, so Print Invoice does not charge the table twice. */
+  const tableTimeSaleRef = useRef(null);
 
   const selectedMap =
     tableMaps.find((map) => map.id === selectedMapId) || tableMaps[0] || null;
@@ -1056,7 +1059,9 @@ export default function PosTableMap() {
     }
   }
 
-  async function persistTableTimeSale(target, paymentSummary) {
+  async function persistTableTimeSale(target, paymentSummary, { announce = true } = {}) {
+    if (tableTimeSaleRef.current?.success) return tableTimeSaleRef.current;
+
     setIsCompletingSale(true);
     try {
       const result = await payTableTimedService({
@@ -1073,15 +1078,52 @@ export default function PosTableMap() {
         return { success: false };
       }
 
-      toast.success("Sale completed");
+      if (announce) toast.success("Sale completed");
       await loadHeldOrders();
       await loadOpenTableRounds();
-      return { success: true };
+      const saved = { success: true, orders: result.orders || [] };
+      tableTimeSaleRef.current = saved;
+      return saved;
     } catch (error) {
       showDismissibleToast(error?.message || "Failed to complete sale");
       return { success: false };
     } finally {
       setIsCompletingSale(false);
+    }
+  }
+
+  async function handlePrintTableTimeInvoice(paymentSummary) {
+    const target = tenderTarget;
+    if (!target?.tableTime || isPrintingReceipt) return { success: false };
+
+    setIsPrintingReceipt(true);
+    let salePersisted = Boolean(tableTimeSaleRef.current?.success);
+    try {
+      const persisted = await persistTableTimeSale(target, paymentSummary, {
+        announce: false,
+      });
+      if (!persisted?.success) return { success: false, salePersisted: false };
+      salePersisted = true;
+
+      const printResult = await printReceiptForHistoryCheck(persisted.orders, {
+        storeProfile,
+        menuConfig,
+      });
+      if (printResult.success) {
+        toast.success(printResult.message || "Invoice printed");
+      } else {
+        showDismissibleToast(printResult.message || "Failed to print invoice");
+      }
+      return {
+        success: Boolean(printResult.success),
+        salePersisted: true,
+        printed: Boolean(printResult.success),
+      };
+    } catch (error) {
+      showDismissibleToast(error?.message || "Failed to print invoice");
+      return { success: false, salePersisted };
+    } finally {
+      setIsPrintingReceipt(false);
     }
   }
 
@@ -1127,6 +1169,7 @@ export default function PosTableMap() {
   async function handleTableQrCompleteSale(paymentSummary) {
     const result = await persistTableQrSale(paymentSummary);
     if (!result?.success) return;
+    tableTimeSaleRef.current = null;
     setTenderTarget(null);
   }
 
@@ -1753,14 +1796,22 @@ export default function PosTableMap() {
         isOpen={Boolean(tenderTarget)}
         onClose={() => {
           if (isCompletingSale) return;
+          tableTimeSaleRef.current = null;
           setTenderTarget(null);
         }}
         amountDue={Number(tenderTarget?.amountDue || 0)}
         onCompleteSale={handleTableQrCompleteSale}
         onPersistSale={persistTableQrSale}
-        onFinishPaidSale={handleTableQrFinishPaidSale}
+        onFinishPaidSale={() => {
+          tableTimeSaleRef.current = null;
+          handleTableQrFinishPaidSale();
+        }}
+        onPrintReceipt={
+          tenderTarget?.tableTime ? handlePrintTableTimeInvoice : undefined
+        }
+        isPrintingReceipt={isPrintingReceipt}
         isCompletingSale={isCompletingSale}
-        hideReceiptActions
+        hideReceiptActions={!tenderTarget?.tableTime}
         tyroCardEnabled={tyroCardEnabled}
         tyroConfig={tyroPayments}
         linklyCardEnabled={linklyCardEnabled}
