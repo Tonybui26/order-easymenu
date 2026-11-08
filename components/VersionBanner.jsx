@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { RefreshCw, X } from "lucide-react";
+import { TriangleAlert } from "lucide-react";
 
 /** Temporary: keep the update banner visible for UI review. Set back to false. */
 const FORCE_SHOW_VERSION_BANNER = true;
@@ -10,10 +10,11 @@ const FORCE_SHOW_VERSION_BANNER = true;
 export default function VersionBanner() {
   const pathname = usePathname();
   const [showBanner, setShowBanner] = useState(FORCE_SHOW_VERSION_BANNER);
-  const [isDismissed, setIsDismissed] = useState(false);
+  const [isDismissed] = useState(false);
   const initialBuildIdRef = useRef(null);
   const pollIntervalRef = useRef(null);
   const isDismissedRef = useRef(false);
+  const bannerRef = useRef(null);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -75,46 +76,62 @@ export default function VersionBanner() {
     window.location.reload();
   }
 
-  function handleDismiss() {
-    setShowBanner(false);
-    setIsDismissed(true);
-  }
+  const isVisible =
+    pathname !== "/customer-display" &&
+    (showBanner || FORCE_SHOW_VERSION_BANNER);
 
-  if (pathname === "/customer-display") {
-    return null;
-  }
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!isVisible) {
+      root.style.setProperty("--version-banner-h", "0px");
+      return;
+    }
 
-  if (!showBanner && !FORCE_SHOW_VERSION_BANNER) {
+    const banner = bannerRef.current;
+    if (!banner) return;
+
+    function syncHeight() {
+      root.style.setProperty(
+        "--version-banner-h",
+        `${banner.offsetHeight}px`,
+      );
+    }
+
+    syncHeight();
+    const observer = new ResizeObserver(syncHeight);
+    observer.observe(banner);
+    return () => {
+      observer.disconnect();
+      root.style.setProperty("--version-banner-h", "0px");
+    };
+  }, [isVisible]);
+
+  if (!isVisible) {
     return null;
   }
 
   return (
-    <div className="fixed left-0 right-0 top-0 z-[9999] bg-blue-600 text-white shadow-lg">
-      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <RefreshCw className="size-7" />
-            <p className="text-lg font-medium">
-              Updates available: Reload to get the latest improvements.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleReload}
-              className="rounded-md bg-white px-10 py-3 text-lg font-semibold text-blue-600 transition-colors hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600"
-            >
-              Reload Now
-            </button>
-            <button
-              onClick={handleDismiss}
-              className="hidden rounded-md p-1.5 text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600"
-              aria-label="Dismiss"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <>
+      <style>{`
+        .h-\\[100dvh\\] {
+          height: calc(100dvh - var(--version-banner-h, 0px));
+        }
+        .min-h-\\[100dvh\\],
+        .min-h-\\[100vh\\] {
+          min-height: calc(100dvh - var(--version-banner-h, 0px));
+        }
+      `}</style>
+      <button
+        ref={bannerRef}
+        type="button"
+        onClick={handleReload}
+        className="flex w-full shrink-0 items-center justify-center gap-2 bg-blue-600 px-3.5 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
+      >
+        <TriangleAlert className="size-4 shrink-0" aria-hidden />
+        <span className="truncate text-sm font-medium">
+          Update available: Tap this banner to get the latest improvements.
+        </span>
+      </button>
+    </>
   );
 }
