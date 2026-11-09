@@ -3190,7 +3190,7 @@ export default function PosTerminal() {
 
             <div
               className={cn(
-                "min-h-0 flex-1 overflow-y-auto bg-[#f2f2f2] transition-opacity duration-300",
+                "min-h-0 flex-1 overflow-y-auto bg-[#f2f2f2] pt-2 transition-opacity duration-300",
                 awaitingOrderType && "pointer-events-none",
               )}
             >
