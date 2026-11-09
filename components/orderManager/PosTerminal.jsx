@@ -778,32 +778,105 @@ export default function PosTerminal() {
     resolvedOrderType === "dine-in" &&
     !isTakeawayBuzzer;
 
-  const tableLabel = (() => {
+  const orderHeader = (() => {
+    const tableValue = resolvedTableNumber || "--";
     if (!resolvedOrderType) {
-      if (isOrderTypeMissing) return "SELECT ORDER TYPE";
-      if (resolvedTableNumber) return `TABLE: ${resolvedTableNumber}`;
-      return "DINE IN or TAKE AWAY";
+      if (isOrderTypeMissing) {
+        return {
+          kindLabel: "Order",
+          valueLabel: "--",
+          typeLabel: "SELECT ORDER TYPE",
+          isPrompt: true,
+          isError: true,
+        };
+      }
+      if (resolvedTableNumber) {
+        return {
+          kindLabel: "Table",
+          valueLabel: resolvedTableNumber,
+          typeLabel: "DINE IN or TAKE AWAY",
+          isPrompt: true,
+          isError: false,
+        };
+      }
+      return {
+        kindLabel: "Order",
+        valueLabel: "--",
+        typeLabel: "DINE IN or TAKE AWAY",
+        isPrompt: true,
+        isError: false,
+      };
     }
     if (resolvedOrderType === "dine-in") {
       if (isTakeawayBuzzer && resolvedTableNumber) {
-        return `DINE IN: ${resolvedTableNumber}`;
+        return {
+          kindLabel: "Dine in",
+          valueLabel: resolvedTableNumber,
+          typeLabel: "DINE-IN",
+          isPrompt: false,
+          isError: false,
+        };
       }
-      return `TABLE: ${resolvedTableNumber || "--"}`;
+      return {
+        kindLabel: "Table",
+        valueLabel: tableValue,
+        typeLabel: "DINE-IN",
+        isPrompt: false,
+        isError: false,
+      };
     }
     if (resolvedOrderType === "buzzer") {
-      return `BUZZER: ${resolvedTableNumber || "--"}`;
+      return {
+        kindLabel: "Buzzer",
+        valueLabel: tableValue,
+        typeLabel: "BUZZER",
+        isPrompt: false,
+        isError: false,
+      };
     }
     if (resolvedOrderType === "takeaway") {
       if (isTakeawayBuzzer && resolvedTableNumber) {
-        return `BUZZER: ${resolvedTableNumber}`;
+        return {
+          kindLabel: "Buzzer",
+          valueLabel: resolvedTableNumber,
+          typeLabel: "TAKEAWAY",
+          isPrompt: false,
+          isError: false,
+        };
       }
-      if (customerName.trim()) return `TAKEAWAY: ${customerName.trim()}`;
-      return `TAKEAWAY${resolvedTableNumber ? `: ${resolvedTableNumber}` : ""}`;
+      if (customerName.trim()) {
+        return {
+          kindLabel: "Takeaway",
+          valueLabel: customerName.trim(),
+          typeLabel: "TAKEAWAY",
+          isPrompt: false,
+          isError: false,
+        };
+      }
+      return {
+        kindLabel: "Takeaway",
+        valueLabel: resolvedTableNumber || "--",
+        typeLabel: "TAKEAWAY",
+        isPrompt: false,
+        isError: false,
+      };
     }
     if (resolvedOrderType === "delivery") {
-      return `DELIVERY${resolvedTableNumber ? `: ${resolvedTableNumber}` : ""}`;
+      return {
+        kindLabel: "Delivery",
+        valueLabel: resolvedTableNumber || "--",
+        typeLabel: "DELIVERY",
+        isPrompt: false,
+        isError: false,
+      };
     }
-    return `TABLE: ${resolvedTableNumber || "--"}`;
+    return {
+      kindLabel: "Table",
+      valueLabel: tableValue,
+      typeLabel: "DINE-IN",
+      isPrompt: false,
+      isError: false,
+    };
   })();
 
   const tableOpenStartedAt = useMemo(() => {
@@ -2917,7 +2990,7 @@ export default function PosTerminal() {
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {/* Left: current order */}
           <section className="flex w-[34%] min-w-[280px] max-w-[440px] shrink-0 flex-col bg-white pb-[env(safe-area-inset-bottom)]">
-            <div className="relative z-20 flex shrink-0 items-stretch gap-2 border-neutral-200 bg-[#f2f2f2] p-2">
+            <div className="relative z-20 flex h-16 shrink-0 items-stretch gap-2 border-neutral-200 bg-[#f2f2f2] pr-2">
               <motion.button
                 key={tableFieldShakeKey}
                 type="button"
@@ -2937,19 +3010,39 @@ export default function PosTerminal() {
                     : { x: 0 }
                 }
                 transition={{ duration: 0.35, ease: "easeInOut" }}
-                className={cn(
-                  "flex min-h-[52px] min-w-0 flex-1 items-center justify-center gap-2 rounded-md bg-white px-4 text-base font-semibold transition-shadow hover:bg-neutral-50 active:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-800",
-                  awaitingOrderType
-                    ? isOrderTypeMissing
-                      ? "bg-red-50 text-red-700 shadow-[0_4px_14px_rgba(239,68,68,0.35)]"
-                      : "font-bold text-[#301C0F] shadow-[0_4px_14px_rgba(48,28,15,0.28)]"
-                    : "text-neutral-700 shadow-[0_0_0_1px_#d4d4d4]",
-                )}
+                className="flex min-w-0 flex-1 items-stretch overflow-hidden disabled:cursor-not-allowed"
               >
-                <span className="truncate">{tableLabel}</span>
-                {tableOpenStartedAt ? (
-                  <TableOpenTimerBadge startedAt={tableOpenStartedAt} />
-                ) : null}
+                <div className="flex min-w-16 flex-col items-center justify-center bg-[#301C0F] px-2 text-white">
+                  <span className="text-[12px] font-medium">
+                    {orderHeader.kindLabel}
+                  </span>
+                  <span className="mt-0.5 max-w-full truncate text-center text-2xl font-bold leading-none tracking-tight">
+                    {orderHeader.valueLabel}
+                  </span>
+                </div>
+                <div className="flex min-w-0 flex-1 items-stretch pl-2 pt-2">
+                  <div
+                    className={cn(
+                      "flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg px-3 transition-shadow",
+                      orderHeader.isError
+                        ? "bg-red-50 text-red-700 shadow-[0_4px_14px_rgba(239,68,68,0.35)]"
+                        : orderHeader.isPrompt
+                          ? "bg-white font-bold text-[#301C0F]"
+                          : "bg-white text-[#301C0F]",
+                      isTableFieldLocked && "bg-neutral-100 text-neutral-700",
+                    )}
+                  >
+                    <span className="truncate text-center text-base font-bold tracking-wide">
+                      {orderHeader.typeLabel}
+                    </span>
+                    {tableOpenStartedAt ? (
+                      <TableOpenTimerBadge
+                        startedAt={tableOpenStartedAt}
+                        className="px-2 py-1 text-sm"
+                      />
+                    ) : null}
+                  </div>
+                </div>
               </motion.button>
               {showTicketBuzzerButton ? (
                 <button
@@ -2960,14 +3053,14 @@ export default function PosTerminal() {
                       : "Buzzer"
                   }
                   onClick={() => setIsTicketBuzzerDrawerOpen(true)}
-                  className="flex min-w-[52px] shrink-0 items-center justify-center rounded-md bg-white text-neutral-700 shadow-[0_0_0_1px_#d4d4d4] transition-colors hover:bg-neutral-50 active:bg-neutral-100"
+                  className="mt-2 flex size-14 shrink-0 items-center justify-center rounded-md bg-white text-neutral-700 transition-colors hover:bg-neutral-50 active:bg-neutral-100"
                 >
                   {ticketBuzzerNumber ? (
-                    <span className="truncate px-1 text-base font-bold tabular-nums text-[#984B28]">
+                    <span className="truncate px-1 text-sm font-bold tabular-nums text-[#984B28]">
                       {ticketBuzzerNumber}
                     </span>
                   ) : (
-                    <BellRing size={22} strokeWidth={1.5} />
+                    <BellRing size={20} strokeWidth={1.5} />
                   )}
                 </button>
               ) : null}
@@ -2975,10 +3068,10 @@ export default function PosTerminal() {
                 type="button"
                 aria-label="Customer info"
                 onClick={handleOpenCustomerInfo}
-                className="flex w-[52px] shrink-0 items-center justify-center rounded-md bg-white text-neutral-700 shadow-[0_0_0_1px_#d4d4d4] transition-colors hover:bg-neutral-50 active:bg-neutral-100"
+                className="mt-2 flex size-14 shrink-0 items-center justify-center rounded-md bg-white text-neutral-700 transition-colors hover:bg-neutral-50 active:bg-neutral-100"
               >
                 <UserRoundPen
-                  size={22}
+                  size={20}
                   strokeWidth={1.5}
                   className={cn(hasCustomerInfo && "text-[#984B28]")}
                 />
@@ -3098,7 +3191,7 @@ export default function PosTerminal() {
             <div
               className={cn(
                 "min-h-0 flex-1 overflow-y-auto bg-[#f2f2f2] transition-opacity duration-300",
-                awaitingOrderType && "pointer-events-none opacity-35",
+                awaitingOrderType && "pointer-events-none",
               )}
             >
               {isResumingOrder ? (
@@ -3106,7 +3199,7 @@ export default function PosTerminal() {
                   Loading held order…
                 </div>
               ) : cartLines.length === 0 ? (
-                <div className="flex h-full items-center justify-center px-6 text-center text-sm text-neutral-400">
+                <div className="flex h-full items-center justify-center px-6 text-center text-neutral-700">
                   {awaitingOrderType
                     ? "Choose dine in or take away to start"
                     : "Tap products to add them to this order"}
@@ -3165,7 +3258,7 @@ export default function PosTerminal() {
               onDiscount={handleOpenDiscountDrawer}
               className={cn(
                 "transition-opacity duration-300",
-                awaitingOrderType && "pointer-events-none opacity-35",
+                awaitingOrderType && "pointer-events-none",
               )}
             />
           </section>
