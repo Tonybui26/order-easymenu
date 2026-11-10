@@ -302,11 +302,46 @@ function PosProductCard({
   onAdd,
   disabled = false,
   useKitchenPrintAliases = false,
+  menuStyle = "style1",
 }) {
   const displayTitle =
     formatPosItemDisplayName(item.title, { useKitchenPrintAliases }) ||
     "Untitled";
   const hasImage = Boolean(item.PhotoSrc);
+  const isStyle2 = menuStyle === "style2";
+
+  if (isStyle2) {
+    return (
+      <button
+        type="button"
+        onClick={() => onAdd?.(item)}
+        disabled={disabled}
+        className="relative aspect-square w-full overflow-hidden rounded-2xl border-[6px] border-white bg-neutral-200 shadow-[0_1px_2px_rgba(0,0,0,0.06)] transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
+      >
+        {hasImage ? (
+          <Image
+            src={item.PhotoSrc}
+            alt={displayTitle}
+            fill
+            sizes="20vw"
+            className="object-cover"
+          />
+        ) : (
+          <div className="absolute inset-0 bg-neutral-200" />
+        )}
+        <div
+          className="absolute inset-0 opacity-[0.35]"
+          style={{
+            backgroundImage:
+              "linear-gradient(to bottom, rgba(102,102,102,0) 0%, rgba(0,0,0,1) 89%)",
+          }}
+        />
+        <span className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/45 to-transparent px-3 pb-3.5 pt-6 text-center text-sm font-bold leading-snug text-white xl:text-base">
+          <span className="line-clamp-3">{displayTitle}</span>
+        </span>
+      </button>
+    );
+  }
 
   return (
     <button
@@ -459,6 +494,7 @@ export default function PosTerminal() {
   const [isVoidingLine, setIsVoidingLine] = useState(false);
   const { handleOpenCashDrawer } = usePosOpenCashDrawer(showDismissibleToast);
   const posConfig = useMemo(() => resolvePosConfig(menuConfig), [menuConfig]);
+  const posMenuStyle = posConfig.menuStyle;
   const tableTimerEnabled =
     posConfig.manualOpenTableEnabled === true ||
     posConfig.manualCloseTableEnabled === true;
@@ -3411,7 +3447,12 @@ export default function PosTerminal() {
                       </div>
                     ) : (
                       <div className="p-4">
-                        <div className="grid grid-cols-4 gap-1 xl:grid-cols-5">
+                        <div
+                          className={cn(
+                            "grid grid-cols-4 xl:grid-cols-5",
+                            posMenuStyle === "style2" ? "gap-2" : "gap-1",
+                          )}
+                        >
                           {menuSearchResults.map((item) => (
                             <PosProductCard
                               key={item.id}
@@ -3419,6 +3460,7 @@ export default function PosTerminal() {
                               onAdd={handleAddItem}
                               disabled={isViewOnly}
                               useKitchenPrintAliases={useKitchenPrintAliases}
+                              menuStyle={posMenuStyle}
                             />
                           ))}
                         </div>
@@ -3466,7 +3508,10 @@ export default function PosTerminal() {
                         return (
                           <div
                             key={row.id}
-                            className="grid grid-cols-4 gap-1 xl:grid-cols-5"
+                            className={cn(
+                              "grid grid-cols-4 xl:grid-cols-5",
+                              posMenuStyle === "style2" ? "gap-2" : "gap-1",
+                            )}
                           >
                             {rowItems.map((item) => (
                               <PosProductCard
@@ -3475,6 +3520,7 @@ export default function PosTerminal() {
                                 onAdd={handleAddItem}
                                 disabled={isViewOnly}
                                 useKitchenPrintAliases={useKitchenPrintAliases}
+                                menuStyle={posMenuStyle}
                               />
                             ))}
                           </div>
