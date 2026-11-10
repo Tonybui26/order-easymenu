@@ -3091,18 +3091,18 @@ export default function PosTerminal() {
                 transition={{ duration: 0.35, ease: "easeInOut" }}
                 className="flex min-w-0 flex-1 items-stretch overflow-hidden disabled:cursor-not-allowed"
               >
-                <div className="flex min-w-16 flex-col items-center justify-center bg-[#301C0F] px-2 text-white">
-                  <span className="text-[12px] font-medium">
+                <div className="flex min-w-16 flex-col items-center justify-center bg-[#301C0F] px-1.5 text-white xl:px-2">
+                  <span className="text-[11px] font-medium xl:text-[12px]">
                     {orderHeader.kindLabel}
                   </span>
-                  <span className="mt-0.5 max-w-full truncate text-center text-2xl font-bold leading-none tracking-tight">
+                  <span className="mt-0.5 max-w-full truncate text-center text-xl font-bold leading-none tracking-tight xl:text-2xl">
                     {orderHeader.valueLabel}
                   </span>
                 </div>
                 <div className="flex min-w-0 flex-1 items-stretch pl-2 pt-2">
                   <div
                     className={cn(
-                      "flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg px-3 transition-shadow",
+                      "flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg px-2.5 transition-shadow xl:px-3",
                       orderHeader.isError
                         ? "bg-red-50 text-red-700 shadow-[0_4px_14px_rgba(239,68,68,0.35)]"
                         : orderHeader.isPrompt
@@ -3111,13 +3111,13 @@ export default function PosTerminal() {
                       isTableFieldLocked && "bg-neutral-100 text-neutral-700",
                     )}
                   >
-                    <span className="truncate text-center text-base font-bold tracking-wide">
+                    <span className="truncate text-center text-sm font-bold tracking-wide xl:text-base">
                       {orderHeader.typeLabel}
                     </span>
                     {tableOpenStartedAt ? (
                       <TableOpenTimerBadge
                         startedAt={tableOpenStartedAt}
-                        className="px-2 py-1 text-sm"
+                        className="px-2 py-0.5 text-xs xl:py-1 xl:text-sm"
                       />
                     ) : null}
                   </div>
@@ -3274,11 +3274,11 @@ export default function PosTerminal() {
               )}
             >
               {isResumingOrder ? (
-                <div className="flex h-full items-center justify-center px-6 text-center text-sm text-neutral-400">
+                <div className="flex h-full items-center justify-center px-6 text-center text-xs text-neutral-400 xl:text-sm">
                   Loading held order…
                 </div>
               ) : cartLines.length === 0 ? (
-                <div className="flex h-full items-center justify-center px-6 text-center text-neutral-700">
+                <div className="flex h-full items-center justify-center px-6 text-center text-sm text-neutral-700">
                   {awaitingOrderType
                     ? "Choose dine in or take away to start"
                     : "Tap products to add them to this order"}
@@ -3350,19 +3350,19 @@ export default function PosTerminal() {
             )}
           >
             {/* Tabs column — z-30 + overhang so selected indicator sits on top of products */}
-            <aside className="relative z-30 flex w-[120px] shrink-0 flex-col bg-[#f0f0f0] pb-[env(safe-area-inset-bottom)] sm:w-[150px]">
+            <aside className="relative z-30 flex w-[110px] shrink-0 flex-col bg-[#f0f0f0] pb-[env(safe-area-inset-bottom)] sm:w-[132px] xl:w-[150px]">
               <div className="-mr-3 min-h-0 flex-1 overflow-y-auto pr-3">
                 {tabs.length === 0 ? (
                   canEditMenu ? (
                     <button
                       type="button"
                       onClick={() => navigate("/settings/edit-menu")}
-                      className="p-3 text-center text-xs font-medium text-neutral-500 underline"
+                      className="p-2.5 text-center text-[11px] font-medium text-neutral-500 underline xl:p-3 xl:text-xs"
                     >
                       No POS tabs yet. Edit menu
                     </button>
                   ) : (
-                    <p className="p-3 text-center text-xs font-medium text-neutral-500">
+                    <p className="p-2.5 text-center text-[11px] font-medium text-neutral-500 xl:p-3 xl:text-xs">
                       No POS tabs yet.
                     </p>
                   )
@@ -3380,7 +3380,7 @@ export default function PosTerminal() {
                           type="button"
                           onClick={() => handleTabClick(tab.id)}
                           className={cn(
-                            "relative flex min-h-[72px] w-full shrink-0 items-center justify-start overflow-hidden border-l-[7px] px-3 py-6 text-left text-base font-semibold text-neutral-900 xl:text-lg",
+                            "relative flex min-h-[56px] w-full shrink-0 items-center justify-start overflow-hidden border-l-[7px] px-2.5 py-4 text-left text-sm font-semibold text-neutral-900 xl:min-h-[72px] xl:px-3 xl:py-6 xl:text-lg",
                             isSelected
                               ? "bg-[#f0f0f0]"
                               : "bg-white hover:bg-neutral-50",
@@ -3432,9 +3432,9 @@ export default function PosTerminal() {
                     isCompletingSale ||
                     isResumingOrder
                   }
-                  className="flex w-full items-center justify-center gap-0 bg-[#ef3636] px-3 py-6 text-base font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24] disabled:cursor-not-allowed disabled:bg-neutral-400 disabled:hover:bg-neutral-400 sm:gap-1 sm:py-6 xl:text-lg"
+                  className="flex w-full items-center justify-center gap-0 bg-[#ef3636] px-3 py-4 text-sm font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24] disabled:cursor-not-allowed disabled:bg-neutral-400 disabled:hover:bg-neutral-400 sm:gap-1 xl:py-6 xl:text-lg"
                 >
-                  <span className="text-xl">$</span>
+                  <span className="text-lg xl:text-xl">$</span>
                   Pay
                 </button>
               </div>
@@ -3474,18 +3474,18 @@ export default function PosTerminal() {
                     className="h-full overflow-y-auto pt-16"
                   >
                     <div className="border-b border-neutral-200/80 px-4 pb-3 pt-1">
-                      <h2 className="text-lg font-semibold text-neutral-900 xl:text-xl">
+                      <h2 className="text-base font-semibold text-neutral-900 xl:text-xl">
                         Results for &ldquo;{trimmedMenuSearchQuery}&rdquo;
                       </h2>
                       {menuSearchResults.length > 0 ? (
-                        <p className="mt-0.5 text-sm text-neutral-500">
+                        <p className="mt-0.5 text-xs text-neutral-500 xl:text-sm">
                           {menuSearchResults.length} product
                           {menuSearchResults.length === 1 ? "" : "s"}
                         </p>
                       ) : null}
                     </div>
                     {menuSearchResults.length === 0 ? (
-                      <div className="flex h-[calc(100%-4.5rem)] items-center justify-center px-6 text-center text-sm text-neutral-500">
+                      <div className="flex h-[calc(100%-4.5rem)] items-center justify-center px-6 text-center text-xs text-neutral-500 xl:text-sm">
                         No products match your search
                       </div>
                     ) : (
@@ -3515,7 +3515,7 @@ export default function PosTerminal() {
                   <motion.div
                     key="pos-tab-empty"
                     {...getPosPanelMotionProps(panelTransitionDirection)}
-                    className="flex h-full items-center justify-center text-sm text-neutral-500"
+                    className="flex h-full items-center justify-center text-xs text-neutral-500 xl:text-sm"
                   >
                     Select a tab
                   </motion.div>
@@ -3523,7 +3523,7 @@ export default function PosTerminal() {
                   <motion.div
                     key={`${selectedTabId}-open-item`}
                     {...getPosPanelMotionProps(panelTransitionDirection)}
-                    className="flex h-full items-center justify-center px-6 text-center text-sm text-neutral-500"
+                    className="flex h-full items-center justify-center px-6 text-center text-xs text-neutral-500 xl:text-sm"
                   >
                     Tap {selectedTab.name || "this tab"} to add a custom item
                   </motion.div>
@@ -3531,7 +3531,7 @@ export default function PosTerminal() {
                   <motion.div
                     key={`${selectedTabId}-empty`}
                     {...getPosPanelMotionProps(panelTransitionDirection)}
-                    className="flex h-full items-center justify-center text-sm text-neutral-500"
+                    className="flex h-full items-center justify-center text-xs text-neutral-500 xl:text-sm"
                   >
                     This tab has no products yet
                   </motion.div>

@@ -304,7 +304,7 @@ export default function PosCartLine({
             handleContentActivate();
           }}
           className={cn(
-            "relative z-[2] flex items-center gap-2.5 px-3 py-2.5",
+            "relative z-[2] flex items-center gap-2 px-2.5 py-2 xl:gap-2.5 xl:px-3 xl:py-2.5",
             (!isLocked || canSwipeOptions) && "cursor-pointer",
             (isSentToKitchen || isCancelled) && "text-neutral-500",
           )}
@@ -321,7 +321,7 @@ export default function PosCartLine({
           {isLocked ? (
             <span
               className={cn(
-                "inline-flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-neutral-200 bg-neutral-50 px-2 text-sm font-bold text-neutral-800",
+                "inline-flex h-7 min-w-[1.75rem] shrink-0 items-center justify-center rounded-md border border-neutral-200 bg-neutral-50 px-1.5 text-xs font-bold text-neutral-800 xl:h-8 xl:min-w-[2rem] xl:px-2 xl:text-sm",
                 strikeClass,
               )}
             >
@@ -338,7 +338,7 @@ export default function PosCartLine({
                 }
                 onQtyClick?.(line.lineId);
               }}
-              className="inline-flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-neutral-200 bg-white px-2 text-sm font-bold text-neutral-800 shadow-sm transition-colors hover:bg-neutral-50 active:bg-neutral-100"
+              className="inline-flex h-7 min-w-[1.75rem] shrink-0 items-center justify-center rounded-md border border-neutral-200 bg-white px-1.5 text-xs font-bold text-neutral-800 shadow-sm transition-colors hover:bg-neutral-50 active:bg-neutral-100 xl:h-8 xl:min-w-[2rem] xl:px-2 xl:text-sm"
               aria-label={`Edit quantity of ${displayTitle}`}
             >
               {qty}
@@ -349,7 +349,7 @@ export default function PosCartLine({
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
               <p
                 className={cn(
-                  "min-w-0 text-base font-medium text-neutral-800",
+                  "min-w-0 text-sm font-medium text-neutral-800 xl:text-base",
                   strikeClass,
                   isCancelled && "text-neutral-400",
                 )}
@@ -383,7 +383,7 @@ export default function PosCartLine({
 
           <span
             className={cn(
-              "inline-flex h-8 shrink-0 items-center justify-center rounded-md border-neutral-200 bg-white px-2 text-sm font-semibold tabular-nums text-neutral-800",
+              "inline-flex h-7 shrink-0 items-center justify-center rounded-md border-neutral-200 bg-white px-1.5 text-xs font-semibold tabular-nums text-neutral-800 xl:h-8 xl:px-2 xl:text-sm",
               strikeClass,
               isCancelled && "text-neutral-400",
             )}
@@ -434,11 +434,11 @@ export default function PosCartLine({
               return (
                 <li
                   key={`variant-${variant.groupName}-${variant.optionId}`}
-                  className="flex items-center gap-2.5 py-1.5 pl-[3.25rem] pr-3"
+                  className="flex items-center gap-2 py-1 pl-[2.75rem] pr-2.5 xl:gap-2.5 xl:py-1.5 xl:pl-[3.25rem] xl:pr-3"
                 >
                   <p
                     className={cn(
-                      "min-w-0 flex-1 truncate text-sm text-neutral-500",
+                      "min-w-0 flex-1 truncate text-xs text-neutral-500 xl:text-sm",
                       strikeClass,
                     )}
                   >
@@ -469,11 +469,11 @@ export default function PosCartLine({
               return (
                 <li
                   key={`modifier-${modifier.groupName}-${modifier.optionId}`}
-                  className="flex items-center gap-2.5 py-1.5 pl-[3.25rem] pr-3"
+                  className="flex items-center gap-2 py-1 pl-[2.75rem] pr-2.5 xl:gap-2.5 xl:py-1.5 xl:pl-[3.25rem] xl:pr-3"
                 >
                   <p
                     className={cn(
-                      "min-w-0 flex-1 truncate text-sm text-neutral-500",
+                      "min-w-0 flex-1 truncate text-xs text-neutral-500 xl:text-sm",
                       strikeClass,
                     )}
                   >
@@ -482,7 +482,7 @@ export default function PosCartLine({
                   {price > 0 ? (
                     <span
                       className={cn(
-                        "min-w-[3rem] shrink-0 text-right text-sm tabular-nums text-neutral-600",
+                        "min-w-[3rem] shrink-0 text-right text-xs tabular-nums text-neutral-600 xl:text-sm",
                         strikeClass,
                       )}
                     >

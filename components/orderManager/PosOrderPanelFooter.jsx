@@ -67,7 +67,7 @@ export default function PosOrderPanelFooter({
     >
       <div className="overflow-hidden rounded-xl border-[#efefef] bg-white drop-shadow-md">
         <div className="grid grid-cols-[1.15fr_1fr] border-b border-neutral-100">
-          <div className="space-y-1 border-r border-[#f2f2f2] px-3 py-2.5 text-sm font-semibold uppercase tracking-wide text-neutral-500 xl:text-base">
+          <div className="space-y-0.5 border-r border-[#f2f2f2] px-2.5 py-2 text-xs font-semibold uppercase tracking-wide text-neutral-500 xl:space-y-1 xl:px-3 xl:py-2.5 xl:text-base">
             <div className="flex items-baseline justify-between gap-2">
               <span className="text-neutral-400">Discount</span>
               <span className="tabular-nums text-neutral-600">
@@ -96,11 +96,11 @@ export default function PosOrderPanelFooter({
             </div>
           </div>
 
-          <div className="flex flex-col items-center justify-center px-3 py-2.5 text-center">
-            <span className="text-base font-bold uppercase tracking-wide text-neutral-900">
+          <div className="flex flex-col items-center justify-center px-2.5 py-2 text-center xl:px-3 xl:py-2.5">
+            <span className="text-sm font-bold uppercase tracking-wide text-neutral-900 xl:text-base">
               Total
             </span>
-            <span className="text-2xl font-bold text-[#e72a2a]">
+            <span className="text-xl font-bold text-[#e72a2a] xl:text-2xl">
               {formatMoney(total)}
             </span>
           </div>
@@ -150,7 +150,7 @@ function FooterAction({
       disabled={disabled}
       aria-label={ariaLabel || undefined}
       className={cn(
-        "flex min-h-[4.25rem] items-center justify-center gap-2 px-2 text-sm font-semibold uppercase tracking-wide text-neutral-900 transition-colors",
+        "flex min-h-[3.5rem] items-center justify-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-neutral-900 transition-colors xl:min-h-[4.25rem] xl:gap-2 xl:text-sm",
         disabled
           ? "cursor-not-allowed opacity-40"
           : "hover:bg-neutral-200/80 active:bg-neutral-300/70",
@@ -158,9 +158,8 @@ function FooterAction({
       )}
     >
       <Icon
-        size={22}
         strokeWidth={1.5}
-        className={cn("shrink-0", iconClassName)}
+        className={cn("size-[18px] shrink-0 xl:size-[22px]", iconClassName)}
       />
       {label}
     </button>
