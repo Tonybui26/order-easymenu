@@ -303,14 +303,20 @@ function PosProductCard({
   disabled = false,
   useKitchenPrintAliases = false,
   menuStyle = "style1",
+  cartQty = 0,
 }) {
   const displayTitle =
     formatPosItemDisplayName(item.title, { useKitchenPrintAliases }) ||
     "Untitled";
   const hasImage = Boolean(item.PhotoSrc);
   const isStyle2 = menuStyle === "style2";
+  const isInCart = cartQty > 0;
 
   if (isStyle2) {
+    const overlayGradient = isInCart
+      ? "linear-gradient(to bottom, rgba(48,28,15,0) 0%, rgba(48,28,15,1) 89%)"
+      : "linear-gradient(to bottom, rgba(102,102,102,0) 0%, rgba(0,0,0,1) 89%)";
+
     return (
       <button
         type="button"
@@ -329,12 +335,14 @@ function PosProductCard({
             />
             <div
               className="absolute inset-0 opacity-[0.35]"
-              style={{
-                backgroundImage:
-                  "linear-gradient(to bottom, rgba(102,102,102,0) 0%, rgba(0,0,0,1) 89%)",
-              }}
+              style={{ backgroundImage: overlayGradient }}
             />
-            <span className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/45 to-transparent px-3 pb-3.5 pt-6 text-center text-sm font-bold leading-snug text-white xl:text-base">
+            <span
+              className={cn(
+                "absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t to-transparent px-3 pb-3.5 pt-6 text-center text-sm font-bold leading-snug text-white xl:text-base",
+                isInCart ? "from-[#301C0F]/70" : "from-black/45",
+              )}
+            >
               <span className="line-clamp-3">{displayTitle}</span>
             </span>
           </>
@@ -343,6 +351,20 @@ function PosProductCard({
             <span className="line-clamp-3">{displayTitle}</span>
           </span>
         )}
+        <AnimatePresence>
+          {isInCart ? (
+            <motion.span
+              key={cartQty}
+              initial={{ scale: 0.35, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.35, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 520, damping: 16 }}
+              className="absolute right-2 top-2 z-20 flex size-7 items-center justify-center rounded-[100%] bg-brand_accent text-sm font-bold leading-none text-white shadow-md xl:size-8 xl:text-base"
+            >
+              {cartQty}
+            </motion.span>
+          ) : null}
+        </AnimatePresence>
       </button>
     );
   }
@@ -499,6 +521,18 @@ export default function PosTerminal() {
   const { handleOpenCashDrawer } = usePosOpenCashDrawer(showDismissibleToast);
   const posConfig = useMemo(() => resolvePosConfig(menuConfig), [menuConfig]);
   const posMenuStyle = posConfig.menuStyle;
+  const cartQtyByItemId = useMemo(() => {
+    const qtyById = new Map();
+    for (const line of cartLines) {
+      const itemId = line?.itemId;
+      if (!itemId) continue;
+      qtyById.set(
+        itemId,
+        (qtyById.get(itemId) || 0) + Number(line.quantity || 1),
+      );
+    }
+    return qtyById;
+  }, [cartLines]);
   const tableTimerEnabled =
     posConfig.manualOpenTableEnabled === true ||
     posConfig.manualCloseTableEnabled === true;
@@ -3465,6 +3499,7 @@ export default function PosTerminal() {
                               disabled={isViewOnly}
                               useKitchenPrintAliases={useKitchenPrintAliases}
                               menuStyle={posMenuStyle}
+                              cartQty={cartQtyByItemId.get(item.id) || 0}
                             />
                           ))}
                         </div>
@@ -3525,6 +3560,7 @@ export default function PosTerminal() {
                                 disabled={isViewOnly}
                                 useKitchenPrintAliases={useKitchenPrintAliases}
                                 menuStyle={posMenuStyle}
+                                cartQty={cartQtyByItemId.get(item.id) || 0}
                               />
                             ))}
                           </div>
