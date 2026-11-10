@@ -103,7 +103,7 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
           className="size-8 xl:size-8"
           priority
         />
-        <span className="font-brand text-xl font-extrabold text-white xl:text-[1.4rem]">
+        <span className="font-brand text-[1.4rem] font-extrabold text-white">
           Easy<span className="text-brand_accent">Menu</span>
         </span>
       </button>

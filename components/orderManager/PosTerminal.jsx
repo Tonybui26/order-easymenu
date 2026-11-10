@@ -3068,7 +3068,7 @@ export default function PosTerminal() {
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {/* Left: current order */}
-          <section className="flex w-[34%] min-w-[280px] max-w-[440px] shrink-0 flex-col bg-white pb-[env(safe-area-inset-bottom)]">
+          <section className="flex w-[30%] min-w-[280px] max-w-[440px] shrink-0 flex-col bg-white pb-[env(safe-area-inset-bottom)]">
             <div className="relative z-20 flex h-16 shrink-0 items-stretch gap-2 border-neutral-200 bg-[#f2f2f2] pr-2">
               <motion.button
                 key={tableFieldShakeKey}
