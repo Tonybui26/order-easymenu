@@ -524,6 +524,7 @@ export default function PosTerminal() {
   const cartQtyByItemId = useMemo(() => {
     const qtyById = new Map();
     for (const line of cartLines) {
+      if (!isOpenCartLine(line)) continue;
       const itemId = line?.itemId;
       if (!itemId) continue;
       qtyById.set(
