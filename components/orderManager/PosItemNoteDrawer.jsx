@@ -156,13 +156,13 @@ export default function PosItemNoteDrawer({
         </div>
       </div>
 
-      <label className="mt-4 flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-neutral-300 bg-white px-4 py-3">
-        <span className="text-base font-semibold uppercase tracking-wide text-neutral-900">
+      <label className="mt-4 flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-neutral-300 bg-white px-3 py-2.5">
+        <span className="text-sm font-semibold uppercase tracking-wide text-neutral-900">
           Mark for Takeaway
         </span>
         <input
           type="checkbox"
-          className="toggle toggle-primary toggle-lg shrink-0"
+          className="toggle toggle-primary toggle-sm shrink-0"
           checked={isTakeaway}
           onChange={(event) => setIsTakeaway(event.target.checked)}
           aria-label="Mark item for takeaway"
