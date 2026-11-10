@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BellRing, Check, Plus, UserRoundPen } from "lucide-react";
+import { BellRing, Check, UserRoundPen } from "lucide-react";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
@@ -297,6 +297,25 @@ function useAllMenuItems(menuContent) {
   }, [menuContent]);
 }
 
+function PosProductCartQtyBadge({ cartQty }) {
+  return (
+    <AnimatePresence>
+      {cartQty > 0 ? (
+        <motion.span
+          key={cartQty}
+          initial={{ scale: 0.35, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.35, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 520, damping: 16 }}
+          className="absolute right-2 top-2 z-20 flex size-7 items-center justify-center rounded-[100%] bg-brand_accent text-sm font-bold leading-none text-white shadow-md xl:size-8 xl:text-base"
+        >
+          {cartQty}
+        </motion.span>
+      ) : null}
+    </AnimatePresence>
+  );
+}
+
 function PosProductCard({
   item,
   onAdd,
@@ -351,20 +370,7 @@ function PosProductCard({
             <span className="line-clamp-3">{displayTitle}</span>
           </span>
         )}
-        <AnimatePresence>
-          {isInCart ? (
-            <motion.span
-              key={cartQty}
-              initial={{ scale: 0.35, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.35, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 520, damping: 16 }}
-              className="absolute right-2 top-2 z-20 flex size-7 items-center justify-center rounded-[100%] bg-brand_accent text-sm font-bold leading-none text-white shadow-md xl:size-8 xl:text-base"
-            >
-              {cartQty}
-            </motion.span>
-          ) : null}
-        </AnimatePresence>
+        <PosProductCartQtyBadge cartQty={cartQty} />
       </button>
     );
   }
@@ -376,9 +382,7 @@ function PosProductCard({
       disabled={disabled}
       className="relative flex w-full flex-col overflow-hidden rounded-lg bg-white shadow-[0_0_0_1px_#1a1a1a0f] transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
     >
-      <span className="absolute left-2 top-2 z-10 flex size-8 items-center justify-center rounded-full bg-white text-neutral-600 shadow-sm ring-1 ring-black/5">
-        <Plus size={18} strokeWidth={2.5} />
-      </span>
+      <PosProductCartQtyBadge cartQty={cartQty} />
       {hasImage ? (
         <>
           <div className="relative aspect-square w-full bg-neutral-100">
