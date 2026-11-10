@@ -319,26 +319,30 @@ function PosProductCard({
         className="relative aspect-square w-full overflow-hidden rounded-2xl border-[6px] border-white bg-neutral-200 shadow-[0_1px_2px_rgba(0,0,0,0.06)] transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
       >
         {hasImage ? (
-          <Image
-            src={item.PhotoSrc}
-            alt={displayTitle}
-            fill
-            sizes="20vw"
-            className="object-cover"
-          />
+          <>
+            <Image
+              src={item.PhotoSrc}
+              alt={displayTitle}
+              fill
+              sizes="20vw"
+              className="object-cover"
+            />
+            <div
+              className="absolute inset-0 opacity-[0.35]"
+              style={{
+                backgroundImage:
+                  "linear-gradient(to bottom, rgba(102,102,102,0) 0%, rgba(0,0,0,1) 89%)",
+              }}
+            />
+            <span className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/45 to-transparent px-3 pb-3.5 pt-6 text-center text-sm font-bold leading-snug text-white xl:text-base">
+              <span className="line-clamp-3">{displayTitle}</span>
+            </span>
+          </>
         ) : (
-          <div className="absolute inset-0 bg-neutral-200" />
+          <span className="absolute inset-0 z-10 flex items-center justify-center bg-neutral-100 px-3 text-center text-sm font-bold leading-snug text-neutral-800 xl:text-base">
+            <span className="line-clamp-3">{displayTitle}</span>
+          </span>
         )}
-        <div
-          className="absolute inset-0 opacity-[0.35]"
-          style={{
-            backgroundImage:
-              "linear-gradient(to bottom, rgba(102,102,102,0) 0%, rgba(0,0,0,1) 89%)",
-          }}
-        />
-        <span className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/45 to-transparent px-3 pb-3.5 pt-6 text-center text-sm font-bold leading-snug text-white xl:text-base">
-          <span className="line-clamp-3">{displayTitle}</span>
-        </span>
       </button>
     );
   }
