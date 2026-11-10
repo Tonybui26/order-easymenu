@@ -133,7 +133,7 @@ export default function UnpaidTableCard({
           <button
             type="button"
             onClick={() => onMarkAllPaid(tableOrders)}
-            className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-green-600 px-4 py-3 text-sm font-medium text-white transition-colors duration-200 hover:bg-green-700 xl:text-base"
+            className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-[#53a974] px-4 py-3 text-sm font-medium text-white transition-colors duration-200 hover:bg-[#479466] xl:text-base"
           >
             <span>Mark All Paid</span>
           </button>

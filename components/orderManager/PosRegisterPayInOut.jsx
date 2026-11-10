@@ -240,7 +240,7 @@ export default function PosRegisterPayInOut({
               className={cn(
                 "flex-1 rounded-xl px-4 py-3 text-sm font-semibold text-white transition-colors disabled:opacity-50",
                 isPayIn
-                  ? "bg-[#16a34a] hover:bg-[#15803d]"
+                  ? "bg-[#53a974] hover:bg-[#479466]"
                   : "bg-[#ef3636] hover:bg-[#e0662e]",
               )}
             >

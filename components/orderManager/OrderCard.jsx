@@ -1116,10 +1116,10 @@ export default function OrderCard({
                   <button
                     onClick={onReady}
                     disabled={isProcessing}
-                    className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-green-600 px-4 py-4 text-sm font-medium uppercase text-white transition-colors duration-200 xl:text-base ${
+                    className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-[#53a974] px-4 py-4 text-sm font-medium uppercase text-white transition-colors duration-200 xl:text-base ${
                       isProcessing
                         ? "cursor-not-allowed opacity-50"
-                        : "hover:bg-green-700"
+                        : "hover:bg-[#479466]"
                     }`}
                   >
                     <span>{isProcessing ? "Processing..." : "Ready"}</span>
@@ -1144,10 +1144,10 @@ export default function OrderCard({
                   <button
                     onClick={() => onMarkAsPaid(order._id)}
                     disabled={isProcessing}
-                    className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-green-600 px-4 py-4 text-sm font-medium uppercase text-white transition-colors duration-200 xl:text-base ${
+                    className={`flex flex-1 items-center justify-center space-x-2 rounded-xl bg-[#53a974] px-4 py-4 text-sm font-medium uppercase text-white transition-colors duration-200 xl:text-base ${
                       isProcessing
                         ? "cursor-not-allowed opacity-50"
-                        : "hover:bg-green-700"
+                        : "hover:bg-[#479466]"
                     }`}
                   >
                     <span>

@@ -6,7 +6,8 @@ import { cn } from "@/lib/helper";
 export const POS_ACTION_TONE = {
   blue: "bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800",
   teal: "bg-teal-600 text-white hover:bg-teal-700 active:bg-teal-800",
-  green: "bg-green-600 text-white hover:bg-green-700 active:bg-green-800",
+  green:
+    "bg-[#53a974] text-white hover:bg-[#479466] active:bg-[#3d7f57]",
   purple: "bg-purple-600 text-white hover:bg-purple-700 active:bg-purple-800",
   red: "bg-red-600 text-white hover:bg-red-700 active:bg-red-800",
 };
