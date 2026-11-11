@@ -10,7 +10,10 @@ import {
 } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
-import { verifyStaffPinAction } from "@/lib/actions/authActions";
+import {
+  releaseOrderManagerSessionAction,
+  verifyStaffPinAction,
+} from "@/lib/actions/authActions";
 import {
   clearActiveOperator,
   isTerminalLocked,
@@ -100,6 +103,11 @@ export function ActiveOperatorProvider({ children }) {
   const storeLogout = useCallback(async () => {
     clearActiveOperator();
     setActiveOperator(null);
+    try {
+      await releaseOrderManagerSessionAction();
+    } catch (error) {
+      console.error("release OM session on logout:", error);
+    }
     await signOut({ redirect: false });
     window.location.href = `${window.location.origin}/signin`;
   }, []);
