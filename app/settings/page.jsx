@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, LogOut } from "lucide-react";
 import toast from "react-hot-toast";
 import PosChromeHeader from "@/components/orderManager/PosChromeHeader";
 import LocalDeviceSettings from "@/components/orderManager/settings/LocalDeviceSettings";
@@ -12,7 +12,7 @@ import SettingsSaveBar from "@/components/orderManager/settings/SettingsSaveBar"
 import { usePosOpenCashDrawer } from "@/components/orderManager/usePosOpenCashDrawer";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
-import { canEditPosMenu } from "@/lib/staff/staffRoles";
+import { canEditPosMenu, isStoreManagerRole } from "@/lib/staff/staffRoles";
 import { fetchGetMenuByOwnerEmail } from "@/lib/api/fetchApi";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import { resolvePosConfig } from "@/lib/pos/posConfig";
@@ -35,9 +35,15 @@ export default function SettingsPage() {
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
   const { userData } = useGlobalAppContext();
   const { menuConfig, saveMenuConfigExplicit, dataLoaded } = useMenuContext();
-  const { activeOperator, hydrated: operatorHydrated } = useActiveOperator();
+  const {
+    activeOperator,
+    hydrated: operatorHydrated,
+    storeLogout,
+  } = useActiveOperator();
   const canEditMenu =
     operatorHydrated && canEditPosMenu(menuConfig, activeOperator);
+  const canStoreLogout =
+    operatorHydrated && isStoreManagerRole(activeOperator?.role);
   const savedPosConfig = useMemo(
     () => resolvePosConfig(menuConfig),
     [menuConfig],
@@ -163,7 +169,7 @@ export default function SettingsPage() {
           <p className="px-4 pb-2 pt-4 text-xs font-medium text-gray-500">
             Settings
           </p>
-          <nav aria-label="Settings">
+          <nav aria-label="Settings" className="flex-1">
             {SETTINGS_SECTIONS.map((section) => {
               const isActive = section.id === activeSection;
               return (
@@ -195,6 +201,18 @@ export default function SettingsPage() {
               </button>
             ) : null}
           </nav>
+          {canStoreLogout ? (
+            <div className="mt-auto border-t border-gray-200 px-2 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <button
+                type="button"
+                onClick={() => storeLogout()}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm text-neutral-700 transition-colors hover:bg-black/[0.04]"
+              >
+                <LogOut className="size-5 shrink-0 text-red-600" aria-hidden />
+                Logout
+              </button>
+            </div>
+          ) : null}
         </aside>
 
         <div
