@@ -18,15 +18,18 @@ import {
   Package2,
   Settings,
   Monitor,
+  MonitorSmartphone,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import { useActiveOperator } from "@/components/context/ActiveOperatorContext";
 import { useMenuContext } from "@/components/context/MenuContext";
+import { usePosNavigate } from "@/components/context/PosNavigateContext";
 import {
   isStaffPinLockEnabled,
   isStoreManagerRole,
 } from "@/lib/staff/staffRoles";
+import { getPosHomePath } from "@/lib/pos/posConfig";
 import {
   NOTIFICATION_SOUND_OPTIONS,
   NOTIFICATION_SOUND_REPLAY_INTERVAL_MS,
@@ -51,11 +54,13 @@ export default function MoreMenuButton({
   const [isSmallScreen, setIsSmallScreen] = useState(false);
   const [isTestingSound, setIsTestingSound] = useState(false);
   const router = useRouter();
+  const { navigate } = usePosNavigate();
   const { activeOperator, storeLogout } = useActiveOperator();
   const { menuConfig } = useMenuContext();
   const pinLockEnabled = isStaffPinLockEnabled(menuConfig);
   const canStoreLogout =
     !pinLockEnabled || isStoreManagerRole(activeOperator?.role);
+  const posEnabled = Boolean(menuConfig?.posEnabled);
   const {
     notificationSoundId,
     setNotificationSoundId,
@@ -161,6 +166,11 @@ export default function MoreMenuButton({
     setShowModal(false);
   }
 
+  function handleOpenPos() {
+    setShowModal(false);
+    navigate(getPosHomePath(menuConfig));
+  }
+
   const moreFeatures = [
     // View Mode Tabs for Small Screens Only.
     // Kitchen Display shows Preparing and Ready in the header on every size.
@@ -239,42 +249,56 @@ export default function MoreMenuButton({
           { type: "divider" },
         ]
       : []),
-    // Existing Features (always shown)
-    {
-      id: "kitchen-display",
-      icon: Monitor,
-      title: "Kitchen display",
-      description: kitchenDisplayEnabled
-        ? "On for this device — tap to turn off"
-        : "Off — tap to simplify this screen for the kitchen",
-      action: () => setKitchenDisplayEnabled(!kitchenDisplayEnabled),
-      keepModalOpen: true,
-      isActive: kitchenDisplayEnabled,
-    },
-    {
-      icon: CheckCheck,
-      title: "Completed Orders",
-      // description: "View and manage all completed orders",
-      action: () => {
-        setViewMode("completed");
-        setShowModal(false);
-      },
-    },
+    ...(kitchenDisplayEnabled
+      ? posEnabled
+        ? [
+            {
+              icon: MonitorSmartphone,
+              title: "POS",
+              description: "Open point of sale",
+              action: handleOpenPos,
+            },
+          ]
+        : []
+      : [
+          {
+            id: "kitchen-display",
+            icon: Monitor,
+            title: "Kitchen display",
+            description: kitchenDisplayEnabled
+              ? "On for this device — tap to turn off"
+              : "Off — tap to simplify this screen for the kitchen",
+            action: () => setKitchenDisplayEnabled(!kitchenDisplayEnabled),
+            keepModalOpen: true,
+            isActive: kitchenDisplayEnabled,
+          },
+          {
+            icon: CheckCheck,
+            title: "Completed Orders",
+            action: () => {
+              setViewMode("completed");
+              setShowModal(false);
+            },
+          },
+        ]),
     {
       icon: Package2,
       title: "Product availability",
-      // description: "Mark items sold out while keeping them on the menu",
       action: () => {
         setViewMode("productAvailability");
         setShowModal(false);
       },
       isActive: viewMode === "productAvailability",
     },
-    {
-      icon: Settings,
-      title: "Settings",
-      action: handleOpenSettings,
-    },
+    ...(!kitchenDisplayEnabled
+      ? [
+          {
+            icon: Settings,
+            title: "Settings",
+            action: handleOpenSettings,
+          },
+        ]
+      : []),
     {
       id: "mute-new-order-alerts",
       icon: newOrderAlertsMuted ? BellOff : BellRing,
@@ -300,12 +324,6 @@ export default function MoreMenuButton({
       description: "Reload to apply latest changes",
       action: () => window.location.reload(),
     },
-    // {
-    //   icon: BarChart3,
-    //   title: "Analytics & Reports",
-    //   description: "View order statistics and business insights",
-    //   action: () => console.log("Analytics clicked"),
-    // },
   ];
 
   return (
@@ -322,10 +340,24 @@ export default function MoreMenuButton({
 
       {/* More Features Modal */}
       <dialog className={`modal ${showModal ? "modal-open" : ""}`}>
-        <div className="modal-box max-w-2xl">
+        <div
+          className={`modal-box ${
+            kitchenDisplayEnabled ? "max-w-sm p-4" : "max-w-2xl"
+          }`}
+        >
           {/* Header */}
-          <div className="mb-6 flex items-center justify-between">
-            <h3 className="text-lg font-bold text-gray-900">More Features</h3>
+          <div
+            className={`flex items-center justify-between ${
+              kitchenDisplayEnabled ? "mb-3" : "mb-6"
+            }`}
+          >
+            <h3
+              className={`font-bold text-gray-900 ${
+                kitchenDisplayEnabled ? "text-base" : "text-lg"
+              }`}
+            >
+              More Features
+            </h3>
             <button
               onClick={() => setShowModal(false)}
               className="btn btn-circle btn-ghost btn-sm"
@@ -335,7 +367,11 @@ export default function MoreMenuButton({
           </div>
 
           {/* Features Grid */}
-          <div className="grid grid-cols-1 gap-2">
+          <div
+            className={`grid grid-cols-1 ${
+              kitchenDisplayEnabled ? "gap-1.5" : "gap-2"
+            }`}
+          >
             {moreFeatures.map((feature, index) => {
               // Handle divider
               if (feature.type === "divider") {
@@ -442,7 +478,11 @@ export default function MoreMenuButton({
           </div>
 
           {canStoreLogout ? (
-            <div className="mt-6 flex justify-end">
+            <div
+              className={`flex justify-end ${
+                kitchenDisplayEnabled ? "mt-3" : "mt-6"
+              }`}
+            >
               <button
                 onClick={async () => {
                   setShowModal(false);
