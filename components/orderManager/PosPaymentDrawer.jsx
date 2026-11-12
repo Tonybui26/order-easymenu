@@ -474,6 +474,7 @@ export default function PosPaymentDrawer({
       onClose={handleClose}
       showHeader={false}
       side="right"
+      widthClassName="w-[min(100%,20rem)] md:w-[min(100%,28rem)]"
       closeDisabled={
         isPurchasing ||
         cardApproved ||
@@ -620,15 +621,15 @@ export default function PosPaymentDrawer({
           }
         />
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
-          <p className="mb-3 text-center text-xl font-semibold text-white">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3 md:p-4">
+          <p className="mb-2 text-center text-lg font-semibold text-white md:mb-3 md:text-xl">
             Amount Tendered
           </p>
 
-          <div className="mb-4 flex items-center gap-2">
+          <div className="mb-3 flex items-center gap-2 md:mb-4">
             <div
               className={cn(
-                "flex min-h-[3.25rem] flex-1 items-center justify-center rounded-lg bg-white px-4 py-4 text-center text-3xl font-bold tabular-nums",
+                "flex min-h-[2.75rem] flex-1 items-center justify-center rounded-lg bg-white px-3 py-3 text-center text-2xl font-bold tabular-nums md:min-h-[3.25rem] md:px-4 md:py-4 md:text-3xl",
                 digits ? "text-neutral-900" : "text-neutral-300",
               )}
             >
@@ -637,13 +638,13 @@ export default function PosPaymentDrawer({
             <button
               type="button"
               aria-label="Tip"
-              className="flex size-12 shrink-0 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:bg-white/20"
+              className="flex size-10 shrink-0 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:bg-white/20 md:size-12"
             >
-              <HandCoins size={28} strokeWidth={1.75} />
+              <HandCoins size={24} strokeWidth={1.75} />
             </button>
           </div>
 
-          <div className="mb-4 grid grid-cols-4 gap-1.5">
+          <div className="mb-3 grid grid-cols-4 gap-1 md:mb-4 md:gap-1.5">
             {KEYPAD_ROWS.flat().map((key) => {
               if (key === "backspace") {
                 return (
@@ -652,10 +653,10 @@ export default function PosPaymentDrawer({
                     type="button"
                     onClick={() => handleKey(key)}
                     disabled={isPurchasing || isCompletingSale}
-                    className="flex h-16 items-center justify-center rounded-md bg-white text-2xl font-semibold text-neutral-900 shadow-sm transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+                    className="flex h-12 items-center justify-center rounded-md bg-white text-xl font-semibold text-neutral-900 shadow-sm transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-70 md:h-16 md:text-2xl"
                     aria-label="Delete"
                   >
-                    <Delete size={20} strokeWidth={2.25} />
+                    <Delete size={18} strokeWidth={2.25} />
                   </button>
                 );
               }
@@ -665,7 +666,7 @@ export default function PosPaymentDrawer({
                   type="button"
                   onClick={() => handleKey(key)}
                   disabled={isPurchasing || isCompletingSale}
-                  className="flex h-16 items-center justify-center rounded-md bg-white text-2xl font-semibold text-neutral-900 shadow-sm transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="flex h-12 items-center justify-center rounded-md bg-white text-xl font-semibold text-neutral-900 shadow-sm transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-70 md:h-16 md:text-2xl"
                 >
                   {key}
                 </button>
@@ -673,7 +674,7 @@ export default function PosPaymentDrawer({
             })}
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-1.5 md:gap-2">
             {PAYMENT_METHODS.map(({ id, label, Icon, className }) => {
               const isCardWaiting = id === "credit-card" && isPurchasing;
               const isCashLocked =
@@ -685,12 +686,12 @@ export default function PosPaymentDrawer({
                   disabled={isPurchasing || isCompletingSale}
                   onClick={() => handleSelectPayment(id)}
                   className={cn(
-                    "flex min-h-[5.5rem] flex-col items-center justify-center gap-1.5 rounded-lg px-3 py-3 text-sm font-bold uppercase tracking-wide shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-70",
+                    "flex min-h-[4rem] flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wide shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-70 md:min-h-[5.5rem] md:gap-1.5 md:px-3 md:py-3 md:text-sm",
                     className,
                     isCashLocked && "opacity-55",
                   )}
                 >
-                  <Icon size={28} strokeWidth={1.75} />
+                  <Icon size={22} strokeWidth={1.75} />
                   {isCardWaiting ? "Waiting for EFTPOS…" : label}
                 </button>
               );
@@ -764,29 +765,29 @@ function FinaliseSaleStep({
   const hasCardFee = isCard && Number(processingFee) > 0;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3 md:p-5">
       <div className="flex flex-1 flex-col items-center justify-center text-center">
-        <h2 className="text-2xl font-bold text-white">
+        <h2 className="text-xl font-bold text-white md:text-2xl">
           {trainingMode ? "Training Payment" : "Finalise Sale!"}
         </h2>
         {isCard ? (
-          <p className="mt-2 text-base font-medium text-white/95">
+          <p className="mt-2 text-sm font-medium text-white/95 md:text-base">
             Amount charged
           </p>
         ) : (
-          <p className="mt-2 text-base font-medium text-white/95">
+          <p className="mt-2 text-sm font-medium text-white/95 md:text-base">
             Change required from: {formatMoney(amountTendered)}
           </p>
         )}
 
-        <div className="mt-8 flex min-h-[4.5rem] w-full max-w-sm items-center justify-center rounded-lg bg-white px-4 py-5">
-          <span className="text-4xl font-bold tabular-nums text-neutral-900">
+        <div className="mt-5 flex min-h-[3.5rem] w-full max-w-sm items-center justify-center rounded-lg bg-white px-3 py-4 md:mt-8 md:min-h-[4.5rem] md:px-4 md:py-5">
+          <span className="text-3xl font-bold tabular-nums text-neutral-900 md:text-4xl">
             {formatMoney(isCard ? amountTendered : change)}
           </span>
         </div>
 
         {showManualCardInstruction ? (
-          <p className="mt-5 max-w-sm text-base font-bold text-white">
+          <p className="mt-4 max-w-sm text-sm font-bold text-white md:mt-5 md:text-base">
             Approve the card payment on your EFTPOS terminal, then tap Complete
             Sale.
           </p>
@@ -799,12 +800,12 @@ function FinaliseSaleStep({
         ) : null}
 
         {trainingMode ? (
-          <p className="mt-5 max-w-sm text-sm text-white/85">
+          <p className="mt-4 max-w-sm text-sm text-white/85 md:mt-5">
             Nothing is saved. Close this step, then tap Hold to clear the
             training check.
           </p>
         ) : hideReceiptActions ? null : (
-          <div className="mt-5 w-full max-w-sm">
+          <div className="mt-4 w-full max-w-sm md:mt-5">
             <button
               type="button"
               disabled={isPrintingReceipt || isCompletingSale}
@@ -814,7 +815,7 @@ function FinaliseSaleStep({
                   onInvoicePrinted?.();
                 }
               }}
-              className="min-h-[4.25rem] w-full rounded-lg bg-[#E7AB94] px-3 text-sm font-bold uppercase tracking-wide text-[#984B23] transition-colors hover:bg-[#E7AB94] active:bg-[#E7AB94] disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-[3.25rem] w-full rounded-lg bg-[#E7AB94] px-3 text-sm font-bold uppercase tracking-wide text-[#984B23] transition-colors hover:bg-[#E7AB94] active:bg-[#E7AB94] disabled:cursor-not-allowed disabled:opacity-60 md:min-h-[4.25rem]"
             >
               {isPrintingReceipt ? "Printing…" : "Print Invoice"}
             </button>
@@ -826,7 +827,7 @@ function FinaliseSaleStep({
         <button
           type="button"
           onClick={onTrainingDone}
-          className="mt-6 flex min-h-[3.75rem] w-full items-center justify-center rounded-lg bg-white text-base font-bold uppercase tracking-wide text-[#984B28] transition-colors hover:bg-white/95 active:bg-white/90"
+          className="mt-4 flex min-h-[3rem] w-full items-center justify-center rounded-lg bg-white text-sm font-bold uppercase tracking-wide text-[#984B28] transition-colors hover:bg-white/95 active:bg-white/90 md:mt-6 md:min-h-[3.75rem] md:text-base"
         >
           Done
         </button>
@@ -835,7 +836,7 @@ function FinaliseSaleStep({
           type="button"
           onClick={onCompleteSale}
           disabled={isCompletingSale || isPrintingReceipt}
-          className="mt-6 flex min-h-[3.75rem] w-full items-center justify-center rounded-lg bg-[#ef3636] text-base font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24] disabled:cursor-not-allowed disabled:opacity-70"
+          className="mt-4 flex min-h-[3rem] w-full items-center justify-center rounded-lg bg-[#ef3636] text-sm font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#e0662e] active:bg-[#d45c24] disabled:cursor-not-allowed disabled:opacity-70 md:mt-6 md:min-h-[3.75rem] md:text-base"
         >
           {completeLabel}
         </button>
