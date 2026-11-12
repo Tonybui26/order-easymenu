@@ -6,11 +6,12 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { usePosNavigate } from "@/components/context/PosNavigateContext";
 import {
   Folder,
+  Monitor,
   PanelBottomOpen,
   Printer,
-  QrCode,
   RefreshCw,
 } from "lucide-react";
+import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { getPosHomePath } from "@/lib/pos/posConfig";
 import PosHeaderNavMenu from "./PosHeaderNavMenu";
@@ -41,7 +42,13 @@ const POS_HEADER_ACTIONS = [
     href: "/pos/held",
     requiresPos: true,
   },
-  { id: "qr", label: "QR", Icon: QrCode, href: "/" },
+  {
+    id: "kds",
+    label: "KSD",
+    Icon: Monitor,
+    href: "/",
+    enableKitchenDisplay: true,
+  },
   {
     id: "cash-drawer",
     label: "Open drawer",
@@ -67,6 +74,8 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { menuConfig } = useMenuContext();
+  const { kitchenDisplayEnabled, setKitchenDisplayEnabled } =
+    useGlobalAppContext();
   const posEnabled = Boolean(menuConfig?.posEnabled);
   const hasOffTableHeld = useSyncExternalStore(
     subscribeHeldOffTableAlert,
@@ -109,55 +118,62 @@ export default function PosChromeHeader({ onLogoClick, onOpenCashDrawer }) {
       </button>
 
       <div className="flex items-center gap-3 sm:gap-6">
-        {headerActions.map(({ id, label, Icon, href }) => {
-          const isActive =
-            id === "print"
-              ? pathname === "/settings" &&
-                searchParams.get("section") === "printers"
-              : href &&
-                (pathname === href ||
-                  (href !== "/" && pathname?.startsWith(href)));
-          const showAlert = id === "held" && hasOffTableHeld;
+        {headerActions.map(
+          ({ id, label, Icon, href, enableKitchenDisplay }) => {
+            const isActive =
+              id === "print"
+                ? pathname === "/settings" &&
+                  searchParams.get("section") === "printers"
+                : id === "kds"
+                  ? pathname === "/" && kitchenDisplayEnabled
+                  : href &&
+                    (pathname === href ||
+                      (href !== "/" && pathname?.startsWith(href)));
+            const showAlert = id === "held" && hasOffTableHeld;
 
-          return (
-            <button
-              key={id}
-              type="button"
-              aria-label={label}
-              aria-current={isActive ? "page" : undefined}
-              onClick={() => {
-                if (id === "cash-drawer") {
-                  onOpenCashDrawer?.();
-                  return;
-                }
-                if (id === "sync") {
-                  void reloadAppWithCatalogSync();
-                  return;
-                }
-                if (href) navigate(href);
-              }}
-              className={`relative flex size-10 items-center justify-center rounded-xl border border-transparent transition-colors active:bg-black/25 sm:size-11 ${
-                isActive
-                  ? "bg-brand_accent/25 text-brand_accent"
-                  : "bg-brand_accent/10 text-white"
-              }`}
-            >
-              <Icon size={24} strokeWidth={1.5} />
-              {showAlert && (
-                <span className="absolute -right-1 -top-1 flex size-3 items-center justify-center">
-                  <span
-                    aria-hidden
-                    className="absolute size-3 rounded-full border-2 border-amber-400 [animation:held-alert-wave_1.4s_ease-out_infinite]"
-                  />
-                  <span
-                    aria-hidden
-                    className="relative size-2.5 rounded-full bg-amber-400"
-                  />
-                </span>
-              )}
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={id}
+                type="button"
+                aria-label={label}
+                aria-current={isActive ? "page" : undefined}
+                onClick={() => {
+                  if (id === "cash-drawer") {
+                    onOpenCashDrawer?.();
+                    return;
+                  }
+                  if (id === "sync") {
+                    void reloadAppWithCatalogSync();
+                    return;
+                  }
+                  if (enableKitchenDisplay) {
+                    setKitchenDisplayEnabled(true);
+                  }
+                  if (href) navigate(href);
+                }}
+                className={`relative flex size-10 items-center justify-center rounded-xl border border-transparent transition-colors active:bg-black/25 sm:size-11 ${
+                  isActive
+                    ? "bg-brand_accent/25 text-brand_accent"
+                    : "bg-brand_accent/10 text-white"
+                }`}
+              >
+                <Icon size={24} strokeWidth={1.5} />
+                {showAlert && (
+                  <span className="absolute -right-1 -top-1 flex size-3 items-center justify-center">
+                    <span
+                      aria-hidden
+                      className="absolute size-3 rounded-full border-2 border-amber-400 [animation:held-alert-wave_1.4s_ease-out_infinite]"
+                    />
+                    <span
+                      aria-hidden
+                      className="relative size-2.5 rounded-full bg-amber-400"
+                    />
+                  </span>
+                )}
+              </button>
+            );
+          },
+        )}
         <PosHeaderNavMenu />
         <PosHeaderUserPanel />
       </div>
