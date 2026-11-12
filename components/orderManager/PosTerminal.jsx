@@ -3529,6 +3529,7 @@ export default function PosTerminal() {
                       selectedVariants={panelSelections.selectedVariants}
                       selectedModifiers={panelSelections.selectedModifiers}
                       useKitchenPrintAliases={useKitchenPrintAliases}
+                      menuStyle={posMenuStyle}
                       onSelectVariant={handleSelectVariant}
                       onToggleModifier={handleToggleModifier}
                     />

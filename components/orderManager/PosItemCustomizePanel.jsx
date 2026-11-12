@@ -22,12 +22,17 @@ export default function PosItemCustomizePanel({
   selectedVariants = {},
   selectedModifiers = {},
   useKitchenPrintAliases = false,
+  menuStyle = "style1",
   onSelectVariant,
   onToggleModifier,
 }) {
   if (!item) return null;
 
   const nameOptions = { useKitchenPrintAliases };
+  const optionGridClassName = cn(
+    "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5",
+    menuStyle === "style2" ? "gap-2" : "gap-1",
+  );
   const itemDisplayTitle =
     formatPosItemDisplayName(item.title, nameOptions) || "Customize";
 
@@ -70,7 +75,7 @@ export default function PosItemCustomizePanel({
                   {groupLabel}
                 </h3>
               ) : null}
-              <div className="flex flex-wrap gap-3">
+              <div className={optionGridClassName}>
                 {options.map((option) => {
                   const isSelected =
                     selectedVariants[variant.groupId] === option.id;
@@ -114,7 +119,7 @@ export default function PosItemCustomizePanel({
                   {groupLabel}
                 </h3>
               ) : null}
-              <div className="flex flex-wrap gap-3">
+              <div className={optionGridClassName}>
                 {options.map((option) => {
                   const isSelected = selectedIds.includes(option.id);
                   return (
@@ -156,13 +161,13 @@ function OptionTile({ label, isSelected, onClick }) {
       type="button"
       onClick={onClick}
       className={cn(
-        "flex size-[6.5rem] items-center justify-center bg-white px-2 text-center text-sm font-semibold leading-snug text-neutral-900 transition-shadow sm:size-28 sm:text-base",
+        "relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-lg bg-white px-3 py-8 text-center text-base font-semibold leading-snug text-neutral-900 transition-transform active:scale-[0.98] xl:text-lg",
         isSelected
           ? "border-[3px] border-black shadow-[4px_4px_0_0_rgba(0,0,0,0.35)]"
-          : "border-[3px] border-transparent shadow-none",
+          : "border-[3px] border-transparent shadow-[0_0_0_1px_#1a1a1a0f]",
       )}
     >
-      <span className="line-clamp-3">{label}</span>
+      <span className="line-clamp-4">{label}</span>
     </button>
   );
 }
