@@ -75,6 +75,7 @@ import PosTakeawayCustomerDrawer from "./PosTakeawayCustomerDrawer";
 import PosTakeawayChoiceDrawer from "./PosTakeawayChoiceDrawer";
 import PosTakeawayBuzzerDrawer from "./PosTakeawayBuzzerDrawer";
 import PosPaymentDrawer from "./PosPaymentDrawer";
+import SideDrawer from "./SideDrawer";
 import PosOrderPanelFooter from "./PosOrderPanelFooter";
 import PosItemCustomizePanel from "./PosItemCustomizePanel";
 import PosCartLine from "./PosCartLine";
@@ -507,6 +508,11 @@ export default function PosTerminal() {
   const [isTicketBuzzerDrawerOpen, setIsTicketBuzzerDrawerOpen] =
     useState(false);
   const [isMobileOrderDrawerOpen, setIsMobileOrderDrawerOpen] = useState(false);
+  const [isDesktopPosLayout, setIsDesktopPosLayout] = useState(() =>
+    typeof window !== "undefined"
+      ? window.matchMedia("(min-width: 768px)").matches
+      : true,
+  );
   const [isTakeawayCustomerDrawerOpen, setIsTakeawayCustomerDrawerOpen] =
     useState(false);
   const [customizingItem, setCustomizingItem] = useState(null);
@@ -542,7 +548,9 @@ export default function PosTerminal() {
   useEffect(() => {
     const mediaQuery = window.matchMedia("(min-width: 768px)");
     function handleViewportChange() {
-      if (mediaQuery.matches) setIsMobileOrderDrawerOpen(false);
+      const matches = mediaQuery.matches;
+      setIsDesktopPosLayout(matches);
+      if (matches) setIsMobileOrderDrawerOpen(false);
     }
     handleViewportChange();
     mediaQuery.addEventListener("change", handleViewportChange);
@@ -3023,80 +3031,9 @@ export default function PosTerminal() {
       ? hasSentLines
       : checkOrderIds.length > 0;
 
-  return (
-    <>
-      <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
-        <PosChromeHeader
-          onLogoClick={handleLogoHome}
-          onOpenCashDrawer={handleOpenCashDrawer}
-        />
-
-        {isTrainingMode ? (
-          <div className="shrink-0 bg-amber-400 px-4 py-2 text-center text-sm font-semibold uppercase tracking-wide text-amber-950">
-            Training mode
-          </div>
-        ) : null}
-
-        {linklyCardEnabled ? (
-          <LinklyFailedSaleBanner
-            outcome={linklyFailedOutcome}
-            onDismiss={async () => {
-              await clearLinklyLastTxnOutcome();
-              setLinklyFailedOutcome(null);
-            }}
-            isReprintPending={isLinklyReprintPending}
-            onReprint={async () => {
-              if (!linklyFailedOutcome || isLinklyReprintPending) return;
-              setIsLinklyReprintPending(true);
-              try {
-                const result = await printLinklyTxnReceipt(
-                  {
-                    txnRef: linklyFailedOutcome.txnRef,
-                    sessionId: linklyFailedOutcome.sessionId,
-                    outcome: linklyFailedOutcome.outcome,
-                    success: false,
-                    responseCode: linklyFailedOutcome.responseCode,
-                    responseText: linklyFailedOutcome.responseText,
-                    amtPurchase: linklyFailedOutcome.amountCents,
-                  },
-                  storeProfile || {},
-                  { documentTitle: "CARD RESULT (FAILED)" },
-                );
-                if (result?.success) {
-                  showDismissibleToast(
-                    `Reprinted · TxnRef ${linklyFailedOutcome.txnRef || "—"}`,
-                  );
-                } else {
-                  showDismissibleToast(result?.message || "Reprint failed");
-                }
-              } catch (error) {
-                showDismissibleToast(error?.message || "Reprint failed");
-              } finally {
-                setIsLinklyReprintPending(false);
-              }
-            }}
-          />
-        ) : null}
-
-        <div className="relative flex min-h-0 flex-1 overflow-hidden">
-          {isMobileOrderDrawerOpen ? (
-            <button
-              type="button"
-              aria-label="Close order panel"
-              className="absolute inset-0 z-40 bg-black/30 md:hidden"
-              onClick={() => setIsMobileOrderDrawerOpen(false)}
-            />
-          ) : null}
-
-          {/* Left: current order (inline on md+; drawer on mobile) */}
-          <section
-            className={cn(
-              "flex flex-col bg-white pb-[env(safe-area-inset-bottom)]",
-              "absolute inset-y-0 left-0 z-50 w-[min(92vw,28rem)] max-w-[440px] shadow-2xl transition-transform duration-200 ease-out",
-              isMobileOrderDrawerOpen ? "translate-x-0" : "-translate-x-full",
-              "md:relative md:inset-auto md:z-auto md:w-[30%] md:min-w-[280px] md:shrink-0 md:translate-x-0 md:shadow-none",
-            )}
-          >
+  function renderCurrentOrderPanelBody() {
+    return (
+      <>
             <div className="relative z-20 flex h-16 shrink-0 items-stretch gap-2 border-neutral-200 bg-[#f2f2f2] pr-2">
               <motion.button
                 key={tableFieldShakeKey}
@@ -3185,116 +3122,6 @@ export default function PosTerminal() {
               </button>
             </div>
 
-            <PosTableEntryDrawer
-              isOpen={Boolean(keypadDrawer)}
-              mode={keypadDrawer?.mode || "table"}
-              onClose={() => setKeypadDrawer(null)}
-              initialNumber={keypadInitialNumber}
-              disableNumberInput={Boolean(keypadDrawer?.disableNumberInput)}
-              onConfirm={handleKeypadConfirm}
-            />
-
-            <PosTakeawayChoiceDrawer
-              isOpen={isTakeawayChoiceOpen}
-              showOrderTypeChoice={Boolean(posConfig.dineInUseBuzzer)}
-              orderType={choiceOrderType}
-              onOrderTypeChange={setChoiceOrderType}
-              onCancel={handleTakeawayChoiceCancel}
-              onChooseCustomer={handleChooseTakeawayCustomer}
-              onChooseBuzzer={handleChooseTakeawayBuzzer}
-            />
-
-            <PosTakeawayBuzzerDrawer
-              isOpen={isTakeawayBuzzerDrawerOpen}
-              onCancel={handleTakeawayBuzzerCancel}
-              onConfirm={handleTakeawayBuzzerConfirm}
-            />
-
-            <PosTakeawayBuzzerDrawer
-              isOpen={isTicketBuzzerDrawerOpen}
-              onCancel={() => setIsTicketBuzzerDrawerOpen(false)}
-              onConfirm={(number) => {
-                setTicketBuzzerNumber(number);
-                setIsTicketBuzzerDrawerOpen(false);
-              }}
-            />
-
-            <PosTakeawayCustomerDrawer
-              isOpen={isTakeawayCustomerDrawerOpen}
-              onClose={handleTakeawayCustomerClose}
-              onCancel={handleTakeawayCustomerCancel}
-              onConfirm={handleTakeawayCustomerConfirm}
-              locked={Boolean(pendingTakeaway)}
-              requireName={
-                (Boolean(pendingTakeaway) ||
-                  (resolvedOrderType === "takeaway" &&
-                    !hasTakeawayTableReference(resolvedTableNumber))) &&
-                takeawayRequireName
-              }
-              requirePhone={
-                (Boolean(pendingTakeaway) ||
-                  (resolvedOrderType === "takeaway" &&
-                    !hasTakeawayTableReference(resolvedTableNumber))) &&
-                takeawayRequirePhone
-              }
-              initialName={customerName}
-              initialPhone={customerPhone}
-              initialEmail={customerEmail}
-            />
-
-            <PosDiscountDrawer
-              isOpen={isDiscountDrawerOpen}
-              onClose={() => setIsDiscountDrawerOpen(false)}
-              subtotal={cartSubtotal}
-              initialDigits={discountInitialDigits}
-              onConfirm={handleDiscountConfirm}
-            />
-
-            <PosItemNoteDrawer
-              isOpen={Boolean(noteLineId)}
-              onClose={handleCloseItemNoteDrawer}
-              onSave={handleSaveItemNote}
-              itemTitle={
-                noteLineId
-                  ? cartLines.find((line) => line.lineId === noteLineId)
-                      ?.title || ""
-                  : ""
-              }
-              initialNote={
-                noteLineId
-                  ? cartLines.find((line) => line.lineId === noteLineId)
-                      ?.notes || ""
-                  : ""
-              }
-              initialIsTakeaway={
-                noteLineId
-                  ? Boolean(
-                      cartLines.find((line) => line.lineId === noteLineId)
-                        ?.isTakeaway,
-                    )
-                  : false
-              }
-            />
-
-            <PosPaymentDrawer
-              isOpen={isPaymentDrawerOpen}
-              onClose={() => setIsPaymentDrawerOpen(false)}
-              amountDue={cartTotalAfterDiscount}
-              onCompleteSale={handleCompleteSale}
-              onPersistSale={handlePersistSale}
-              onFinishPaidSale={handleFinishPaidSale}
-              onPrintReceipt={handlePrintReceipt}
-              isPrintingReceipt={isPrintingReceipt}
-              isCompletingSale={isCompletingSale}
-              trainingMode={isTrainingMode}
-              onTrainingDone={handleTrainingPaymentDone}
-              tyroCardEnabled={tyroCardEnabled}
-              tyroConfig={tyroPayments}
-              linklyCardEnabled={linklyCardEnabled}
-              linklyConfig={linklyPayments}
-              onOpenCashDrawer={handleOpenCashDrawer}
-            />
-
             <div
               className={cn(
                 "min-h-0 flex-1 overflow-y-auto bg-[#f2f2f2] pt-2 transition-opacity duration-300",
@@ -3368,7 +3195,200 @@ export default function PosTerminal() {
                 awaitingOrderType && "pointer-events-none",
               )}
             />
-          </section>
+
+      </>
+    );
+  }
+
+
+  return (
+    <>
+      <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#e8e8e8] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+        <PosChromeHeader
+          onLogoClick={handleLogoHome}
+          onOpenCashDrawer={handleOpenCashDrawer}
+        />
+
+        {isTrainingMode ? (
+          <div className="shrink-0 bg-amber-400 px-4 py-2 text-center text-sm font-semibold uppercase tracking-wide text-amber-950">
+            Training mode
+          </div>
+        ) : null}
+
+        {linklyCardEnabled ? (
+          <LinklyFailedSaleBanner
+            outcome={linklyFailedOutcome}
+            onDismiss={async () => {
+              await clearLinklyLastTxnOutcome();
+              setLinklyFailedOutcome(null);
+            }}
+            isReprintPending={isLinklyReprintPending}
+            onReprint={async () => {
+              if (!linklyFailedOutcome || isLinklyReprintPending) return;
+              setIsLinklyReprintPending(true);
+              try {
+                const result = await printLinklyTxnReceipt(
+                  {
+                    txnRef: linklyFailedOutcome.txnRef,
+                    sessionId: linklyFailedOutcome.sessionId,
+                    outcome: linklyFailedOutcome.outcome,
+                    success: false,
+                    responseCode: linklyFailedOutcome.responseCode,
+                    responseText: linklyFailedOutcome.responseText,
+                    amtPurchase: linklyFailedOutcome.amountCents,
+                  },
+                  storeProfile || {},
+                  { documentTitle: "CARD RESULT (FAILED)" },
+                );
+                if (result?.success) {
+                  showDismissibleToast(
+                    `Reprinted · TxnRef ${linklyFailedOutcome.txnRef || "—"}`,
+                  );
+                } else {
+                  showDismissibleToast(result?.message || "Reprint failed");
+                }
+              } catch (error) {
+                showDismissibleToast(error?.message || "Reprint failed");
+              } finally {
+                setIsLinklyReprintPending(false);
+              }
+            }}
+          />
+        ) : null}
+
+        <PosTableEntryDrawer
+          isOpen={Boolean(keypadDrawer)}
+          mode={keypadDrawer?.mode || "table"}
+          onClose={() => setKeypadDrawer(null)}
+          initialNumber={keypadInitialNumber}
+          disableNumberInput={Boolean(keypadDrawer?.disableNumberInput)}
+          onConfirm={handleKeypadConfirm}
+        />
+
+        <PosTakeawayChoiceDrawer
+          isOpen={isTakeawayChoiceOpen}
+          showOrderTypeChoice={Boolean(posConfig.dineInUseBuzzer)}
+          orderType={choiceOrderType}
+          onOrderTypeChange={setChoiceOrderType}
+          onCancel={handleTakeawayChoiceCancel}
+          onChooseCustomer={handleChooseTakeawayCustomer}
+          onChooseBuzzer={handleChooseTakeawayBuzzer}
+        />
+
+        <PosTakeawayBuzzerDrawer
+          isOpen={isTakeawayBuzzerDrawerOpen}
+          onCancel={handleTakeawayBuzzerCancel}
+          onConfirm={handleTakeawayBuzzerConfirm}
+        />
+
+        <PosTakeawayBuzzerDrawer
+          isOpen={isTicketBuzzerDrawerOpen}
+          onCancel={() => setIsTicketBuzzerDrawerOpen(false)}
+          onConfirm={(number) => {
+            setTicketBuzzerNumber(number);
+            setIsTicketBuzzerDrawerOpen(false);
+          }}
+        />
+
+        <PosTakeawayCustomerDrawer
+          isOpen={isTakeawayCustomerDrawerOpen}
+          onClose={handleTakeawayCustomerClose}
+          onCancel={handleTakeawayCustomerCancel}
+          onConfirm={handleTakeawayCustomerConfirm}
+          locked={Boolean(pendingTakeaway)}
+          requireName={
+            (Boolean(pendingTakeaway) ||
+              (resolvedOrderType === "takeaway" &&
+                !hasTakeawayTableReference(resolvedTableNumber))) &&
+            takeawayRequireName
+          }
+          requirePhone={
+            (Boolean(pendingTakeaway) ||
+              (resolvedOrderType === "takeaway" &&
+                !hasTakeawayTableReference(resolvedTableNumber))) &&
+            takeawayRequirePhone
+          }
+          initialName={customerName}
+          initialPhone={customerPhone}
+          initialEmail={customerEmail}
+        />
+
+        <PosDiscountDrawer
+          isOpen={isDiscountDrawerOpen}
+          onClose={() => setIsDiscountDrawerOpen(false)}
+          subtotal={cartSubtotal}
+          initialDigits={discountInitialDigits}
+          onConfirm={handleDiscountConfirm}
+        />
+
+        <PosItemNoteDrawer
+          isOpen={Boolean(noteLineId)}
+          onClose={handleCloseItemNoteDrawer}
+          onSave={handleSaveItemNote}
+          itemTitle={
+            noteLineId
+              ? cartLines.find((line) => line.lineId === noteLineId)?.title ||
+                ""
+              : ""
+          }
+          initialNote={
+            noteLineId
+              ? cartLines.find((line) => line.lineId === noteLineId)?.notes ||
+                ""
+              : ""
+          }
+          initialIsTakeaway={
+            noteLineId
+              ? Boolean(
+                  cartLines.find((line) => line.lineId === noteLineId)
+                    ?.isTakeaway,
+                )
+              : false
+          }
+        />
+
+        <PosPaymentDrawer
+          isOpen={isPaymentDrawerOpen}
+          onClose={() => setIsPaymentDrawerOpen(false)}
+          amountDue={cartTotalAfterDiscount}
+          onCompleteSale={handleCompleteSale}
+          onPersistSale={handlePersistSale}
+          onFinishPaidSale={handleFinishPaidSale}
+          onPrintReceipt={handlePrintReceipt}
+          isPrintingReceipt={isPrintingReceipt}
+          isCompletingSale={isCompletingSale}
+          trainingMode={isTrainingMode}
+          onTrainingDone={handleTrainingPaymentDone}
+          tyroCardEnabled={tyroCardEnabled}
+          tyroConfig={tyroPayments}
+          linklyCardEnabled={linklyCardEnabled}
+          linklyConfig={linklyPayments}
+          onOpenCashDrawer={handleOpenCashDrawer}
+        />
+
+        <div className="relative flex min-h-0 flex-1 overflow-hidden">
+          {/* Left: current order (inline on md+; SideDrawer on mobile) */}
+          {isDesktopPosLayout ? (
+            <section className="flex w-[30%] min-w-[280px] max-w-[440px] shrink-0 flex-col bg-white pb-[env(safe-area-inset-bottom)]">
+              {renderCurrentOrderPanelBody()}
+            </section>
+          ) : (
+            <SideDrawer
+              isOpen={isMobileOrderDrawerOpen}
+              onClose={() => setIsMobileOrderDrawerOpen(false)}
+              side="left"
+              showHeader={false}
+              widthClassName="w-[min(100%,22rem)]"
+              panelClassName="bg-white"
+              bodyClassName=""
+              contentKey="pos-mobile-order-panel"
+              ariaLabel="Current order"
+            >
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
+                {renderCurrentOrderPanelBody()}
+              </div>
+            </SideDrawer>
+          )}
 
           {/* Right: POS menu layout (tabs + products) */}
           <section
