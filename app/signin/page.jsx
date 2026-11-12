@@ -41,7 +41,7 @@ export default async function SignInPage({ searchParams }) {
 
   return (
     <div className="flex min-h-[100vh] items-center justify-center bg-[#fff8f4] px-4 py-12 sm:px-6 lg:px-8">
-      <div className="mx-auto min-w-[350px] max-w-md translate-y-[-20%] rounded-2xl border-4 border-[#f8e3d8] bg-white p-8 shadow-lg sm:p-10 lg:min-w-[400px] xl:min-w-[450px]">
+      <div className="mx-auto min-w-[350px] max-w-md rounded-2xl border-4 border-[#f8e3d8] bg-white p-8 shadow-lg sm:p-10 lg:min-w-[400px] xl:min-w-[450px] min-[1537px]:-translate-y-[20%]">
         <div className="text-center">
           <Link
             href="/"
