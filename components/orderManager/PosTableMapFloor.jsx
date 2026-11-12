@@ -35,6 +35,15 @@ import {
 } from "@/lib/pos/posTableMapMerge";
 import { TableMapElementGraphic } from "./posTableMapIcons";
 
+/** Portrait phones: give the floor a landscape stage so wide maps scale larger. */
+const PORTRAIT_LANDSCAPE_MAX_WIDTH = 768;
+
+function shouldUsePortraitLandscapeStage(hostSize) {
+  const width = Number(hostSize?.width) || 0;
+  const height = Number(hostSize?.height) || 0;
+  return width > 0 && height > width && width < PORTRAIT_LANDSCAPE_MAX_WIDTH;
+}
+
 export default function PosTableMapFloor({
   tableMap,
   heldOrders = [],
@@ -51,7 +60,11 @@ export default function PosTableMapFloor({
   onTableSelect,
 }) {
   const containerRef = useRef(null);
-  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+  const [hostSize, setHostSize] = useState({ width: 0, height: 0 });
+  const useLandscapeStage = shouldUsePortraitLandscapeStage(hostSize);
+  const viewportSize = useLandscapeStage
+    ? { width: hostSize.height, height: hostSize.width }
+    : hostSize;
   const canvasSize = getTableMapCanvasSize(tableMap);
   const layout = getTableMapViewportLayout(canvasSize, viewportSize);
   const objects = Array.isArray(tableMap?.objects) ? tableMap.objects : [];
@@ -71,15 +84,15 @@ export default function PosTableMapFloor({
     const element = containerRef.current;
     if (!element) return;
 
-    function updateViewportSize() {
-      setViewportSize({
+    function updateHostSize() {
+      setHostSize({
         width: element.clientWidth,
         height: element.clientHeight,
       });
     }
 
-    updateViewportSize();
-    const observer = new ResizeObserver(updateViewportSize);
+    updateHostSize();
+    const observer = new ResizeObserver(updateHostSize);
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
@@ -88,11 +101,24 @@ export default function PosTableMapFloor({
     <div
       ref={containerRef}
       className={cn(
-        "absolute inset-0 flex items-center justify-center overflow-hidden",
+        "absolute inset-0 overflow-hidden",
         disableInteraction && "pointer-events-none",
       )}
       style={{ backgroundColor: floorColor }}
     >
+      <div
+        className={cn(
+          "flex items-center justify-center",
+          useLandscapeStage
+            ? "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90"
+            : "h-full w-full",
+        )}
+        style={
+          useLandscapeStage
+            ? { width: hostSize.height, height: hostSize.width }
+            : undefined
+        }
+      >
       {layout.width > 0 && layout.height > 0 ? (
         <div
           className="relative shrink-0 overflow-hidden"
@@ -237,6 +263,7 @@ export default function PosTableMapFloor({
           </div>
         </div>
       ) : null}
+      </div>
     </div>
   );
 }
