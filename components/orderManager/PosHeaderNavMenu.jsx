@@ -92,7 +92,7 @@ const NAV_ITEMS = [
   {
     id: "report",
     label: "Report",
-    description: "Sales summary",
+    description: "Sales & product summary",
     href: "/report",
     Icon: BarChart3,
   },

@@ -17,6 +17,10 @@ import {
 import { isStoreStorageOptimizer } from "@/lib/store/isStorageOptimizer";
 import { printSalesReportReceipt } from "@/lib/printers/printSalesReportReceipt";
 import { buildSalesTrend, summarizeSales } from "@/lib/helper/salesSummary";
+import {
+  productSummaryTotals,
+  summarizeProducts,
+} from "@/lib/helper/productSummary";
 import { pendingLocalSalesOrders } from "@/lib/helper/salesSummaryLocal";
 import {
   listLocalSendRecords,
@@ -29,7 +33,14 @@ const SalesSummaryChart = dynamic(() => import("./SalesSummaryChart"), {
   ssr: false,
 });
 
-const REPORTS = [{ id: "sales-summary", label: "Sales Summary" }];
+const ProductSummaryChart = dynamic(() => import("./ProductSummaryChart"), {
+  ssr: false,
+});
+
+const REPORTS = [
+  { id: "sales-summary", label: "Sales Summary" },
+  { id: "product-summary", label: "Product Summary" },
+];
 
 function formatMoney(amount) {
   return `$${Number(amount || 0).toFixed(2)}`;
@@ -78,10 +89,26 @@ const ROWS = [
   { key: "totalRefunds", label: "Total refund", emphasis: true },
 ];
 
+const PRODUCT_COLUMNS = [
+  { key: "popularityRank", label: "Rank", render: (row) => `#${row.popularityRank}` },
+  { key: "productName", label: "Product" },
+  { key: "category", label: "Category" },
+  { key: "topVariant", label: "Top variant", className: "text-gray-600" },
+  { key: "ordersCount", label: "Orders", align: "right" },
+  { key: "quantitySold", label: "Qty", align: "right" },
+  {
+    key: "revenue",
+    label: "Revenue",
+    align: "right",
+    render: (row) => formatMoney(row.revenue),
+  },
+];
+
 export default function SalesSummary() {
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
-  const { storeProfile, menuConfig } = useMenuContext();
+  const { storeProfile, menuConfig, menuContent } = useMenuContext();
   const storageOptimizerOn = isStoreStorageOptimizer(menuConfig);
+
   const [activeReport, setActiveReport] = useState(REPORTS[0].id);
   const [draftRange, setDraftRange] = useState(() => {
     const today = todayKey();
@@ -156,28 +183,64 @@ export default function SalesSummary() {
     () => buildSalesTrend(orders, appliedFrom, appliedTo),
     [orders, appliedFrom, appliedTo],
   );
+  const productRows = useMemo(
+    () => summarizeProducts(orders, menuContent),
+    [orders, menuContent],
+  );
+  const productTotals = useMemo(
+    () => productSummaryTotals(productRows),
+    [productRows],
+  );
+
+  const dateFromLabel = storageOptimizerOn
+    ? formatReceiptDayMonth(appliedFrom)
+    : formatReceiptDate(appliedFrom);
+  const dateToLabel = storageOptimizerOn
+    ? formatReceiptDayMonth(appliedTo)
+    : formatReceiptDate(appliedTo);
 
   async function handlePrint() {
     if (isPrinting || isLoading) return;
+
     setIsPrinting(true);
     try {
-      const result = await printSalesReportReceipt({
-        storeName: storeProfile?.storeName || "",
-        dateFromLabel: storageOptimizerOn
-          ? formatReceiptDayMonth(appliedFrom)
-          : formatReceiptDate(appliedFrom),
-        dateToLabel: storageOptimizerOn
-          ? formatReceiptDayMonth(appliedTo)
-          : formatReceiptDate(appliedTo),
-        summary,
-      });
+      const result =
+        activeReport === "product-summary"
+          ? await printSalesReportReceipt({
+              storeName: storeProfile?.storeName || "",
+              dateFromLabel,
+              dateToLabel,
+              productSummary: productRows,
+            })
+          : await printSalesReportReceipt({
+              storeName: storeProfile?.storeName || "",
+              dateFromLabel,
+              dateToLabel,
+              summary,
+            });
+
       if (result.success) {
-        toast.success(result.message || "Sales summary printed");
+        toast.success(
+          result.message ||
+            (activeReport === "product-summary"
+              ? "Product summary printed"
+              : "Sales summary printed"),
+        );
       } else {
-        toast.error(result.message || "Failed to print sales summary");
+        toast.error(
+          result.message ||
+            (activeReport === "product-summary"
+              ? "Failed to print product summary"
+              : "Failed to print sales summary"),
+        );
       }
     } catch (printError) {
-      toast.error(printError?.message || "Failed to print sales summary");
+      toast.error(
+        printError?.message ||
+          (activeReport === "product-summary"
+            ? "Failed to print product summary"
+            : "Failed to print sales summary"),
+      );
     } finally {
       setIsPrinting(false);
     }
@@ -247,20 +310,20 @@ export default function SalesSummary() {
               {isPrinting ? "Printing…" : "Print"}
             </button>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <DatePicker
-              value={draftRange}
-              enableDateRange
-              onChange={setDraftRange}
-              placeholder="Select date"
-              className="w-full min-w-56 sm:w-auto"
-            />
-            <button
-              type="button"
-              onClick={handleFilter}
-              className="h-10 rounded-md bg-brand_accent px-5 text-sm font-bold uppercase tracking-wide text-white transition active:scale-[0.99]"
-            >
-              Filter
-            </button>
+              <DatePicker
+                value={draftRange}
+                enableDateRange
+                onChange={setDraftRange}
+                placeholder="Select date"
+                className="w-full min-w-56 sm:w-auto"
+              />
+              <button
+                type="button"
+                onClick={handleFilter}
+                className="h-10 rounded-md bg-brand_accent px-5 text-sm font-bold uppercase tracking-wide text-white transition active:scale-[0.99]"
+              >
+                Filter
+              </button>
             </div>
           </div>
 
@@ -271,7 +334,123 @@ export default function SalesSummary() {
           {isLoading ? (
             <div className="px-4 py-16 text-center text-gray-500">
               <span className="loading loading-spinner loading-md text-brand_accent" />
-              <p className="mt-3">Loading sales summary…</p>
+              <p className="mt-3">
+                {activeReport === "product-summary"
+                  ? "Loading product summary…"
+                  : "Loading sales summary…"}
+              </p>
+            </div>
+          ) : activeReport === "product-summary" ? (
+            <div>
+              <ProductSummaryChart data={productRows} />
+              <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="border-b border-gray-200 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <tr>
+                    {PRODUCT_COLUMNS.map((col) => (
+                      <th
+                        key={col.key}
+                        className={`whitespace-nowrap px-4 py-3 sm:px-6 ${
+                          col.align === "right" ? "text-right" : ""
+                        }`}
+                      >
+                        {col.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {productRows.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={PRODUCT_COLUMNS.length}
+                        className="px-4 py-12 text-center text-gray-500 sm:px-6"
+                      >
+                        No product sales in this range.
+                      </td>
+                    </tr>
+                  ) : (
+                    productRows.map((row) => (
+                      <tr
+                        key={`${row.popularityRank}-${row.productName}`}
+                        className="border-t border-gray-100 text-gray-800"
+                      >
+                        {PRODUCT_COLUMNS.map((col) => (
+                          <td
+                            key={col.key}
+                            className={`px-4 py-3 sm:px-6 ${
+                              col.align === "right"
+                                ? "text-right tabular-nums"
+                                : ""
+                            } ${col.className || ""}`}
+                          >
+                            {col.render
+                              ? col.render(row)
+                              : row[col.key] ?? "—"}
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                {productRows.length > 0 ? (
+                  <tfoot>
+                    <tr className="border-t border-gray-200 bg-gray-50 font-semibold text-gray-900">
+                      <td className="px-4 py-3 sm:px-6" colSpan={4}>
+                        Total
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums sm:px-6">
+                        {productTotals.ordersCount}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums sm:px-6">
+                        {productTotals.quantitySold}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums sm:px-6">
+                        {formatMoney(productTotals.revenue)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                ) : null}
+              </table>
+              {productRows.some(
+                (row) =>
+                  (row.variantBreakdown && row.variantBreakdown !== "-") ||
+                  (row.modifierBreakdown && row.modifierBreakdown !== "-"),
+              ) ? (
+                <div className="border-t border-gray-100 px-4 py-4 sm:px-6">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Variant & modifier detail
+                  </p>
+                  <ul className="space-y-3 text-sm text-gray-700">
+                    {productRows.map((row) => {
+                      const hasDetail =
+                        (row.variantBreakdown &&
+                          row.variantBreakdown !== "-") ||
+                        (row.modifierBreakdown &&
+                          row.modifierBreakdown !== "-");
+                      if (!hasDetail) return null;
+                      return (
+                        <li key={`detail-${row.productName}`}>
+                          <p className="font-medium text-gray-900">
+                            #{row.popularityRank} {row.productName}
+                          </p>
+                          {row.variantBreakdown !== "-" ? (
+                            <p className="text-gray-600">
+                              Variants: {row.variantBreakdown}
+                            </p>
+                          ) : null}
+                          {row.modifierBreakdown !== "-" ? (
+                            <p className="text-gray-600">
+                              Modifiers: {row.modifierBreakdown}
+                            </p>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
+              </div>
             </div>
           ) : (
             <>
