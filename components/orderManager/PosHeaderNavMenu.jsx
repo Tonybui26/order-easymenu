@@ -12,11 +12,13 @@ import {
   History,
   BarChart3,
   Map,
+  Monitor,
   MonitorSmartphone,
   QrCode,
   Settings,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { useGlobalAppContext } from "@/components/context/GlobalAppContext";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { cn } from "@/lib/helper";
 import { isRestaurantModeEnabled } from "@/lib/pos/posConfig";
@@ -62,6 +64,15 @@ const NAV_ITEMS = [
     description: "Kitchen & QR tickets",
     href: "/",
     Icon: QrCode,
+    kitchenDisplay: false,
+  },
+  {
+    id: "kds",
+    label: "KSD",
+    description: "Kitchen display mode",
+    href: "/",
+    Icon: Monitor,
+    kitchenDisplay: true,
   },
   {
     id: "booking",
@@ -94,7 +105,7 @@ const NAV_ITEMS = [
   },
 ];
 
-function resolveActiveItem(pathname, items) {
+function resolveActiveItem(pathname, items, kitchenDisplayEnabled) {
   const list = items.length > 0 ? items : NAV_ITEMS;
   if (
     pathname === "/pos/register" ||
@@ -118,6 +129,9 @@ function resolveActiveItem(pathname, items) {
     return list.find((item) => item.id === "settings") || list[0];
   }
   if (pathname === "/") {
+    if (kitchenDisplayEnabled) {
+      return list.find((item) => item.id === "kds") || list[0];
+    }
     return list.find((item) => item.id === "live-orders") || list[0];
   }
   if (pathname === "/booking" || pathname?.startsWith("/booking/")) {
@@ -143,6 +157,8 @@ export default function PosHeaderNavMenu({ className }) {
   const { navigate } = usePosNavigate();
   const pathname = usePathname();
   const { menuConfig } = useMenuContext();
+  const { kitchenDisplayEnabled, setKitchenDisplayEnabled } =
+    useGlobalAppContext();
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef(null);
 
@@ -156,7 +172,11 @@ export default function PosHeaderNavMenu({ className }) {
     if (item.hideInRestaurantMode && restaurantMode) return false;
     return true;
   });
-  const current = resolveActiveItem(pathname, navItems);
+  const current = resolveActiveItem(
+    pathname,
+    navItems,
+    kitchenDisplayEnabled,
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -184,6 +204,9 @@ export default function PosHeaderNavMenu({ className }) {
   function handleSelect(item) {
     setIsOpen(false);
     if (item.id === current.id) return;
+    if (typeof item.kitchenDisplay === "boolean") {
+      setKitchenDisplayEnabled(item.kitchenDisplay);
+    }
     navigate(item.href);
   }
 
