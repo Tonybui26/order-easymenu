@@ -506,6 +506,7 @@ export default function PosTerminal() {
   const [ticketBuzzerNumber, setTicketBuzzerNumber] = useState("");
   const [isTicketBuzzerDrawerOpen, setIsTicketBuzzerDrawerOpen] =
     useState(false);
+  const [isMobileOrderDrawerOpen, setIsMobileOrderDrawerOpen] = useState(false);
   const [isTakeawayCustomerDrawerOpen, setIsTakeawayCustomerDrawerOpen] =
     useState(false);
   const [customizingItem, setCustomizingItem] = useState(null);
@@ -538,6 +539,16 @@ export default function PosTerminal() {
     }
     return qtyById;
   }, [cartLines]);
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 768px)");
+    function handleViewportChange() {
+      if (mediaQuery.matches) setIsMobileOrderDrawerOpen(false);
+    }
+    handleViewportChange();
+    mediaQuery.addEventListener("change", handleViewportChange);
+    return () => mediaQuery.removeEventListener("change", handleViewportChange);
+  }, []);
+
   const tableTimerEnabled =
     posConfig.manualOpenTableEnabled === true ||
     posConfig.manualCloseTableEnabled === true;
@@ -1223,6 +1234,7 @@ export default function PosTerminal() {
     setCustomizingItem(item);
     setSelectedVariants(maps.selectedVariants);
     setSelectedModifiers(maps.selectedModifiers);
+    setIsMobileOrderDrawerOpen(false);
   }
 
   function handleAddItem(item) {
@@ -3066,9 +3078,25 @@ export default function PosTerminal() {
           />
         ) : null}
 
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          {/* Left: current order */}
-          <section className="flex w-[30%] min-w-[280px] max-w-[440px] shrink-0 flex-col bg-white pb-[env(safe-area-inset-bottom)]">
+        <div className="relative flex min-h-0 flex-1 overflow-hidden">
+          {isMobileOrderDrawerOpen ? (
+            <button
+              type="button"
+              aria-label="Close order panel"
+              className="absolute inset-0 z-40 bg-black/30 md:hidden"
+              onClick={() => setIsMobileOrderDrawerOpen(false)}
+            />
+          ) : null}
+
+          {/* Left: current order (inline on md+; drawer on mobile) */}
+          <section
+            className={cn(
+              "flex flex-col bg-white pb-[env(safe-area-inset-bottom)]",
+              "absolute inset-y-0 left-0 z-50 w-[min(92vw,28rem)] max-w-[440px] shadow-2xl transition-transform duration-200 ease-out",
+              isMobileOrderDrawerOpen ? "translate-x-0" : "-translate-x-full",
+              "md:relative md:inset-auto md:z-auto md:w-[30%] md:min-w-[280px] md:shrink-0 md:translate-x-0 md:shadow-none",
+            )}
+          >
             <div className="relative z-20 flex h-16 shrink-0 items-stretch gap-2 border-neutral-200 bg-[#f2f2f2] pr-2">
               <motion.button
                 key={tableFieldShakeKey}
@@ -3351,6 +3379,24 @@ export default function PosTerminal() {
           >
             {/* Tabs column — z-30 + overhang so selected indicator sits on top of products */}
             <aside className="relative z-30 flex w-[110px] shrink-0 flex-col bg-[#f0f0f0] pb-[env(safe-area-inset-bottom)] sm:w-[132px] xl:w-[150px]">
+              <button
+                type="button"
+                aria-label="Open order panel"
+                aria-expanded={isMobileOrderDrawerOpen}
+                onClick={() => setIsMobileOrderDrawerOpen(true)}
+                className={cn(
+                  "relative z-20 flex min-h-[56px] w-full shrink-0 flex-col items-center justify-center overflow-hidden border-l-[7px] border-l-[#301C0F] bg-[#301C0F] px-2.5 py-3 text-center text-white md:hidden",
+                  selectedTabIndex === 0 && "rounded-br-2xl",
+                )}
+              >
+                <span className="text-[11px] font-medium leading-none">
+                  {orderHeader.kindLabel}
+                </span>
+                <span className="mt-1 max-w-full truncate text-xl font-bold leading-none tracking-tight">
+                  {orderHeader.valueLabel}
+                </span>
+              </button>
+
               <div className="-mr-3 min-h-0 flex-1 overflow-y-auto pr-3">
                 {tabs.length === 0 ? (
                   canEditMenu ? (
@@ -3492,7 +3538,7 @@ export default function PosTerminal() {
                       <div className="p-4">
                         <div
                           className={cn(
-                            "grid grid-cols-4 xl:grid-cols-5",
+                            "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5",
                             posMenuStyle === "style2" ? "gap-2" : "gap-1",
                           )}
                         >
@@ -3553,7 +3599,7 @@ export default function PosTerminal() {
                           <div
                             key={row.id}
                             className={cn(
-                              "grid grid-cols-4 xl:grid-cols-5",
+                              "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5",
                               posMenuStyle === "style2" ? "gap-2" : "gap-1",
                             )}
                           >
