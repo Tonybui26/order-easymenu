@@ -195,6 +195,12 @@ export default function PosTableMapFloor({
               ]
                 .filter(Boolean)
                 .join(", ");
+              const objectRotation = Number(object.rotation) || 0;
+              // Keep table HUD readable on the portrait landscape stage; partitions stay as-is.
+              const tableHudUprightTransform =
+                useLandscapeStage && isTable
+                  ? `rotate(${-objectRotation - 90}deg)`
+                  : undefined;
 
               return (
                 <div
@@ -208,7 +214,7 @@ export default function PosTableMapFloor({
                     top: object.y,
                     width: object.width,
                     height: object.height,
-                    transform: `rotate(${object.rotation || 0}deg)`,
+                    transform: `rotate(${objectRotation}deg)`,
                   }}
                 >
                   <button
@@ -239,6 +245,7 @@ export default function PosTableMapFloor({
                     {hasSelfOrderDot || hasUnpaidQrPaymentDot ? (
                       <span
                         className="pointer-events-none absolute right-1 top-1 z-10 flex items-center gap-0.5"
+                        style={{ transform: tableHudUprightTransform }}
                         aria-hidden
                       >
                         {hasSelfOrderDot ? (
@@ -254,6 +261,7 @@ export default function PosTableMapFloor({
                         object={object}
                         color={labelColor}
                         bookings={tableBookings}
+                        keepScreenUpright={Boolean(tableHudUprightTransform)}
                       />
                     ) : null}
                   </button>
@@ -273,18 +281,29 @@ function shouldShowObjectLabel(object) {
   return isTableMapTable(object) || isTableMapPartition(object);
 }
 
-function ObjectLabel({ object, color, bookings = [] }) {
+function ObjectLabel({
+  object,
+  color,
+  bookings = [],
+  keepScreenUpright = false,
+}) {
   const isVerticalPartition = object.type === "partition-v";
   const labelColor = color || object.fontColor || TABLE_MAP_DEFAULT_FONT_COLOR;
   const nameSize = object.fontSize || TABLE_MAP_DEFAULT_FONT_SIZE;
   const showBookings = !isVerticalPartition && bookings.length > 0;
+  const objectRotation = Number(object.rotation) || 0;
+  const labelTransform = keepScreenUpright
+    ? `rotate(${-objectRotation - 90}deg)`
+    : isVerticalPartition
+      ? "rotate(-90deg)"
+      : undefined;
 
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-visible px-1">
       <div
         className="flex max-w-full flex-col items-center"
         style={{
-          transform: isVerticalPartition ? "rotate(-90deg)" : undefined,
+          transform: labelTransform,
         }}
       >
         <span
