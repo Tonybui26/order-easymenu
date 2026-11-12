@@ -216,19 +216,19 @@ export default function PosHeaderNavMenu({ className }) {
         type="button"
         aria-haspopup="menu"
         aria-expanded={isOpen}
-        aria-label="Switch feature"
+        aria-label={`Switch feature${current?.label ? `: ${current.label}` : ""}`}
         onClick={() => setIsOpen((open) => !open)}
         className={cn(
-          "flex min-h-[44px] min-w-[200px] max-w-[min(100%,16rem)] items-center gap-2.5 rounded-2xl bg-white/[0.08] px-2.5 py-1.5 text-left ring-1 ring-white/10 transition-colors hover:bg-white/[0.12] active:bg-white/[0.16] sm:gap-3 sm:px-1.5 sm:py-1",
+          "flex min-h-[44px] items-center gap-1 rounded-2xl bg-white/[0.08] px-1.5 py-1.5 text-left ring-1 ring-white/10 transition-colors hover:bg-white/[0.12] active:bg-white/[0.16] md:min-w-[200px] md:max-w-[min(100%,16rem)] md:gap-3 md:px-1.5 md:py-1",
           isOpen && "bg-white/[0.14] ring-white/15",
         )}
       >
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand_accent/15 text-white sm:size-10">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand_accent/15 text-white md:size-10">
           <current.Icon size={20} strokeWidth={2} aria-hidden />
         </span>
 
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold leading-tight text-white sm:text-sm">
+        <span className="hidden min-w-0 flex-1 md:block">
+          <span className="block truncate text-sm font-semibold leading-tight text-white">
             {current.label}
           </span>
         </span>

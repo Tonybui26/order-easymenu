@@ -1672,7 +1672,7 @@ export default function PosTableMap() {
                 </button>
               </div>
             </div>
-            <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2">
+            <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 hidden -translate-x-1/2 md:block">
               <div className="pointer-events-auto flex items-center gap-3 rounded-xl bg-[#402e22]/95 px-3 py-2 shadow-sm ring-1 ring-white/10">
                 {legendStatuses.map((status) => {
                   const fill = getPosTableMapStatusFill(status);
