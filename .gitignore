@@ -45,3 +45,9 @@ next-env.d.ts
 
 # Third-party Tyro partner docs
 /TYRO Partner/
+
+# Android Studio local IDE metadata
+android/.idea/
+
+# Unused local iMin SDK copy (plugin uses JitPack)
+printer-imin/android/libs/
