@@ -1732,7 +1732,6 @@ export default function LiveOrderTerminal() {
       : order.status === "preparing",
   ).length;
   const readyCount = orders.filter((order) => order.status === "ready").length;
-  const kdsCompletedCount = getKdsCompletedOrders().length;
   const completedCount = completedOrders.length;
   const completedRefundSummary = useMemo(
     () => summarizeCompletedOrderRefunds(completedOrders),
@@ -2114,7 +2113,6 @@ export default function LiveOrderTerminal() {
                   inline
                   icon={CheckCheck}
                   label="Completed"
-                  count={kdsCompletedCount}
                   isActive={viewMode === "kdsCompleted"}
                   onClick={() => setViewMode("kdsCompleted")}
                 />

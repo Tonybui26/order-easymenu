@@ -20,13 +20,15 @@ export default function ViewModeTab({
         }`}
       >
         <span className="text-sm font-bold">{label}</span>
-        <span
-          className={`flex min-w-6 items-center justify-center rounded-full px-1.5 text-sm font-bold ${
-            isActive ? "bg-brand_accent text-white" : "text-gray-400"
-          }`}
-        >
-          {count}
-        </span>
+        {count != null && (
+          <span
+            className={`flex min-w-6 items-center justify-center rounded-full px-1.5 text-sm font-bold ${
+              isActive ? "bg-brand_accent text-white" : "text-gray-400"
+            }`}
+          >
+            {count}
+          </span>
+        )}
       </button>
     );
   }
@@ -50,15 +52,17 @@ export default function ViewModeTab({
       >
         {label}
       </span>
-      <span
-        className={`flex size-7 items-center justify-center rounded-full px-2 py-1 text-sm font-bold ${
-          isActive
-            ? "bg-brand_accent text-white"
-            : "bg-transparent text-gray-300"
-        }`}
-      >
-        {count}
-      </span>
+      {count != null && (
+        <span
+          className={`flex size-7 items-center justify-center rounded-full px-2 py-1 text-sm font-bold ${
+            isActive
+              ? "bg-brand_accent text-white"
+              : "bg-transparent text-gray-300"
+          }`}
+        >
+          {count}
+        </span>
+      )}
     </button>
   );
 }
