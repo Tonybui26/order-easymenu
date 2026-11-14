@@ -912,8 +912,10 @@ export default function LiveOrderTerminal() {
     }
   }, [viewMode, selectedDate]);
 
+  // Only poll completed while the KDS Completed tab is visible — avoids a
+  // continuous /api/orders/completed hit every 10s on Preparing.
   useEffect(() => {
-    if (!kitchenDisplayEnabled) return undefined;
+    if (!kitchenDisplayEnabled || viewMode !== "kdsCompleted") return undefined;
     let active = true;
     setKdsFinishedLoading(true);
     refreshKdsFinishedOrders().finally(() => {
@@ -924,7 +926,7 @@ export default function LiveOrderTerminal() {
       active = false;
       clearInterval(intervalId);
     };
-  }, [kitchenDisplayEnabled, refreshKdsFinishedOrders]);
+  }, [kitchenDisplayEnabled, viewMode, refreshKdsFinishedOrders]);
 
   // Effect to handle view mode changes when Pay at Counter is disabled
   useEffect(() => {
@@ -1290,7 +1292,12 @@ export default function LiveOrderTerminal() {
       // If order is delivered or cancelled, remove it after a delay
       // Pay-later dine-in orders stay active until payment is collected
       if (["delivered", "cancelled"].includes(newStatus)) {
-        if (kitchenDisplayEnabled) refreshKdsFinishedOrders();
+        if (
+          kitchenDisplayEnabled &&
+          viewModeRef.current === "kdsCompleted"
+        ) {
+          refreshKdsFinishedOrders();
+        }
         const keepDeliveredPayLater =
           newStatus === "delivered" &&
           shouldKeepDeliveredInActive(updatedOrder, menuConfig);
