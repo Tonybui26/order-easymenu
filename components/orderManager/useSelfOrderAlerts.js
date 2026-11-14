@@ -459,6 +459,7 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
             menuConfig,
             itemGroups,
             menuContent,
+            claimHost: "self_order_alerts",
           });
 
           // Skip future retries after a successful claim or a lost claim

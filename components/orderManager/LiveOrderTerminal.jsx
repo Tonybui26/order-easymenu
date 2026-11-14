@@ -377,6 +377,7 @@ export default function LiveOrderTerminal() {
                   menuConfig,
                   itemGroups,
                   menuContent,
+                  claimHost: "live_order_terminal",
                   ...(posEnabled ? {} : { showCustomToast }),
                 });
 
