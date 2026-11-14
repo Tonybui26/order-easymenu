@@ -461,8 +461,17 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
             menuContent,
           });
 
-          // Only skip future retries once prepare succeeded.
-          if (result.prepared && result.updatedOrder) {
+          // Skip future retries after a successful claim or a lost claim
+          // (another runner already owns auto-print for this order).
+          if (result.claimLost && result.updatedOrder) {
+            printedOrderIdsRef.current.add(orderId);
+            autoPreparedIds.add(orderId);
+            nextOrders = nextOrders.map((entry) =>
+              entry._id === result.updatedOrder._id
+                ? result.updatedOrder
+                : entry,
+            );
+          } else if (result.prepared && result.updatedOrder) {
             printedOrderIdsRef.current.add(orderId);
             autoPreparedIds.add(orderId);
             nextOrders = nextOrders.map((entry) =>

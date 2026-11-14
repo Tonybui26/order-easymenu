@@ -380,11 +380,20 @@ export default function LiveOrderTerminal() {
                   ...(posEnabled ? {} : { showCustomToast }),
                 });
 
-                if (result.printed) {
+                if (result.printed || result.claimLost) {
                   printedOrderIdsRef.current.add(order._id);
                 }
 
-                if (result.prepared && result.updatedOrder) {
+                if (result.claimLost && result.updatedOrder) {
+                  autoPreparedIds.add(order._id);
+                  setOrders((prev) =>
+                    prev.map((entry) =>
+                      entry._id === result.updatedOrder._id
+                        ? result.updatedOrder
+                        : entry,
+                    ),
+                  );
+                } else if (result.prepared && result.updatedOrder) {
                   autoPreparedIds.add(order._id);
                   setOrders((prev) =>
                     prev.map((entry) =>
