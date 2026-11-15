@@ -10,6 +10,7 @@ import PosChromeHeader from "./PosChromeHeader";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { fetchCompletedOrders } from "@/lib/api/fetchApi";
+import { OM_CLIENT, OM_PURPOSE } from "@/lib/api/omPollHeaders";
 import {
   formatReceiptDate,
   formatReceiptDayMonth,
@@ -131,6 +132,11 @@ export default function SalesSummary() {
       const data = await fetchCompletedOrders(
         appliedFrom.toISOString(),
         appliedTo.toISOString(),
+        null,
+        {
+          client: OM_CLIENT.ORDER_TERMINAL,
+          purpose: OM_PURPOSE.SALES_SUMMARY,
+        },
       );
       serverOrders = data?.orders || [];
     } catch (loadError) {

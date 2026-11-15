@@ -13,6 +13,7 @@ import {
   createPrintJobsForOrder,
   checkPrinterAvailability,
 } from "@/lib/api/fetchApi";
+import { OM_CLIENT, OM_PURPOSE } from "@/lib/api/omPollHeaders";
 import {
   isCounterPayment,
   isDineInOrder,
@@ -273,7 +274,10 @@ export default function LiveOrderTerminal() {
     lastPollTimeRef.current = Date.now();
 
     try {
-      const data = await fetchOrders();
+      const data = await fetchOrders({
+        client: OM_CLIENT.ORDER_TERMINAL,
+        purpose: OM_PURPOSE.LIVE_ORDERS,
+      });
       const activeOrders = filterOrdersForActiveList(data, menuConfig);
 
       const nextOrders = overlayInFlightKds(
@@ -597,23 +601,12 @@ export default function LiveOrderTerminal() {
       try {
         // Convert local date to UTC date range for accurate database querying
         // This ensures we get all orders for the user's "day" regardless of timezone
-        const localDate = selectedDate;
-        const { startOfLocalDay, endOfLocalDay, startDateUTC, endDateUTC } =
-          localDayIsoRange(localDate);
+        const { startDateUTC, endDateUTC } = localDayIsoRange(selectedDate);
 
-        // Log timezone information for debugging
-        const tzInfo = getTimezoneInfo();
-        console.log(
-          `🌍 User timezone: ${tzInfo.timezone} (${tzInfo.isAheadOfUTC ? "+" : "-"}${tzInfo.offsetHours}h from UTC)`,
-        );
-        console.log(`📅 Local date: ${formatDateForDisplay(localDate)}`);
-        console.log(
-          `🕐 Local day range: ${startOfLocalDay.toLocaleTimeString()} - ${endOfLocalDay.toLocaleTimeString()}`,
-        );
-        console.log(`🌐 UTC day range: ${startDateUTC} - ${endDateUTC}`);
-
-        // Send both start and end dates to API for precise range filtering
-        const data = await fetchCompletedOrders(startDateUTC, endDateUTC);
+        const data = await fetchCompletedOrders(startDateUTC, endDateUTC, null, {
+          client: OM_CLIENT.ORDER_TERMINAL,
+          purpose: OM_PURPOSE.COMPLETED_ORDERS,
+        });
         setCompletedOrders(data.orders || []);
       } catch (error) {
         console.error("Error fetching completed orders:", error);
@@ -631,6 +624,8 @@ export default function LiveOrderTerminal() {
       const { startDateUTC, endDateUTC } = localDayIsoRange(new Date());
       const data = await fetchCompletedOrders(startDateUTC, endDateUTC, null, {
         includeUnpaid: true,
+        client: OM_CLIENT.ORDER_TERMINAL,
+        purpose: OM_PURPOSE.KDS_COMPLETED,
       });
       if (kdsFinishedRequestRef.current !== requestId) return;
       const overlaid = applyPendingKdsDone(
@@ -755,7 +750,10 @@ export default function LiveOrderTerminal() {
     async function loadInitialOrders() {
       setLoading(true);
       try {
-        const data = await fetchOrders();
+        const data = await fetchOrders({
+          client: OM_CLIENT.ORDER_TERMINAL,
+          purpose: OM_PURPOSE.LIVE_ORDERS,
+        });
         const activeOrders = filterOrdersForActiveList(data, menuConfig);
         const nextOrders = overlayInFlightKds(
           activeOrders,
@@ -765,7 +763,6 @@ export default function LiveOrderTerminal() {
         );
         ordersRef.current = nextOrders;
         setOrders(nextOrders);
-        console.log("activeOrders initial", activeOrders);
         replaceDismissedOrderIds(activeOrders.map((order) => order._id));
         setLoading(false);
       } catch (error) {
@@ -914,9 +911,6 @@ export default function LiveOrderTerminal() {
 
   // Effect to fetch completed orders when view mode changes
   useEffect(() => {
-    console.log("useEffect viewMode run");
-    console.log("viewMode", viewMode);
-
     if (viewMode === "completed") {
       fetchCompletedOrdersData();
     }

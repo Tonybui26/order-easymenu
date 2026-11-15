@@ -20,6 +20,7 @@ import DeleteOrderDrawer from "./DeleteOrderDrawer";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 import { useMenuContext } from "@/components/context/MenuContext";
 import { fetchCompletedOrders, updateOrderStatus } from "@/lib/api/fetchApi";
+import { OM_CLIENT, OM_PURPOSE } from "@/lib/api/omPollHeaders";
 import {
   buildOrderHistoryRows,
   filterOrderHistoryRows,
@@ -201,7 +202,10 @@ export default function OrderHistory() {
     setIsLoading(true);
     try {
       const { startDate, endDate } = getOrderHistoryDateRangeUTC(dateFilter);
-      const data = await fetchCompletedOrders(startDate, endDate);
+      const data = await fetchCompletedOrders(startDate, endDate, null, {
+        client: OM_CLIENT.ORDER_TERMINAL,
+        purpose: OM_PURPOSE.ORDER_HISTORY,
+      });
       const nextOrders = (data.orders || []).filter(isHistoryOrder);
       setOrders(nextOrders);
       return nextOrders;

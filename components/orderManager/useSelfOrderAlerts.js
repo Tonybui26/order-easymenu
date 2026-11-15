@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { App } from "@capacitor/app";
 import toast from "react-hot-toast";
 import { fetchOrders, updateOrderStatus } from "@/lib/api/fetchApi";
+import { OM_CLIENT, OM_PURPOSE } from "@/lib/api/omPollHeaders";
 import { filterOrdersForActiveList } from "@/lib/helper/payLater";
 import {
   isSelfOrderAlertCandidate,
@@ -186,7 +187,10 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
       setProcessingAlertIds(new Set(processingAlertIdsRef.current));
 
       try {
-        const data = await fetchOrders();
+        const data = await fetchOrders({
+          client: OM_CLIENT.POS,
+          purpose: OM_PURPOSE.LIVE_ORDERS,
+        });
         const activeOrders = filterOrdersForActiveList(data, menuConfig);
         const order = activeOrders.find((entry) => entry._id === alertId);
 
@@ -241,7 +245,10 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
       setProcessingAlertIds(new Set(processingAlertIdsRef.current));
 
       try {
-        const data = await fetchOrders();
+        const data = await fetchOrders({
+          client: OM_CLIENT.POS,
+          purpose: OM_PURPOSE.LIVE_ORDERS,
+        });
         const activeOrders = filterOrdersForActiveList(data, menuConfig);
         const order = activeOrders.find((entry) => entry._id === alertId);
 
@@ -516,7 +523,10 @@ export function useSelfOrderAlerts({ externalPolling = false } = {}) {
     isPollingInProgressRef.current = true;
 
     try {
-      const data = await fetchOrders();
+      const data = await fetchOrders({
+        client: OM_CLIENT.POS,
+        purpose: OM_PURPOSE.LIVE_ORDERS,
+      });
       let activeOrders = filterOrdersForActiveList(data, menuConfig);
 
       const failedPolls = consecutiveErrorsRef.current;
