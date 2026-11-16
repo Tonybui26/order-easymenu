@@ -75,6 +75,14 @@ export default function PosCartLine({
   const basePrice = Number(line.basePrice ?? line.price ?? 0);
   const variants = line.selectedVariants || [];
   const modifiers = line.selectedModifiers || [];
+  const modifiersTotal = modifiers.reduce(
+    (sum, modifier) => sum + Number(modifier.priceModifier || 0),
+    0,
+  );
+  const listUnitPrice =
+    Math.round((basePrice + modifiersTotal) * 100) / 100;
+  const chargedUnitPrice = Number(line.price ?? listUnitPrice);
+  const hasProductDiscount = chargedUnitPrice < listUnitPrice - 0.001;
   const hasChildren = variants.length > 0 || modifiers.length > 0;
   const isSentToKitchen = line.kitchenStatus === "sent";
   const isCancelled = line.kitchenStatus === "cancelled";
@@ -383,12 +391,21 @@ export default function PosCartLine({
 
           <span
             className={cn(
-              "inline-flex h-7 shrink-0 items-center justify-center rounded-md border-neutral-200 bg-white px-1.5 text-xs font-semibold tabular-nums text-neutral-800 xl:h-8 xl:px-2 xl:text-sm",
+              "inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-md border-neutral-200 bg-white px-1.5 text-xs font-semibold tabular-nums text-neutral-800 xl:h-8 xl:px-2 xl:text-sm",
               strikeClass,
               isCancelled && "text-neutral-400",
             )}
           >
-            {formatMoney(basePrice)}
+            {hasProductDiscount ? (
+              <>
+                <span className="font-medium text-neutral-400 line-through">
+                  {formatMoney(listUnitPrice)}
+                </span>
+                <span>{formatMoney(chargedUnitPrice)}</span>
+              </>
+            ) : (
+              formatMoney(basePrice)
+            )}
           </span>
 
           {showVoidSentButton ? (

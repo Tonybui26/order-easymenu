@@ -1087,7 +1087,12 @@ export default function PosTerminal() {
       variantsPayload,
       Number(item.price || 0),
     );
-    const price = computeLineUnitPrice(basePrice, modifiersPayload);
+    const price = computeLineUnitPrice(
+      basePrice,
+      modifiersPayload,
+      item,
+      storeProfile?.timezone,
+    );
     const configKey = cartConfigKey(variantsPayload, modifiersPayload);
     return {
       variantsPayload,
@@ -1469,7 +1474,12 @@ export default function PosTerminal() {
       selectedVariants,
       Number(item?.price || line.basePrice || 0),
     );
-    const price = computeLineUnitPrice(basePrice, selectedModifiers);
+    const price = computeLineUnitPrice(
+      basePrice,
+      selectedModifiers,
+      item,
+      storeProfile?.timezone,
+    );
     const configKey = cartConfigKey(selectedVariants, selectedModifiers);
     return {
       ...line,
