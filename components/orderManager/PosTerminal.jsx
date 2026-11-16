@@ -51,6 +51,7 @@ import {
   itemNeedsCustomization,
   selectionMapsFromLine,
 } from "@/lib/pos/itemCustomization";
+import { formatActiveProductDiscountBadge } from "@/lib/pricing/productDiscount";
 import {
   isExternalContextCartLine,
   isUnpaidExternalPayableCartLine,
@@ -317,6 +318,15 @@ function PosProductCartQtyBadge({ cartQty }) {
   );
 }
 
+function PosProductDiscountBadge({ label }) {
+  if (!label) return null;
+  return (
+    <span className="absolute left-2 top-2 z-20 max-w-[calc(100%-3.5rem)] truncate rounded-md bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-tight tracking-wide text-white shadow-sm xl:text-[11px]">
+      {label}
+    </span>
+  );
+}
+
 function PosProductCard({
   item,
   onAdd,
@@ -324,6 +334,7 @@ function PosProductCard({
   useKitchenPrintAliases = false,
   menuStyle = "style1",
   cartQty = 0,
+  storeTimezone,
 }) {
   const displayTitle =
     formatPosItemDisplayName(item.title, { useKitchenPrintAliases }) ||
@@ -331,6 +342,11 @@ function PosProductCard({
   const hasImage = Boolean(item.PhotoSrc);
   const isStyle2 = menuStyle === "style2";
   const isInCart = cartQty > 0;
+  const discountBadge = formatActiveProductDiscountBadge(
+    item?.discount,
+    new Date(),
+    storeTimezone,
+  );
 
   if (isStyle2) {
     const overlayGradient = isInCart
@@ -371,6 +387,7 @@ function PosProductCard({
             <span className="line-clamp-3">{displayTitle}</span>
           </span>
         )}
+        <PosProductDiscountBadge label={discountBadge} />
         <PosProductCartQtyBadge cartQty={cartQty} />
       </button>
     );
@@ -383,6 +400,7 @@ function PosProductCard({
       disabled={disabled}
       className="relative flex w-full flex-col overflow-hidden rounded-lg bg-white shadow-[0_0_0_1px_#1a1a1a0f] transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
     >
+      <PosProductDiscountBadge label={discountBadge} />
       <PosProductCartQtyBadge cartQty={cartQty} />
       {hasImage ? (
         <>
@@ -3582,6 +3600,7 @@ export default function PosTerminal() {
                               useKitchenPrintAliases={useKitchenPrintAliases}
                               menuStyle={posMenuStyle}
                               cartQty={cartQtyByItemId.get(item.id) || 0}
+                              storeTimezone={storeProfile?.timezone}
                             />
                           ))}
                         </div>
@@ -3643,6 +3662,7 @@ export default function PosTerminal() {
                                 useKitchenPrintAliases={useKitchenPrintAliases}
                                 menuStyle={posMenuStyle}
                                 cartQty={cartQtyByItemId.get(item.id) || 0}
+                                storeTimezone={storeProfile?.timezone}
                               />
                             ))}
                           </div>
