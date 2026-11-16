@@ -967,6 +967,7 @@ export default function PosTableMap() {
       tableTimedService,
       drawerRoundStartedAt,
       chargedAt,
+      storeProfile?.timezone,
     );
     const { totalSurchargeAmount } = computeTimedServiceSurcharge(
       charge.amount,

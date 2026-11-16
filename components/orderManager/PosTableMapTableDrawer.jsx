@@ -20,6 +20,7 @@ import {
   computeTimedServiceCharge,
   computeTimedServiceSurcharge,
   formatServiceMinutes,
+  formatTimedServiceDiscountBadge,
   formatTimedServiceRate,
   resolveSoleTableTimedService,
 } from "@/lib/pos/timedServiceConfig";
@@ -241,14 +242,27 @@ function PreviewSectionsList({ sections }) {
   return <ul className="space-y-3">{nodes}</ul>;
 }
 
-function TimedServiceRunningPanel({ service }) {
-  const rate = formatTimedServiceRate(service);
+function TimedServiceRunningPanel({ service, storeTimezone }) {
+  const now = new Date();
+  const rate = formatTimedServiceRate(service, now, storeTimezone);
+  const discountBadge = formatTimedServiceDiscountBadge(
+    service,
+    now,
+    storeTimezone,
+  );
 
   return (
     <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-      <p className="text-xl font-bold leading-tight text-neutral-950">
-        {service.name} in use
-      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-xl font-bold leading-tight text-neutral-950">
+          {service.name} in use
+        </p>
+        {discountBadge ? (
+          <span className="rounded-md bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-tight tracking-wide text-white shadow-sm">
+            {discountBadge}
+          </span>
+        ) : null}
+      </div>
       {rate ? (
         <p className="mt-1 text-sm font-semibold tabular-nums text-emerald-800">
           {rate}
@@ -413,7 +427,12 @@ export default function PosTableMapTableDrawer({
 
   const serviceCharge =
     activeTimedService && snap.serviceChargeDue
-      ? computeTimedServiceCharge(activeTimedService, snapServiceStartedAt, now)
+      ? computeTimedServiceCharge(
+          activeTimedService,
+          snapServiceStartedAt,
+          now,
+          storeProfile?.timezone,
+        )
       : null;
   const serviceSurcharge = computeTimedServiceSurcharge(
     serviceCharge?.amount || 0,
@@ -727,7 +746,10 @@ export default function PosTableMapTableDrawer({
         ) : null}
         {activeTimedService &&
         (displayManualMode === "occupied" || !displayManualMode) ? (
-          <TimedServiceRunningPanel service={activeTimedService} />
+          <TimedServiceRunningPanel
+            service={activeTimedService}
+            storeTimezone={storeProfile?.timezone}
+          />
         ) : displayManualMode ? (
           <p className="rounded-xl border border-neutral-100 bg-white px-3 py-4 text-sm text-neutral-600">
             {displayManualMode === "occupied"
