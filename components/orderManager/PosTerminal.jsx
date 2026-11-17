@@ -609,9 +609,17 @@ export default function PosTerminal() {
     posConfig.takeawayRequireCustomerDetails && posConfig.takeawayRequirePhone,
   );
   const takeawayDetailsRequired = takeawayRequireName || takeawayRequirePhone;
+  const takeawayUseBuzzer = Boolean(posConfig.takeawayUseBuzzer);
+  const takeawayRequireBuzzer = Boolean(posConfig.takeawayRequireBuzzer);
+  const dineInRequireBuzzer = Boolean(
+    posConfig.dineInUseBuzzer && posConfig.dineInRequireBuzzer,
+  );
+  /** Require buzzer + customer details → choose either. */
   const takeawayStartChoiceRequired =
-    Boolean(posConfig.takeawayRequireBuzzer) &&
-    Boolean(posConfig.takeawayRequireCustomerDetails);
+    takeawayUseBuzzer && takeawayRequireBuzzer && takeawayDetailsRequired;
+  /** Require buzzer only → force buzzer drawer. */
+  const takeawayBuzzerOnlyRequired =
+    takeawayUseBuzzer && takeawayRequireBuzzer && !takeawayDetailsRequired;
 
   useEffect(() => {
     if (!isTrainingMode || !resumeParam) return;
@@ -831,6 +839,11 @@ export default function PosTerminal() {
       setIsTakeawayChoiceOpen(true);
       return;
     }
+    if (fromParam === "takeaway" && takeawayBuzzerOnlyRequired) {
+      setPendingTakeaway({ tableNumber: "" });
+      setIsTakeawayBuzzerDrawerOpen(true);
+      return;
+    }
     if (fromParam === "takeaway" && takeawayDetailsRequired) {
       setPendingTakeaway({ tableNumber: "" });
       setIsTakeawayCustomerDrawerOpen(true);
@@ -847,6 +860,7 @@ export default function PosTerminal() {
     dataLoaded,
     takeawayDetailsRequired,
     takeawayStartChoiceRequired,
+    takeawayBuzzerOnlyRequired,
   ]);
 
   useEffect(() => {
@@ -1575,7 +1589,9 @@ export default function PosTerminal() {
       const tableRef = String(nextTableNumber || "").trim();
       if (
         hasTakeawayTableReference(tableRef) ||
-        (!takeawayDetailsRequired && !takeawayStartChoiceRequired)
+        (!takeawayDetailsRequired &&
+          !takeawayStartChoiceRequired &&
+          !takeawayBuzzerOnlyRequired)
       ) {
         setTableNumber(tableRef);
         setOrderType("takeaway");
@@ -1592,6 +1608,10 @@ export default function PosTerminal() {
         setIsTakeawayChoiceOpen(true);
         return;
       }
+      if (takeawayBuzzerOnlyRequired && !hasTakeawayTableReference(tableRef)) {
+        setIsTakeawayBuzzerDrawerOpen(true);
+        return;
+      }
       setIsTakeawayCustomerDrawerOpen(true);
       return;
     }
@@ -1599,10 +1619,20 @@ export default function PosTerminal() {
     setTableNumber(nextTableNumber || "");
     setOrderType(nextOrderType || null);
     if (nextOrderType) setIsOrderTypeMissing(false);
+    if (
+      nextOrderType === "dine-in" &&
+      dineInRequireBuzzer &&
+      !String(ticketBuzzerNumber || "").trim()
+    ) {
+      setIsTicketBuzzerDrawerOpen(true);
+    }
   }
 
   function selectedStartOrderType() {
-    if (!posConfig.dineInUseBuzzer) return "takeaway";
+    // Order-type picker only appears on the customer/buzzer choice drawer.
+    if (!posConfig.dineInUseBuzzer || !takeawayStartChoiceRequired) {
+      return "takeaway";
+    }
     return choiceOrderType === "dine-in" ? "dine-in" : "takeaway";
   }
 
@@ -1669,7 +1699,20 @@ export default function PosTerminal() {
 
   function handleTakeawayBuzzerCancel() {
     setIsTakeawayBuzzerDrawerOpen(false);
-    setIsTakeawayChoiceOpen(true);
+    if (takeawayStartChoiceRequired && pendingTakeaway) {
+      setIsTakeawayChoiceOpen(true);
+      return;
+    }
+    if (takeawayBuzzerOnlyRequired && pendingTakeaway) {
+      const hasStartedOrder =
+        cartLines.length > 0 ||
+        Boolean(activeOrderId) ||
+        checkOrderIds.length > 0;
+      if (!hasStartedOrder) {
+        setPendingTakeaway(null);
+        handleLogoHome();
+      }
+    }
   }
 
   function handleTakeawayBuzzerConfirm(number) {
@@ -1925,10 +1968,42 @@ export default function PosTerminal() {
         tableNumber: resolvedTableNumber || "",
       });
       if (takeawayStartChoiceRequired) setIsTakeawayChoiceOpen(true);
+      else if (takeawayBuzzerOnlyRequired) setIsTakeawayBuzzerDrawerOpen(true);
       else setIsTakeawayCustomerDrawerOpen(true);
       return {
         success: false,
         validationBlocked: true,
+      };
+    }
+
+    if (
+      resolvedOrderType === "takeaway" &&
+      takeawayBuzzerOnlyRequired &&
+      !hasTakeawayTableReference(resolvedTableNumber) &&
+      !isTakeawayBuzzer
+    ) {
+      setPendingTakeaway({
+        tableNumber: resolvedTableNumber || "",
+      });
+      setIsTakeawayBuzzerDrawerOpen(true);
+      return {
+        success: false,
+        validationBlocked: true,
+        error: "Enter a buzzer number before sending",
+      };
+    }
+
+    if (
+      resolvedOrderType === "dine-in" &&
+      dineInRequireBuzzer &&
+      !String(ticketBuzzerNumber || "").trim()
+    ) {
+      setIsTicketBuzzerDrawerOpen(true);
+      showDismissibleToast("Enter a buzzer number for dine-in");
+      return {
+        success: false,
+        validationBlocked: true,
+        error: "Enter a buzzer number before sending",
       };
     }
 

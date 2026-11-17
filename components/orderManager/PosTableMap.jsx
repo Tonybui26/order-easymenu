@@ -269,11 +269,19 @@ export default function PosTableMap() {
   const isPayFirstMode = Boolean(
     resolvePosConfig(menuConfig).payFirstModeEnabled,
   );
-  const takeawayButtonLabel =
-    resolvePosConfig(menuConfig).dineInUseBuzzer &&
-    resolvePosConfig(menuConfig).takeawayRequireBuzzer
-      ? "Takeaway / Dine-in"
-      : "Takeaway";
+  const takeawayButtonLabel = (() => {
+    const pos = resolvePosConfig(menuConfig);
+    const detailsRequired =
+      pos.takeawayRequireCustomerDetails &&
+      (pos.takeawayRequireName || pos.takeawayRequirePhone);
+    // Choice drawer can pick Dine-in vs Takeaway when both buzzers + details apply.
+    const showCombinedStart =
+      pos.dineInUseBuzzer &&
+      pos.takeawayUseBuzzer &&
+      pos.takeawayRequireBuzzer &&
+      detailsRequired;
+    return showCombinedStart ? "Takeaway / Dine-in" : "Takeaway";
+  })();
   const tyroPayments = useMemo(
     () => resolvePosPaymentsConfig(menuConfig).tyro,
     [menuConfig],
