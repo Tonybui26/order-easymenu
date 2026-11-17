@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Banknote, CreditCard, Delete, HandCoins, X } from "lucide-react";
+import { Banknote, CreditCard, Delete, HandCoins, Percent, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { cn } from "@/lib/helper";
+import {
+  computeIncludedTaxFromInclusiveTotal,
+  DEFAULT_TAX_PERCENTAGE,
+} from "@/lib/helper/includedTax";
 import { usePosRegisterSession } from "@/components/context/PosRegisterSessionContext";
 import {
   buildTyroPurchaseParams,
@@ -63,6 +67,20 @@ function formatTenderDisplay(value) {
   return `$ ${normalized}`;
 }
 
+function formatDiscountBreakdownLabel(discount) {
+  if (
+    discount?.amount == null ||
+    Number(discount.amount) <= 0 ||
+    !discount?.type
+  ) {
+    return "—";
+  }
+  if (discount.type === "percent" && discount.percent != null) {
+    return `-${Number(discount.percent).toFixed(2)}%`;
+  }
+  return `-${formatMoney(discount.amount)}`;
+}
+
 /**
  * Right-side Amount Tendered drawer for POS payment.
  * Cash / card selection opens the Finalise Sale step with change due.
@@ -87,10 +105,39 @@ export default function PosPaymentDrawer({
   onOpenCashDrawer,
   /** Held QR counter pay: cash/card tender and Complete Sale, no tax invoice print. */
   hideReceiptActions = false,
+  /**
+   * Optional check breakdown for table-map tender (subtotal / discount / surcharge).
+   * When set, shows totals above the keypad. Tax is derived from amountDue.
+   */
+  breakdown = null,
+  /** Opens the check discount drawer (table-map tender). */
+  onOpenDiscount = null,
 }) {
   const { session } = usePosRegisterSession();
   const { storeProfile } = useMenuContext();
   const countsFinalised = Boolean(session?.countsFinalised);
+  const taxPercentage =
+    storeProfile?.taxPercentage != null
+      ? Number(storeProfile.taxPercentage)
+      : DEFAULT_TAX_PERCENTAGE;
+  const showBreakdown = Boolean(breakdown);
+  const canOpenDiscount = typeof onOpenDiscount === "function";
+  const breakdownSubtotal = Math.max(0, Number(breakdown?.subtotal || 0));
+  const breakdownSurcharge = Math.max(
+    0,
+    Number(breakdown?.surchargeTotal || 0),
+  );
+  const breakdownSurchargeLabel =
+    String(breakdown?.surchargeLabel || "").trim() || "Surcharge";
+  const breakdownDiscount =
+    breakdown?.discount?.amount != null &&
+    Number(breakdown.discount.amount) > 0
+      ? breakdown.discount
+      : null;
+  const includedTax = computeIncludedTaxFromInclusiveTotal(
+    amountDue,
+    taxPercentage,
+  );
   const [digits, setDigits] = useState("");
   const [step, setStep] = useState("tender"); // tender | finalise | signature
   const [paymentSummary, setPaymentSummary] = useState(null);
@@ -626,6 +673,66 @@ export default function PosPaymentDrawer({
             Amount Tendered
           </p>
 
+          {showBreakdown ? (
+            <div className="mb-3 rounded-lg bg-white/10 px-3 py-2.5 text-sm text-white md:mb-4 md:px-3.5 md:py-3">
+              <div className="space-y-1.5">
+                <button
+                  type="button"
+                  disabled={!canOpenDiscount || isPurchasing || isCompletingSale}
+                  onClick={() => onOpenDiscount?.()}
+                  className={cn(
+                    "flex w-full items-baseline justify-between gap-2 text-left",
+                    canOpenDiscount &&
+                      "rounded-md transition-colors hover:bg-white/10 active:bg-white/15",
+                    canOpenDiscount && "-mx-1 px-1 py-0.5",
+                  )}
+                >
+                  <span className="text-white/70">
+                    Discount
+                    {canOpenDiscount ? (
+                      <Percent
+                        size={12}
+                        strokeWidth={2.25}
+                        className="ml-1 inline align-[-1px] opacity-80"
+                      />
+                    ) : null}
+                  </span>
+                  <span className="tabular-nums font-medium">
+                    {formatDiscountBreakdownLabel(breakdownDiscount)}
+                  </span>
+                </button>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-white/70">Subtotal</span>
+                  <span className="tabular-nums font-medium">
+                    {formatMoney(breakdownSubtotal)}
+                  </span>
+                </div>
+                {breakdownSurcharge > 0 ? (
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-white/70">
+                      {breakdownSurchargeLabel}
+                    </span>
+                    <span className="tabular-nums font-medium">
+                      {formatMoney(breakdownSurcharge)}
+                    </span>
+                  </div>
+                ) : null}
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-white/70">Tax (GST)</span>
+                  <span className="tabular-nums font-medium">
+                    {formatMoney(includedTax)}
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between gap-2 border-t border-white/15 pt-1.5">
+                  <span className="font-semibold">Total</span>
+                  <span className="tabular-nums text-base font-bold">
+                    {formatMoney(amountDue)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="mb-3 flex items-center gap-2 md:mb-4">
             <div
               className={cn(
@@ -635,13 +742,25 @@ export default function PosPaymentDrawer({
             >
               {displayValue || "$ "}
             </div>
-            <button
-              type="button"
-              aria-label="Tip"
-              className="flex size-10 shrink-0 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:bg-white/20 md:size-12"
-            >
-              <HandCoins size={24} strokeWidth={1.75} />
-            </button>
+            {canOpenDiscount ? (
+              <button
+                type="button"
+                aria-label="Discount"
+                disabled={isPurchasing || isCompletingSale}
+                onClick={() => onOpenDiscount?.()}
+                className="flex size-10 shrink-0 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:bg-white/20 disabled:cursor-not-allowed disabled:opacity-60 md:size-12"
+              >
+                <Percent size={24} strokeWidth={1.75} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                aria-label="Tip"
+                className="flex size-10 shrink-0 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:bg-white/20 md:size-12"
+              >
+                <HandCoins size={24} strokeWidth={1.75} />
+              </button>
+            )}
           </div>
 
           <div className="mb-3 grid grid-cols-4 gap-1 md:mb-4 md:gap-1.5">

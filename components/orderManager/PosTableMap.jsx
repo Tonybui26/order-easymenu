@@ -99,6 +99,7 @@ import {
   resolvePosPaymentsConfig,
 } from "@/lib/pos/posPaymentsConfig";
 import PosChromeHeader from "./PosChromeHeader";
+import PosDiscountDrawer from "./PosDiscountDrawer";
 import PosPaymentDrawer from "./PosPaymentDrawer";
 import PosTableMapFloor from "./PosTableMapFloor";
 import PosTableMapTableDrawer from "./PosTableMapTableDrawer";
@@ -109,6 +110,10 @@ import DismissibleToast, {
 } from "@/components/orderManager/DismissibleToast";
 import { usePosOpenCashDrawer } from "./usePosOpenCashDrawer";
 import { hydrateHeldOrders, hydrateResumeOrders } from "@/lib/localDb/posLiveSnapshot";
+
+function roundMapMoney(amount) {
+  return Math.round(Number(amount || 0) * 100) / 100;
+}
 
 const TABLE_MAP_POLL_MS = 10000;
 const BOOKING_INDICATOR_WINDOW_MS = 60 * 60 * 1000;
@@ -122,6 +127,59 @@ function isBookingIndicatorCurrent(startsAt, now) {
 
 function orderIdsCacheKey(orderIds) {
   return (orderIds || []).map(String).join(",");
+}
+
+/** Unpaid ticket item/surcharge totals for map tender discount base. */
+function sumUnpaidOrdersPricing(orders, payableOrderIds) {
+  const idSet = new Set((payableOrderIds || []).map(String));
+  const unpaid = (orders || []).filter(
+    (order) =>
+      idSet.has(String(order?._id)) &&
+      String(order?.paymentStatus || "").trim() !== "paid",
+  );
+  let subtotal = 0;
+  let surchargeTotal = 0;
+  for (const order of unpaid) {
+    subtotal += Number(order?.subtotal ?? order?.total ?? 0);
+    if (String(order?.source || "").trim() === "pos") {
+      surchargeTotal += Number(order?.surchargeTotal || 0);
+    }
+  }
+  return {
+    subtotal: roundMapMoney(subtotal),
+    surchargeTotal: roundMapMoney(surchargeTotal),
+  };
+}
+
+function buildTenderAmountDue(itemsSubtotal, surchargeTotal, discount) {
+  const discountAmount =
+    discount?.discountAmount != null && Number(discount.discountAmount) > 0
+      ? Number(discount.discountAmount)
+      : 0;
+  return Math.max(
+    0,
+    roundMapMoney(
+      Number(itemsSubtotal || 0) +
+        Number(surchargeTotal || 0) -
+        discountAmount,
+    ),
+  );
+}
+
+function formatTenderDiscountForBreakdown(discount) {
+  if (
+    !discount ||
+    discount.discountAmount == null ||
+    Number(discount.discountAmount) <= 0
+  ) {
+    return null;
+  }
+  return {
+    amount: Number(discount.discountAmount),
+    type: discount.discountType || null,
+    percent:
+      discount.discountType === "percent" ? discount.discountPercent : null,
+  };
 }
 
 function ticketsStatusKey(heldOrder) {
@@ -172,6 +230,8 @@ export default function PosTableMap() {
   const [drawerTableName, setDrawerTableName] = useState(null);
   const [drawerHeldOrder, setDrawerHeldOrder] = useState(null);
   const [tenderTarget, setTenderTarget] = useState(null);
+  const [isDiscountDrawerOpen, setIsDiscountDrawerOpen] = useState(false);
+  const [tenderDiscount, setTenderDiscount] = useState(null);
   const [isCompletingSale, setIsCompletingSale] = useState(false);
   const [isPrintingReceipt, setIsPrintingReceipt] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -954,6 +1014,44 @@ export default function PosTableMap() {
     );
   }
 
+  function resolvePayableOrdersPricing(payableOrderIds) {
+    if (!payableOrderIds?.length) {
+      return { subtotal: 0, surchargeTotal: 0 };
+    }
+    const cacheKey = orderIdsCacheKey(
+      drawerHeldOrder?.orderIds?.length
+        ? drawerHeldOrder.orderIds
+        : payableOrderIds,
+    );
+    const cached = resumeOrdersCacheRef.current.get(cacheKey);
+    if (cached?.length) {
+      return sumUnpaidOrdersPricing(cached, payableOrderIds);
+    }
+    // Cache miss: treat amountDue as item subtotal (no separate surcharge split).
+    return {
+      subtotal: roundMapMoney(
+        Number(drawerHeldOrder?.amountDue ?? drawerHeldOrder?.total ?? 0),
+      ),
+      surchargeTotal: 0,
+    };
+  }
+
+  function openMapTender(target) {
+    setTenderDiscount(null);
+    setIsDiscountDrawerOpen(false);
+    tableTimeSaleRef.current = null;
+    setTenderTarget({
+      ...target,
+      discount: null,
+      amountDue: buildTenderAmountDue(
+        target.itemsSubtotal,
+        target.surchargeTotal,
+        null,
+      ),
+    });
+    handleCloseDrawer();
+  }
+
   function handlePayTableTime() {
     if (kitchenInProgress) {
       showDismissibleToast(
@@ -969,28 +1067,38 @@ export default function PosTableMap() {
       chargedAt,
       storeProfile?.timezone,
     );
-    const { totalSurchargeAmount } = computeTimedServiceSurcharge(
-      charge.amount,
-      { posSurcharges, storeProfile, at: chargedAt },
-    );
+    const timeSurcharge = computeTimedServiceSurcharge(charge.amount, {
+      posSurcharges,
+      storeProfile,
+      at: chargedAt,
+    });
     const orderIds = drawerHeldOrder
       ? getDrawerPayableOrderIds(drawerHeldOrder)
       : [];
-    const ordersDue = orderIds.length
-      ? Number(drawerHeldOrder?.amountDue ?? 0)
-      : 0;
+    const foodPricing = resolvePayableOrdersPricing(orderIds);
+    const itemsSubtotal = roundMapMoney(
+      foodPricing.subtotal + Number(charge.amount || 0),
+    );
+    const surchargeTotal = roundMapMoney(
+      foodPricing.surchargeTotal +
+        Number(timeSurcharge.totalSurchargeAmount || 0),
+    );
+    const surchargeLabel =
+      timeSurcharge.surcharges.length === 1 &&
+      foodPricing.surchargeTotal <= 0
+        ? timeSurcharge.surcharges[0].description
+        : "Surcharge";
 
-    setTenderTarget({
+    openMapTender({
       orderIds,
-      amountDue:
-        Math.round((ordersDue + charge.amount + totalSurchargeAmount) * 100) /
-        100,
+      itemsSubtotal,
+      surchargeTotal,
+      surchargeLabel,
       tableTime: {
         table: drawerTableName,
         chargedAt: new Date(chargedAt).toISOString(),
       },
     });
-    handleCloseDrawer();
   }
 
   function handlePay() {
@@ -1011,13 +1119,20 @@ export default function PosTableMap() {
 
     // QR counter cash/card: tender on the table map. Do not open the POS menu.
     if (counterQrIds.length > 0 && posPayableIds.length === 0) {
-      setTenderTarget({
+      const pricing = resolvePayableOrdersPricing(counterQrIds);
+      openMapTender({
         orderIds: counterQrIds,
-        amountDue: Number(
-          drawerHeldOrder?.amountDue ?? drawerHeldOrder?.total ?? 0,
-        ),
+        itemsSubtotal:
+          pricing.subtotal > 0
+            ? pricing.subtotal
+            : roundMapMoney(
+                Number(
+                  drawerHeldOrder?.amountDue ?? drawerHeldOrder?.total ?? 0,
+                ),
+              ),
+        surchargeTotal: pricing.surchargeTotal,
+        surchargeLabel: "Surcharge",
       });
-      handleCloseDrawer();
       return;
     }
 
@@ -1025,6 +1140,37 @@ export default function PosTableMap() {
     navigate(
       `/pos?resume=${encodeURIComponent(resumeIds.join(","))}&pay=1`,
     );
+  }
+
+  function handleMapDiscountConfirm({
+    discountAmount,
+    discountPercent,
+    discountType,
+  }) {
+    const nextDiscount =
+      discountAmount == null || Number(discountAmount) <= 0
+        ? null
+        : {
+            discountAmount: Number(discountAmount),
+            discountPercent:
+              discountType === "percent" ? discountPercent ?? null : null,
+            discountType: discountType || null,
+          };
+
+    setTenderDiscount(nextDiscount);
+    setIsDiscountDrawerOpen(false);
+    setTenderTarget((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        discount: nextDiscount,
+        amountDue: buildTenderAmountDue(
+          prev.itemsSubtotal,
+          prev.surchargeTotal,
+          nextDiscount,
+        ),
+      };
+    });
   }
 
   async function prepareQrCounterOrdersAfterPay(orders) {
@@ -1065,6 +1211,7 @@ export default function PosTableMap() {
 
     setIsCompletingSale(true);
     try {
+      const discount = target.discount || tenderDiscount;
       const result = await payTableTimedService({
         table: target.tableTime.table,
         chargedAt: target.tableTime.chargedAt,
@@ -1073,6 +1220,13 @@ export default function PosTableMap() {
         amountTendered: Number(paymentSummary.amountTendered || 0),
         changeDue: Number(paymentSummary.change || 0),
         processingFee: Number(paymentSummary.processingFee || 0),
+        ...(discount?.discountAmount > 0 && discount?.discountType
+          ? {
+              discountAmount: discount.discountAmount,
+              discountPercent: discount.discountPercent ?? null,
+              discountType: discount.discountType,
+            }
+          : null),
       });
       if (!result?.success) {
         showDismissibleToast(result?.error || "Failed to complete sale");
@@ -1142,12 +1296,20 @@ export default function PosTableMap() {
 
     setIsCompletingSale(true);
     try {
+      const discount = target.discount || tenderDiscount;
       const result = await completePosSaleBatch({
         orderIds: target.orderIds,
         method: paymentSummary.method,
         amountTendered: Number(paymentSummary.amountTendered || 0),
         changeDue: Number(paymentSummary.change || 0),
         processingFee: Number(paymentSummary.processingFee || 0),
+        ...(discount?.discountAmount > 0 && discount?.discountType
+          ? {
+              discountAmount: discount.discountAmount,
+              discountPercent: discount.discountPercent ?? null,
+              discountType: discount.discountType,
+            }
+          : null),
       });
       if (!result?.success) {
         showDismissibleToast(result?.error || "Failed to complete sale");
@@ -1167,15 +1329,21 @@ export default function PosTableMap() {
     }
   }
 
-  async function handleTableQrCompleteSale(paymentSummary) {
-    const result = await persistTableQrSale(paymentSummary);
-    if (!result?.success) return;
+  function clearMapTender() {
     tableTimeSaleRef.current = null;
+    setTenderDiscount(null);
+    setIsDiscountDrawerOpen(false);
     setTenderTarget(null);
   }
 
+  async function handleTableQrCompleteSale(paymentSummary) {
+    const result = await persistTableQrSale(paymentSummary);
+    if (!result?.success) return;
+    clearMapTender();
+  }
+
   function handleTableQrFinishPaidSale() {
-    setTenderTarget(null);
+    clearMapTender();
   }
 
   async function handleSendToKitchen() {
@@ -1797,16 +1965,32 @@ export default function PosTableMap() {
         isOpen={Boolean(tenderTarget)}
         onClose={() => {
           if (isCompletingSale) return;
-          tableTimeSaleRef.current = null;
-          setTenderTarget(null);
+          clearMapTender();
         }}
         amountDue={Number(tenderTarget?.amountDue || 0)}
+        breakdown={
+          tenderTarget
+            ? {
+                subtotal: Number(tenderTarget.itemsSubtotal || 0),
+                surchargeTotal: Number(tenderTarget.surchargeTotal || 0),
+                surchargeLabel: tenderTarget.surchargeLabel || "Surcharge",
+                discount: formatTenderDiscountForBreakdown(
+                  tenderTarget.discount || tenderDiscount,
+                ),
+              }
+            : null
+        }
+        onOpenDiscount={() => {
+          if (isCompletingSale) return;
+          if (!(Number(tenderTarget?.itemsSubtotal) > 0)) {
+            showDismissibleToast("Nothing to discount");
+            return;
+          }
+          setIsDiscountDrawerOpen(true);
+        }}
         onCompleteSale={handleTableQrCompleteSale}
         onPersistSale={persistTableQrSale}
-        onFinishPaidSale={() => {
-          tableTimeSaleRef.current = null;
-          handleTableQrFinishPaidSale();
-        }}
+        onFinishPaidSale={handleTableQrFinishPaidSale}
         onPrintReceipt={
           tenderTarget?.tableTime ? handlePrintTableTimeInvoice : undefined
         }
@@ -1818,6 +2002,22 @@ export default function PosTableMap() {
         linklyCardEnabled={linklyCardEnabled}
         linklyConfig={linklyPayments}
         onOpenCashDrawer={handleOpenCashDrawer}
+      />
+
+      <PosDiscountDrawer
+        isOpen={isDiscountDrawerOpen}
+        onClose={() => setIsDiscountDrawerOpen(false)}
+        subtotal={Number(tenderTarget?.itemsSubtotal || 0)}
+        initialDigits={
+          tenderDiscount?.discountType === "percent" &&
+          tenderDiscount?.discountPercent != null
+            ? String(tenderDiscount.discountPercent)
+            : tenderDiscount?.discountType === "dollar" &&
+                tenderDiscount?.discountAmount != null
+              ? String(tenderDiscount.discountAmount)
+              : ""
+        }
+        onConfirm={handleMapDiscountConfirm}
       />
 
       <DeleteOrderDrawer
