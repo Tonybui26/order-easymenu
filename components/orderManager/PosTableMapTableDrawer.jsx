@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import {
+  ArrowRightLeft,
   ChevronDown,
   CircleDollarSign,
   FileText,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/helper";
 import { isKitchenPrintingEnabled } from "@/lib/pos/kitchenPrintingConfig";
+import { drawerEntryHasPosCheck } from "@/lib/pos/posTableMapHeld";
 import { mergeReceiptSurchargeLines } from "@/lib/pos/posSurcharges";
 import {
   computeTimedServiceCharge,
@@ -286,6 +288,12 @@ function sectionLinesTotal(lines = []) {
 
 const TABLE_MORE_ACTIONS = [
   {
+    id: "transfer-table",
+    label: "Transfer table",
+    icon: ArrowRightLeft,
+    tone: "purple",
+  },
+  {
     id: "print-bill",
     label: "Print Bill",
     icon: FileText,
@@ -352,6 +360,7 @@ export default function PosTableMapTableDrawer({
   onOpenTable,
   onCloseTable,
   onNewOrder,
+  onTransferTable,
 }) {
   const { menuConfig, timedServices, posSurcharges, storeProfile } =
     useMenuContext();
@@ -497,6 +506,11 @@ export default function PosTableMapTableDrawer({
   }
 
   const hasTickets = Boolean(displayHeldOrder?.orderIds?.length);
+  const hasUnpaidPosCheck =
+    drawerEntryHasPosCheck(displayHeldOrder) &&
+    Number(displayHeldOrder?.amountDue || 0) > 0;
+  const canTransferTable =
+    displayManualMode === "occupied" || hasUnpaidPosCheck;
   const actionsDisabled = isProcessing || (!hasTickets && !displayManualMode);
   const footerPrimaryCount = [
     showSendToKitchen,
@@ -506,6 +520,7 @@ export default function PosTableMapTableDrawer({
   ].filter(Boolean).length;
 
   const visibleMoreActions = TABLE_MORE_ACTIONS.filter((action) => {
+    if (action.id === "transfer-table") return canTransferTable;
     if (showServicePay) return action.id === "print-bill";
     if (displayManualMode) return false;
     if (action.id === "delete") return hasTickets;
@@ -686,6 +701,7 @@ export default function PosTableMapTableDrawer({
           disabled={isProcessing}
           onClick={() => {
             setShowMoreActions(false);
+            if (action.id === "transfer-table") onTransferTable?.();
             if (action.id === "print-bill") onPrintBill?.();
             if (action.id === "reprint-order") onReprintOrder?.();
             if (action.id === "delete") onDelete?.();

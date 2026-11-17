@@ -17,6 +17,7 @@ import {
   closeManualTable,
   payTableTimedService,
   mergePosTables,
+  transferPosTable,
   unmergePosTables,
   markOrderPayLater,
   updateOrderStatus,
@@ -103,6 +104,7 @@ import PosDiscountDrawer from "./PosDiscountDrawer";
 import PosPaymentDrawer from "./PosPaymentDrawer";
 import PosTableMapFloor from "./PosTableMapFloor";
 import PosTableMapTableDrawer from "./PosTableMapTableDrawer";
+import PosTableMapTransferModal from "./PosTableMapTransferModal";
 import PosTableMapUndoMergeModal from "./PosTableMapUndoMergeModal";
 import DeleteOrderDrawer from "./DeleteOrderDrawer";
 import DismissibleToast, {
@@ -247,6 +249,10 @@ export default function PosTableMap() {
   const [mergeGroups, setMergeGroups] = useState([]);
   const [undoMergeTarget, setUndoMergeTarget] = useState(null);
   const [isUndoingMerge, setIsUndoingMerge] = useState(false);
+  const [isTransferMode, setIsTransferMode] = useState(false);
+  const [transferFromTable, setTransferFromTable] = useState(null);
+  const [transferConfirmTarget, setTransferConfirmTarget] = useState(null);
+  const [isTransferring, setIsTransferring] = useState(false);
   const [navigatingTableNames, setNavigatingTableNames] = useState([]);
   /** @type {React.MutableRefObject<Map<string, object[]>>} */
   const resumeOrdersCacheRef = useRef(new Map());
@@ -685,8 +691,74 @@ export default function PosTableMap() {
     navigate("/pos?orderType=takeaway");
   }
 
+  function exitTransferMode() {
+    if (isTransferring) return;
+    setIsTransferMode(false);
+    setTransferFromTable(null);
+    setTransferConfirmTarget(null);
+  }
+
+  function handleEnterTransferMode(fromTable) {
+    const source = String(fromTable || drawerTableName || "").trim();
+    if (!source) {
+      showDismissibleToast("Select a table to transfer from");
+      return;
+    }
+    handleCloseDrawer();
+    setIsMergeMode(false);
+    setMergeSelectedNames([]);
+    setUndoMergeTarget(null);
+    setTransferFromTable(source);
+    setTransferConfirmTarget(null);
+    setIsTransferMode(true);
+    toast.success(`Transfer from ${source} — tap a table`);
+  }
+
+  function isTransferTargetOccupied(tableName) {
+    const held = findHeldOrderForTableMap(heldOrders, tableName);
+    if (held && Number(held.amountDue || 0) > 0) return true;
+    if (held && findPosHeldOrderForTable(heldOrders, tableName)) return true;
+    return openRoundTableKeys.has(normalizeTableMapTableName(tableName));
+  }
+
+  async function handleConfirmTransferTable() {
+    const fromTable = String(transferFromTable || "").trim();
+    const toTable = String(transferConfirmTarget || "").trim();
+    if (!fromTable || !toTable || isTransferring) return;
+
+    setIsTransferring(true);
+    try {
+      const result = await transferPosTable({ fromTable, toTable });
+      if (!result?.success) {
+        showDismissibleToast(result?.error || "Failed to transfer table");
+        return;
+      }
+
+      setMergeGroups((prev) => {
+        const next = removeGroupsOverlappingTables(prev, [fromTable, toTable]);
+        savePosTableMergeGroups(mergeStoreKey, next);
+        return next;
+      });
+      await loadHeldOrders();
+      await loadOpenTableRounds();
+      toast.success(
+        result.combined
+          ? `Transferred to table ${toTable} (combined)`
+          : `Transferred to table ${toTable}`,
+      );
+      setIsTransferMode(false);
+      setTransferFromTable(null);
+      setTransferConfirmTarget(null);
+    } catch (error) {
+      showDismissibleToast(error?.message || "Failed to transfer table");
+    } finally {
+      setIsTransferring(false);
+    }
+  }
+
   function handleEnterMergeMode() {
     handleCloseDrawer();
+    exitTransferMode();
     setMergeSelectedNames([]);
     setUndoMergeTarget(null);
     setIsMergeMode(true);
@@ -831,6 +903,22 @@ export default function PosTableMap() {
     const tableName = getTableMapTableName(object);
     if (!tableName) {
       showDismissibleToast("This table has no name configured");
+      return;
+    }
+
+    if (isTransferMode) {
+      if (isTransferring) return;
+      const fromKey = normalizeTableMapTableName(transferFromTable);
+      const tapKey = normalizeTableMapTableName(tableName);
+      if (!fromKey) {
+        exitTransferMode();
+        return;
+      }
+      if (tapKey === fromKey) {
+        exitTransferMode();
+        return;
+      }
+      setTransferConfirmTarget(tableName);
       return;
     }
 
@@ -1770,9 +1858,14 @@ export default function PosTableMap() {
     ? !kitchenInProgress
     : paymentActions.showPay;
   const { showSendToKitchen } = paymentActions;
-  const mapFloorColor = isMergeMode
-    ? TABLE_MAP_MERGE_FLOOR_COLOR
-    : TABLE_MAP_FLOOR_COLOR;
+  const mapFloorColor =
+    isMergeMode || isTransferMode
+      ? TABLE_MAP_MERGE_FLOOR_COLOR
+      : TABLE_MAP_FLOOR_COLOR;
+  const transferSelectedNames = [
+    transferFromTable,
+    transferConfirmTarget,
+  ].filter(Boolean);
 
   return (
     <>
@@ -1822,23 +1915,35 @@ export default function PosTableMap() {
                   <ShoppingBag className="size-4 shrink-0" aria-hidden />
                   {takeawayButtonLabel}
                 </button>
-                <button
-                  type="button"
-                  onClick={handleToggleMergeMode}
-                  className="flex min-h-[44px] items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10 xl:text-base"
-                >
-                  {isMergeMode ? (
-                    <>
-                      <X className="size-4 shrink-0" aria-hidden />
-                      Close
-                    </>
-                  ) : (
-                    <>
-                      <Combine className="size-4 shrink-0" aria-hidden />
-                      Merge
-                    </>
-                  )}
-                </button>
+                {isTransferMode ? (
+                  <button
+                    type="button"
+                    onClick={exitTransferMode}
+                    disabled={isTransferring}
+                    className="flex min-h-[44px] items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10 disabled:opacity-60 xl:text-base"
+                  >
+                    <X className="size-4 shrink-0" aria-hidden />
+                    Close
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleToggleMergeMode}
+                    className="flex min-h-[44px] items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10 xl:text-base"
+                  >
+                    {isMergeMode ? (
+                      <>
+                        <X className="size-4 shrink-0" aria-hidden />
+                        Close
+                      </>
+                    ) : (
+                      <>
+                        <Combine className="size-4 shrink-0" aria-hidden />
+                        Merge
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
             <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 hidden -translate-x-1/2 md:block">
@@ -1884,8 +1989,14 @@ export default function PosTableMap() {
               unpaidQrPaymentTableKeys={unpaidQrPaymentTableKeys}
               bookingsByTableKey={bookingsByTableKey}
               floorColor={mapFloorColor}
-              solidFloor={isMergeMode}
-              selectedTableNames={isMergeMode ? mergeSelectedNames : []}
+              solidFloor={isMergeMode || isTransferMode}
+              selectedTableNames={
+                isTransferMode
+                  ? transferSelectedNames
+                  : isMergeMode
+                    ? mergeSelectedNames
+                    : []
+              }
               navigatingTableNames={navigatingTableNames}
               disableInteraction={navigatingTableNames.length > 0}
               mergeColorByTableName={mergeColorByTableName}
@@ -1958,6 +2069,7 @@ export default function PosTableMap() {
         onOpenTable={handleOpenTableManually}
         onCloseTable={handleCloseTableManually}
         onNewOrder={() => openNewOrderForTable(drawerTableName)}
+        onTransferTable={() => handleEnterTransferMode(drawerTableName)}
         isProcessing={isProcessing || isDeleting || isManualTableSaving}
       />
 
@@ -2042,6 +2154,23 @@ export default function PosTableMap() {
           setUndoMergeTarget(null);
         }}
         onConfirm={handleConfirmUndoMerge}
+      />
+
+      <PosTableMapTransferModal
+        isOpen={Boolean(isTransferMode && transferConfirmTarget)}
+        fromTable={transferFromTable || ""}
+        toTable={transferConfirmTarget || ""}
+        targetOccupied={
+          transferConfirmTarget
+            ? isTransferTargetOccupied(transferConfirmTarget)
+            : false
+        }
+        isProcessing={isTransferring}
+        onClose={() => {
+          if (isTransferring) return;
+          setTransferConfirmTarget(null);
+        }}
+        onConfirm={handleConfirmTransferTable}
       />
     </>
   );
