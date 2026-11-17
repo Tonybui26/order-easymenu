@@ -2,8 +2,10 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   useTransition,
 } from "react";
@@ -17,6 +19,7 @@ export function PosNavigateProvider({ children }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showOverlay, setShowOverlay] = useState(false);
+  const guardRef = useRef(null);
 
   useEffect(() => {
     if (!isPending) {
@@ -33,14 +36,31 @@ export function PosNavigateProvider({ children }) {
     };
   }, [isPending]);
 
-  function navigate(href) {
-    startTransition(() => {
-      router.push(href);
-    });
-  }
+  const setNavigationGuard = useCallback((guard) => {
+    guardRef.current = typeof guard === "function" ? guard : null;
+    return () => {
+      if (guardRef.current === guard) guardRef.current = null;
+    };
+  }, []);
+
+  const navigate = useCallback(
+    async (href) => {
+      const guard = guardRef.current;
+      if (guard) {
+        const allowed = await guard(href);
+        if (!allowed) return;
+      }
+      startTransition(() => {
+        router.push(href);
+      });
+    },
+    [router],
+  );
 
   return (
-    <PosNavigateContext.Provider value={{ navigate, isPending }}>
+    <PosNavigateContext.Provider
+      value={{ navigate, isPending, setNavigationGuard }}
+    >
       {children}
       {showOverlay ? (
         <div

@@ -222,7 +222,7 @@ function SortablePosItem({ item, onRemove, onEdit }) {
   );
 }
 
-export default function PosMenuLayoutView() {
+export default function PosMenuLayoutView({ onDirtyChange, saveRef } = {}) {
   const { menuContent, setMenuContent, posLayouts, itemGroups, syncCatalogFromServer } =
     useMenuContext();
   const allItems = useAllMenuItems(menuContent);
@@ -271,6 +271,10 @@ export default function PosMenuLayoutView() {
     [draftLayouts, posLayouts],
   );
 
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
   const [draggingTabId, setDraggingTabId] = useState(null);
   const [draggingItemId, setDraggingItemId] = useState(null);
 
@@ -302,7 +306,8 @@ export default function PosMenuLayoutView() {
   const tabIds = useMemo(() => tabs.map((tab) => tab.id), [tabs]);
 
   async function handleSaveChanges() {
-    if (!isDirty || isSaving) return;
+    if (!isDirty) return true;
+    if (isSaving) return false;
     setIsSaving(true);
     try {
       const result = await updatePosLayouts(draftLayouts);
@@ -317,12 +322,25 @@ export default function PosMenuLayoutView() {
       } else {
         toast.success("Menu layout saved");
       }
+      return true;
     } catch (error) {
       toast.error(error?.message || "Could not save the menu layout");
+      return false;
     } finally {
       setIsSaving(false);
     }
   }
+
+  const saveChangesRef = useRef(handleSaveChanges);
+  saveChangesRef.current = handleSaveChanges;
+
+  useEffect(() => {
+    if (!saveRef) return;
+    saveRef.current = () => saveChangesRef.current();
+    return () => {
+      if (saveRef.current) saveRef.current = null;
+    };
+  }, [saveRef]);
 
   function updateSelectedTab(mutate) {
     if (!selectedTabId) return;
