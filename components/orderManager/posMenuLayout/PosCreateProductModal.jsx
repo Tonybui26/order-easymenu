@@ -72,20 +72,27 @@ export default function PosCreateProductModal({
     setPricingMode(product?.hasVariants === true ? "variable" : "single");
     setVariantPrices(variantPricesFromProduct(product));
     setModifierSelection(modifierSelectionFromProduct(product, modifierSets));
-    setCategoryId(product?.categoryId || "");
+    const defaultCategoryId =
+      product?.categoryId ||
+      (!isEditMode ? (sections || [])[0]?.id : "") ||
+      "";
+    setCategoryId(defaultCategoryId);
     setNewCategoryTitle("");
     setItemGroupId(product?.itemGroupId || groupOptions[0]?.id || "food");
     setPosOnly(isEditMode ? product?.posOnly === true : true);
     setAvailable(isEditMode ? product?.available !== false : true);
     setIsSaving(false);
-  }, [isOpen, product, isEditMode, groupOptions, modifierSets]);
+  }, [isOpen, product, isEditMode, groupOptions, modifierSets, sections]);
 
   const trimmedName = name.trim();
+  const hasValidPrice = usesVariablePrice
+    ? hasPricedVariantOption(variantPrices)
+    : price.trim() !== "";
   const canSubmit =
     trimmedName.length > 0 &&
     Boolean(itemGroupId) &&
     (hasCategories ? Boolean(categoryId) : !isEditMode && newCategoryTitle.trim().length > 0) &&
-    (!usesVariablePrice || hasPricedVariantOption(variantPrices));
+    hasValidPrice;
 
   function toggleVariantOption(groupId, optionId) {
     setVariantPrices((current) => {
@@ -202,77 +209,21 @@ export default function PosCreateProductModal({
       }
     >
       <div className="space-y-4">
-        <label className="block text-sm font-medium text-neutral-800" htmlFor="pos-product-name">
-          Name
+        <label className="block text-sm font-bold text-neutral-800" htmlFor="pos-product-name">
+          Name <span className="text-error">*</span>
           <input
             id="pos-product-name"
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Enter item title"
-            className="input input-bordered mt-1.5 w-full"
+            required
+            className="input input-bordered mt-1.5 w-full font-normal"
           />
-        </label>
-
-        <label className="block text-sm font-medium text-neutral-800" htmlFor="pos-product-description">
-          Description
-          <textarea
-            id="pos-product-description"
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder="Description"
-            className="textarea textarea-bordered mt-1.5 h-24 w-full"
-          />
-        </label>
-
-        <label className="block text-sm font-medium text-neutral-800" htmlFor="pos-product-category">
-          Category
-          {hasCategories ? (
-            <select
-              id="pos-product-category"
-              className="select select-bordered mt-1.5 w-full"
-              value={categoryId}
-              onChange={(event) => setCategoryId(event.target.value)}
-            >
-              <option value="">Choose a category</option>
-              {(sections || []).map((section) => (
-                <option key={section.id} value={section.id}>
-                  {sectionLabel(section)}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              id="pos-product-category"
-              value={newCategoryTitle}
-              onChange={(event) => setNewCategoryTitle(event.target.value)}
-              placeholder="Category name"
-              className="input input-bordered mt-1.5 w-full"
-            />
-          )}
-        </label>
-
-        <label className="block text-sm font-medium text-neutral-800" htmlFor="pos-product-food-group">
-          Food group
-          <select
-            id="pos-product-food-group"
-            className="select select-bordered mt-1.5 w-full"
-            value={itemGroupId}
-            onChange={(event) => setItemGroupId(event.target.value)}
-          >
-            {groupOptions.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.name}
-              </option>
-            ))}
-          </select>
-          <span className="mt-1.5 block text-sm font-normal text-neutral-500">
-            Kitchen printers for this group receive the product.
-          </span>
         </label>
 
         <div>
-          <label className="block text-sm font-medium text-neutral-800" htmlFor="pos-product-pricing">
-            Price
+          <label className="block text-sm font-bold text-neutral-800" htmlFor="pos-product-pricing">
+            Price <span className="text-error">*</span>
           </label>
           <select
             id="pos-product-pricing"
@@ -355,6 +306,66 @@ export default function PosCreateProductModal({
             </div>
           )}
         </div>
+
+        <label className="block text-sm font-medium text-neutral-800" htmlFor="pos-product-description">
+          Description
+          <textarea
+            id="pos-product-description"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder="Description"
+            className="textarea textarea-bordered mt-1.5 h-24 w-full"
+          />
+        </label>
+
+        <label className="block text-sm font-bold text-neutral-800" htmlFor="pos-product-category">
+          Category <span className="text-error">*</span>
+          {hasCategories ? (
+            <select
+              id="pos-product-category"
+              className="select select-bordered mt-1.5 w-full font-normal"
+              value={categoryId}
+              onChange={(event) => setCategoryId(event.target.value)}
+              required
+            >
+              <option value="">Choose a category</option>
+              {(sections || []).map((section) => (
+                <option key={section.id} value={section.id}>
+                  {sectionLabel(section)}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              id="pos-product-category"
+              value={newCategoryTitle}
+              onChange={(event) => setNewCategoryTitle(event.target.value)}
+              placeholder="Category name"
+              required
+              className="input input-bordered mt-1.5 w-full font-normal"
+            />
+          )}
+        </label>
+
+        <label className="block text-sm font-bold text-neutral-800" htmlFor="pos-product-food-group">
+          Food group <span className="text-error">*</span>
+          <select
+            id="pos-product-food-group"
+            className="select select-bordered mt-1.5 w-full font-normal"
+            value={itemGroupId}
+            onChange={(event) => setItemGroupId(event.target.value)}
+            required
+          >
+            {groupOptions.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.name}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1.5 block text-sm font-normal text-neutral-500">
+            Kitchen printers for this group receive the product.
+          </span>
+        </label>
 
         <div>
           <p className="text-sm font-medium text-neutral-800">Modifiers</p>
