@@ -3,7 +3,25 @@
 import { useEffect, useState } from "react";
 import { Delete } from "lucide-react";
 import { motion } from "motion/react";
+import toast from "react-hot-toast";
 import SideDrawer from "./SideDrawer";
+
+/** POS cart only — matches easymenu `POS_MIN_LINE_QUANTITY`. */
+const POS_MIN_QTY = 0.01;
+const POS_MAX_QTY = 999;
+
+function roundPosQty(value) {
+  const parsed = Number.parseFloat(String(value).trim());
+  if (!Number.isFinite(parsed)) return null;
+  return Math.round(parsed * 100) / 100;
+}
+
+function formatQtyDisplay(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  if (Number.isInteger(n)) return String(n);
+  return n.toFixed(2).replace(/\.?0+$/, "");
+}
 
 const KEYPAD_ROWS = [
   ["1", "2", "3"],
@@ -54,11 +72,15 @@ export default function PosTableEntryDrawer({
     setIsNumberMissing(false);
     setDigits((prev) => {
       if (digit === ".") {
-        if (prev.includes(".")) return prev;
-        return `${prev}.`;
+        if (!isQuantityMode || prev.includes(".")) return prev;
+        return prev === "" ? "0." : `${prev}.`;
+      }
+      if (isQuantityMode && prev.includes(".")) {
+        const [, decimals = ""] = prev.split(".");
+        if (decimals.length >= 2) return prev;
       }
       const next = `${prev}${digit}`;
-      const maxLen = isQuantityMode ? 4 : 6;
+      const maxLen = isQuantityMode ? 6 : 6;
       return next.length > maxLen ? prev : next;
     });
   }
@@ -101,10 +123,15 @@ export default function PosTableEntryDrawer({
   }
 
   function handleConfirmQuantity() {
-    const quantity = Number.parseInt(resolvedDigits(), 10);
-    onConfirm?.({
-      quantity: Number.isFinite(quantity) ? quantity : 0,
-    });
+    const quantity = roundPosQty(resolvedDigits());
+    if (quantity == null || quantity < POS_MIN_QTY || quantity > POS_MAX_QTY) {
+      nudgeMissingNumber();
+      toast.error(
+        `Enter a quantity between ${POS_MIN_QTY} and ${POS_MAX_QTY}`,
+      );
+      return;
+    }
+    onConfirm?.({ quantity });
     onClose?.();
   }
 
@@ -141,7 +168,11 @@ export default function PosTableEntryDrawer({
           {digits ? (
             digits
           ) : initialNumber ? (
-            <span className="text-neutral-300">{String(initialNumber)}</span>
+            <span className="text-neutral-300">
+              {isQuantityMode
+                ? formatQtyDisplay(initialNumber)
+                : String(initialNumber)}
+            </span>
           ) : (
             <span
               className={
@@ -150,7 +181,11 @@ export default function PosTableEntryDrawer({
                   : "text-neutral-300"
               }
             >
-              {isNumberMissing ? "Enter table number" : "\u00A0"}
+              {isNumberMissing
+                ? isQuantityMode
+                  ? "Enter quantity"
+                  : "Enter table number"
+                : "\u00A0"}
             </span>
           )}
         </motion.div>

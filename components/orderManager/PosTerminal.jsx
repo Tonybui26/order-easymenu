@@ -1697,14 +1697,15 @@ export default function PosTerminal() {
     if (!isOpenCartLine(line)) return;
 
     if (isQrCounterEditableCartLine(line)) {
-      if (!quantity || quantity <= 0) {
+      const qrQty = Math.floor(Number(quantity) || 0);
+      if (!qrQty || qrQty <= 0) {
         await handleRemoveLine(lineId);
         return;
       }
       try {
         const result = await persistCounterQrLineEdit(line, {
           action: "setQuantity",
-          quantity,
+          quantity: qrQty,
         });
         if (!result?.success) {
           showDismissibleToast(result?.error || "Failed to update quantity");
@@ -1712,7 +1713,7 @@ export default function PosTerminal() {
         }
         setCartLines((prev) =>
           prev.map((entry) =>
-            entry.lineId === lineId ? { ...entry, quantity } : entry,
+            entry.lineId === lineId ? { ...entry, quantity: qrQty } : entry,
           ),
         );
       } catch (error) {
@@ -1721,14 +1722,15 @@ export default function PosTerminal() {
       return;
     }
 
-    if (!quantity || quantity <= 0) {
+    const posQty = Math.round(Number(quantity) * 100) / 100;
+    if (!Number.isFinite(posQty) || posQty < 0.01) {
       dropCartLineLocally(lineId);
       return;
     }
 
     setCartLines((prev) =>
       prev.map((entry) =>
-        entry.lineId === lineId ? { ...entry, quantity } : entry,
+        entry.lineId === lineId ? { ...entry, quantity: posQty } : entry,
       ),
     );
   }
