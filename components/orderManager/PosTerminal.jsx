@@ -901,6 +901,13 @@ export default function PosTerminal() {
   const disableTableNumberInput =
     isTableNumberLocked || (isResumedCheck && Boolean(resolvedTableNumber));
   const isTableFieldLocked = isViewOnly;
+  /**
+   * Table map home: takeaway uses customer/buzzer; dine-in from a table is
+   * already seated — ignore order-header keypad opens (style unchanged).
+   */
+  const ignoreOrderHeaderKeypadClick =
+    restaurantMode &&
+    (resolvedOrderType === "takeaway" || isTableNumberLocked);
   const awaitingOrderType = !resolvedOrderType && !isTableFieldLocked;
   const hasCustomerInfo = Boolean(customerName.trim() || customerPhone.trim());
   const showTicketBuzzerButton =
@@ -3157,7 +3164,7 @@ export default function PosTerminal() {
                 key={tableFieldShakeKey}
                 type="button"
                 onClick={() => {
-                  if (isTableFieldLocked) return;
+                  if (isTableFieldLocked || ignoreOrderHeaderKeypadClick) return;
                   setKeypadDrawer({
                     mode: "table",
                     disableNumberInput: disableTableNumberInput,
