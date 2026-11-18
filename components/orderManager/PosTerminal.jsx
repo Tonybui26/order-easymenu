@@ -902,12 +902,13 @@ export default function PosTerminal() {
     isTableNumberLocked || (isResumedCheck && Boolean(resolvedTableNumber));
   const isTableFieldLocked = isViewOnly;
   /**
-   * Table map home: takeaway uses customer/buzzer; dine-in from a table is
-   * already seated — ignore order-header keypad opens (style unchanged).
+   * Ignore order-header keypad opens (style unchanged):
+   * - Table map: takeaway, or dine-in already seated from the map
+   * - POS without table map: once an order type is selected
    */
-  const ignoreOrderHeaderKeypadClick =
-    restaurantMode &&
-    (resolvedOrderType === "takeaway" || isTableNumberLocked);
+  const ignoreOrderHeaderKeypadClick = restaurantMode
+    ? resolvedOrderType === "takeaway" || isTableNumberLocked
+    : Boolean(resolvedOrderType);
   const awaitingOrderType = !resolvedOrderType && !isTableFieldLocked;
   const hasCustomerInfo = Boolean(customerName.trim() || customerPhone.trim());
   const showTicketBuzzerButton =
