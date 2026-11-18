@@ -991,6 +991,15 @@ export default function PosTerminal() {
           isError: false,
         };
       }
+      if (hasTakeawayTableReference(resolvedTableNumber)) {
+        return {
+          kindLabel: "Table",
+          valueLabel: resolvedTableNumber,
+          typeLabel: "TAKEAWAY",
+          isPrompt: false,
+          isError: false,
+        };
+      }
       if (customerName.trim()) {
         return {
           kindLabel: "Takeaway",
@@ -1002,7 +1011,7 @@ export default function PosTerminal() {
       }
       return {
         kindLabel: "Takeaway",
-        valueLabel: resolvedTableNumber || "--",
+        valueLabel: "--",
         typeLabel: "TAKEAWAY",
         isPrompt: false,
         isError: false,
