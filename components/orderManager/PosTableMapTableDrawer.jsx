@@ -289,7 +289,7 @@ function sectionLinesTotal(lines = []) {
 const TABLE_MORE_ACTIONS = [
   {
     id: "transfer-table",
-    label: "Transfer table",
+    label: "Transfer Table",
     icon: ArrowRightLeft,
     tone: "purple",
   },
@@ -553,7 +553,7 @@ export default function PosTableMapTableDrawer({
         Pay
       </PosActionButton>
       <PosActionButton tone="blue" disabled={isProcessing} onClick={onNewOrder}>
-        Add order
+        Add Order
       </PosActionButton>
     </div>
   ) : displayManualMode ? (
@@ -564,7 +564,7 @@ export default function PosTableMapTableDrawer({
           disabled={isProcessing}
           onClick={onCloseTable}
         >
-          {isProcessing ? "Closing…" : "Close table"}
+          {isProcessing ? "Closing…" : "Close Table"}
         </PosActionButton>
       ) : (
         <PosActionButton
@@ -572,11 +572,11 @@ export default function PosTableMapTableDrawer({
           disabled={isProcessing}
           onClick={onOpenTable}
         >
-          {isProcessing ? "Opening…" : "Open table"}
+          {isProcessing ? "Opening…" : "Open Table"}
         </PosActionButton>
       )}
       <PosActionButton tone="blue" disabled={isProcessing} onClick={onNewOrder}>
-        Add order
+        Add Order
       </PosActionButton>
     </div>
   ) : null;
@@ -619,7 +619,7 @@ export default function PosTableMapTableDrawer({
               disabled={actionsDisabled}
               onClick={onSendToKitchen}
             >
-              {isProcessing ? "Sending…" : "Send to kitchen"}
+              {isProcessing ? "Sending…" : "Send To Kitchen"}
             </PosActionButton>
           ) : null}
           {displayShowAllServed ? (
@@ -659,8 +659,8 @@ export default function PosTableMapTableDrawer({
           aria-expanded={showMoreActions}
           aria-label={
             showMoreActions
-              ? "Close more actions"
-              : `More actions for ${displayTitle}`
+              ? "Close More Actions"
+              : `More Actions For ${displayTitle}`
           }
           disabled={actionsDisabled}
           onClick={() => setShowMoreActions((open) => !open)}
@@ -687,7 +687,7 @@ export default function PosTableMapTableDrawer({
                 Close
               </>
             ) : (
-              "More actions"
+              "More Actions"
             )}
           </span>
           {!showMoreActions ? (
