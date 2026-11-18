@@ -907,6 +907,15 @@ export default function PosTerminal() {
     Boolean(posConfig.dineInUseBuzzer) &&
     resolvedOrderType === "dine-in" &&
     !isTakeawayBuzzer;
+  const showTakeawayBuzzerButton =
+    takeawayUseBuzzer && resolvedOrderType === "takeaway";
+  const headerBuzzerNumber = showTakeawayBuzzerButton
+    ? isTakeawayBuzzer
+      ? String(resolvedTableNumber || "").trim()
+      : ""
+    : String(ticketBuzzerNumber || "").trim();
+  const showHeaderBuzzerButton =
+    showTicketBuzzerButton || showTakeawayBuzzerButton;
 
   const orderHeader = (() => {
     const tableValue = resolvedTableNumber || "--";
@@ -1719,9 +1728,13 @@ export default function PosTerminal() {
     const buzzer = String(number || "").trim();
     if (!buzzer) return;
     setTableNumber(buzzer);
-    setOrderType(selectedStartOrderType());
     setIsTakeawayBuzzer(true);
     setIsOrderTypeMissing(false);
+    if (pendingTakeaway) {
+      setOrderType(selectedStartOrderType());
+    } else if (!resolvedOrderType) {
+      setOrderType("takeaway");
+    }
     setIsTakeawayBuzzerDrawerOpen(false);
     setIsTakeawayChoiceOpen(false);
     setPendingTakeaway(null);
@@ -3193,20 +3206,26 @@ export default function PosTerminal() {
                   </div>
                 </div>
               </motion.button>
-              {showTicketBuzzerButton ? (
+              {showHeaderBuzzerButton ? (
                 <button
                   type="button"
                   aria-label={
-                    ticketBuzzerNumber
-                      ? `Buzzer ${ticketBuzzerNumber}`
+                    headerBuzzerNumber
+                      ? `Buzzer ${headerBuzzerNumber}`
                       : "Buzzer"
                   }
-                  onClick={() => setIsTicketBuzzerDrawerOpen(true)}
+                  onClick={() => {
+                    if (showTakeawayBuzzerButton) {
+                      setIsTakeawayBuzzerDrawerOpen(true);
+                      return;
+                    }
+                    setIsTicketBuzzerDrawerOpen(true);
+                  }}
                   className="mt-2 flex size-14 shrink-0 items-center justify-center rounded-md bg-white text-neutral-700 transition-colors hover:bg-neutral-50 active:bg-neutral-100"
                 >
-                  {ticketBuzzerNumber ? (
+                  {headerBuzzerNumber ? (
                     <span className="truncate px-1 text-sm font-bold tabular-nums text-[#984B28]">
-                      {ticketBuzzerNumber}
+                      {headerBuzzerNumber}
                     </span>
                   ) : (
                     <BellRing size={20} strokeWidth={1.5} />
