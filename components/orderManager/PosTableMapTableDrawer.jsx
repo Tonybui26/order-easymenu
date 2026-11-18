@@ -311,6 +311,12 @@ const TABLE_MORE_ACTIONS = [
     icon: XCircle,
     tone: "red",
   },
+  {
+    id: "close-table",
+    label: "Cancel",
+    icon: XCircle,
+    tone: "red",
+  },
 ];
 
 function resolveDrawerTitle(title, tableName, heldOrder) {
@@ -519,8 +525,15 @@ export default function PosTableMapTableDrawer({
     displayShowComplete,
   ].filter(Boolean).length;
 
+  const canCloseManualTimeOnly =
+    showServicePay &&
+    displayManualMode === "occupied" &&
+    !hasTickets &&
+    Boolean(onCloseTable);
+
   const visibleMoreActions = TABLE_MORE_ACTIONS.filter((action) => {
     if (action.id === "transfer-table") return canTransferTable;
+    if (action.id === "close-table") return canCloseManualTimeOnly;
     if (showServicePay) return action.id === "print-bill";
     if (displayManualMode) return false;
     if (action.id === "delete") return hasTickets;
@@ -584,7 +597,7 @@ export default function PosTableMapTableDrawer({
   ) : null;
 
   const actionButtons =
-    manualActions && !showServicePay
+    manualActions && !showServicePay && visibleMoreActions.length === 0
       ? manualActions
       : manualActions ||
           footerPrimaryCount > 0 ||
@@ -702,6 +715,7 @@ export default function PosTableMapTableDrawer({
           onClick={() => {
             setShowMoreActions(false);
             if (action.id === "transfer-table") onTransferTable?.();
+            if (action.id === "close-table") onCloseTable?.();
             if (action.id === "print-bill") onPrintBill?.();
             if (action.id === "reprint-order") onReprintOrder?.();
             if (action.id === "delete") onDelete?.();
