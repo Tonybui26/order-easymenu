@@ -85,7 +85,10 @@ import {
   getTableMapTableName,
   normalizeTableMapTableName,
 } from "@/lib/pos/posTableMaps";
-import { resolvePosConfig } from "@/lib/pos/posConfig";
+import {
+  isTableMapTakeawayDineInChoiceEnabled,
+  resolvePosConfig,
+} from "@/lib/pos/posConfig";
 import { startedAtForTableNames } from "@/lib/pos/tableOpenDuration";
 import {
   computeTimedServiceCharge,
@@ -269,19 +272,11 @@ export default function PosTableMap() {
   const isPayFirstMode = Boolean(
     resolvePosConfig(menuConfig).payFirstModeEnabled,
   );
-  const takeawayButtonLabel = (() => {
-    const pos = resolvePosConfig(menuConfig);
-    const detailsRequired =
-      pos.takeawayRequireCustomerDetails &&
-      (pos.takeawayRequireName || pos.takeawayRequirePhone);
-    // Choice drawer can pick Dine-in vs Takeaway when both buzzers + details apply.
-    const showCombinedStart =
-      pos.dineInUseBuzzer &&
-      pos.takeawayUseBuzzer &&
-      pos.takeawayRequireBuzzer &&
-      detailsRequired;
-    return showCombinedStart ? "Takeaway / Dine-in" : "Takeaway";
-  })();
+  const takeawayButtonLabel = isTableMapTakeawayDineInChoiceEnabled(
+    resolvePosConfig(menuConfig),
+  )
+    ? "Takeaway / Dine-in"
+    : "Takeaway";
   const tyroPayments = useMemo(
     () => resolvePosPaymentsConfig(menuConfig).tyro,
     [menuConfig],

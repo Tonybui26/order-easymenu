@@ -99,6 +99,7 @@ import {
   resolvePosConfig,
   getPosHomePath,
   isRestaurantModeEnabled,
+  isTableMapTakeawayDineInChoiceEnabled,
 } from "@/lib/pos/posConfig";
 import {
   isTyroPosCardReady,
@@ -620,6 +621,20 @@ export default function PosTerminal() {
   /** Require buzzer only → force buzzer drawer. */
   const takeawayBuzzerOnlyRequired =
     takeawayUseBuzzer && takeawayRequireBuzzer && !takeawayDetailsRequired;
+  /** Explicit toggle or legacy 4-combo — Takeaway button may start dine-in. */
+  const takeawayDineInChoiceEnabled =
+    isTableMapTakeawayDineInChoiceEnabled(posConfig);
+  /**
+   * Combined start drawer panel when dine-in choice is available:
+   * both required → method buttons; only one → embed that input; none → tap type.
+   */
+  const takeawayChoiceStartPanel = takeawayStartChoiceRequired
+    ? "methods"
+    : takeawayBuzzerOnlyRequired
+      ? "buzzer"
+      : takeawayDetailsRequired
+        ? "customer"
+        : "none";
 
   useEffect(() => {
     if (!isTrainingMode || !resumeParam) return;
@@ -835,6 +850,12 @@ export default function PosTerminal() {
     router.replace("/pos");
     if (fromParam === "takeaway" && takeawayStartChoiceRequired) {
       setPendingTakeaway({ tableNumber: "" });
+      setChoiceOrderType(takeawayDineInChoiceEnabled ? "dine-in" : "takeaway");
+      setIsTakeawayChoiceOpen(true);
+      return;
+    }
+    if (fromParam === "takeaway" && takeawayDineInChoiceEnabled) {
+      setPendingTakeaway({ tableNumber: "" });
       setChoiceOrderType("dine-in");
       setIsTakeawayChoiceOpen(true);
       return;
@@ -861,6 +882,7 @@ export default function PosTerminal() {
     takeawayDetailsRequired,
     takeawayStartChoiceRequired,
     takeawayBuzzerOnlyRequired,
+    takeawayDineInChoiceEnabled,
   ]);
 
   useEffect(() => {
@@ -902,13 +924,11 @@ export default function PosTerminal() {
     isTableNumberLocked || (isResumedCheck && Boolean(resolvedTableNumber));
   const isTableFieldLocked = isViewOnly;
   /**
-   * Ignore order-header keypad opens (style unchanged):
-   * - Table map: takeaway, or dine-in already seated from the map
-   * - POS without table map: once an order type is selected
+   * Ignore order-header keypad opens once an order type is selected
+   * (takeaway or dine-in from the map button, seated table, etc.).
+   * Style unchanged — click is a no-op only.
    */
-  const ignoreOrderHeaderKeypadClick = restaurantMode
-    ? resolvedOrderType === "takeaway" || isTableNumberLocked
-    : Boolean(resolvedOrderType);
+  const ignoreOrderHeaderKeypadClick = Boolean(resolvedOrderType);
   const awaitingOrderType = !resolvedOrderType && !isTableFieldLocked;
   const hasCustomerInfo = Boolean(customerName.trim() || customerPhone.trim());
   const showTicketBuzzerButton =
@@ -1655,11 +1675,85 @@ export default function PosTerminal() {
   }
 
   function selectedStartOrderType() {
-    // Order-type picker only appears on the customer/buzzer choice drawer.
-    if (!posConfig.dineInUseBuzzer || !takeawayStartChoiceRequired) {
-      return "takeaway";
+    if (!takeawayDineInChoiceEnabled) return "takeaway";
+    return choiceOrderType === "dine-in" ? "dine-in" : "takeaway";
+  }
+
+  function resolveChoiceOrderType(nextOrderType) {
+    if (nextOrderType === "dine-in" || nextOrderType === "takeaway") {
+      return nextOrderType;
     }
     return choiceOrderType === "dine-in" ? "dine-in" : "takeaway";
+  }
+
+  function applyPendingTableNumber() {
+    const pending = pendingTakeaway;
+    if (pending && pending.tableNumber != null && pending.tableNumber !== "") {
+      setTableNumber(pending.tableNumber);
+    }
+  }
+
+  function handleConfirmChoiceOrderType(nextOrderType) {
+    const selected = resolveChoiceOrderType(nextOrderType);
+    setChoiceOrderType(selected);
+    setIsTakeawayChoiceOpen(false);
+    applyPendingTableNumber();
+    setOrderType(selected);
+    setIsOrderTypeMissing(false);
+    setIsTakeawayBuzzer(false);
+    setPendingTakeaway(null);
+    if (
+      selected === "dine-in" &&
+      dineInRequireBuzzer &&
+      !String(ticketBuzzerNumber || "").trim()
+    ) {
+      setIsTicketBuzzerDrawerOpen(true);
+    }
+  }
+
+  function handleConfirmChoiceBuzzer({ orderType: nextOrderType, number }) {
+    const selected = resolveChoiceOrderType(nextOrderType);
+    const buzzer = String(number || "").trim();
+    if (!buzzer) return;
+    setChoiceOrderType(selected);
+    setIsTakeawayChoiceOpen(false);
+    setIsOrderTypeMissing(false);
+    setPendingTakeaway(null);
+    if (selected === "takeaway") {
+      setTableNumber(buzzer);
+      setIsTakeawayBuzzer(true);
+      setOrderType("takeaway");
+      return;
+    }
+    setIsTakeawayBuzzer(false);
+    setOrderType("dine-in");
+    setTicketBuzzerNumber(buzzer);
+  }
+
+  function handleConfirmChoiceCustomer({
+    orderType: nextOrderType,
+    name,
+    phone,
+    email,
+  }) {
+    const selected = resolveChoiceOrderType(nextOrderType);
+    setChoiceOrderType(selected);
+    applyPendingTableNumber();
+    setCustomerName(String(name || "").trim());
+    setCustomerPhone(String(phone || "").trim());
+    setCustomerEmail(String(email || "").trim());
+    setIsTakeawayBuzzer(false);
+    setOrderType(selected);
+    setIsOrderTypeMissing(false);
+    setIsTakeawayChoiceOpen(false);
+    setPendingTakeaway(null);
+    if (
+      selected === "dine-in" &&
+      dineInRequireBuzzer &&
+      !String(ticketBuzzerNumber || "").trim()
+    ) {
+      setIsTicketBuzzerDrawerOpen(true);
+    }
   }
 
   function handleOpenCustomerInfo() {
@@ -3408,12 +3502,24 @@ export default function PosTerminal() {
 
         <PosTakeawayChoiceDrawer
           isOpen={isTakeawayChoiceOpen}
-          showOrderTypeChoice={Boolean(posConfig.dineInUseBuzzer)}
+          showOrderTypeChoice={takeawayDineInChoiceEnabled}
+          startPanel={
+            takeawayDineInChoiceEnabled
+              ? takeawayChoiceStartPanel
+              : takeawayStartChoiceRequired
+                ? "methods"
+                : "none"
+          }
           orderType={choiceOrderType}
           onOrderTypeChange={setChoiceOrderType}
           onCancel={handleTakeawayChoiceCancel}
           onChooseCustomer={handleChooseTakeawayCustomer}
           onChooseBuzzer={handleChooseTakeawayBuzzer}
+          onConfirmOrderType={handleConfirmChoiceOrderType}
+          onConfirmBuzzer={handleConfirmChoiceBuzzer}
+          onConfirmCustomer={handleConfirmChoiceCustomer}
+          requireName={takeawayRequireName}
+          requirePhone={takeawayRequirePhone}
         />
 
         <PosTakeawayBuzzerDrawer
