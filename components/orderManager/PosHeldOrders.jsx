@@ -28,10 +28,12 @@ import { buildCartLinesFromResumeOrders } from "@/lib/pos/posResumeOrder";
 import {
   getAllTicketIds,
   buzzerTakeawayNumber,
+  dineInTicketBuzzerNumber,
   getPosHeldDrawerTitle,
   getTicketIdsNotDelivered,
   getTicketIdsByStatus,
   isBuzzerTakeawayHeldOrder,
+  isDineInTicketBuzzerHeldOrder,
   isPosDineInHeldOrder,
   isPickupOrDeliveryHeldOrder,
   isPosSourceHeldOrder,
@@ -816,7 +818,9 @@ export default function PosHeldOrders() {
     Boolean(isPosHeldDrawer) && !Boolean(drawerHeldOrder?.allPaid);
   const posDrawerTitle = isBuzzerTakeawayHeldOrder(drawerHeldOrder)
     ? `Buzzer ${buzzerTakeawayNumber(drawerHeldOrder)}`.trim()
-    : getPosHeldDrawerTitle(drawerHeldOrder);
+    : isDineInTicketBuzzerHeldOrder(drawerHeldOrder)
+      ? `Buzzer ${dineInTicketBuzzerNumber(drawerHeldOrder)}`.trim()
+      : getPosHeldDrawerTitle(drawerHeldOrder);
   const posDrawerTotalLabel = isPosDineInHeldOrder(drawerHeldOrder)
     ? "Table total"
     : "Order total";

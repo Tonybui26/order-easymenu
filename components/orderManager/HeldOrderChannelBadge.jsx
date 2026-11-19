@@ -3,6 +3,7 @@ import {
   getHeldOrderChannel,
   getHeldOrderChannelLabel,
   isBuzzerTakeawayHeldOrder,
+  isDineInTicketBuzzerHeldOrder,
 } from "@/lib/pos/posHeldOrder";
 
 const CHANNEL_TONE = {
@@ -14,9 +15,10 @@ const CHANNEL_TONE = {
 
 /** Small channel label shown under the hold timer on Held cards. */
 export default function HeldOrderChannelBadge({ order, className }) {
-  const channel = isBuzzerTakeawayHeldOrder(order)
-    ? "buzzer"
-    : getHeldOrderChannel(order);
+  const channel =
+    isBuzzerTakeawayHeldOrder(order) || isDineInTicketBuzzerHeldOrder(order)
+      ? "buzzer"
+      : getHeldOrderChannel(order);
 
   return (
     <span

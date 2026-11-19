@@ -254,6 +254,7 @@ export default function OrderCard({
 
   const isTableOrder = isDineIn;
   const pickUpTable = getOrderTableNumber(order.table);
+  const dineInTable = isTableOrder ? getOrderTableNumber(order.table) : null;
   const pickupTitle = kitchenDisplayEnabled ? "Takeaway" : "Pick-up";
   const isBuzzerStart =
     String(order?.source || "").trim() === "pos" &&
@@ -265,19 +266,24 @@ export default function OrderCard({
     kdsBuzzerNumber && sourceBadge
       ? { label: "Buzzer", className: "bg-[#ec7439] text-white" }
       : sourceBadge;
+  // No map seat (Takeaway-start → dine-in): title is "Dine-in", not "Table …".
   const kdsTitle =
-    isBuzzerStart && isTableOrder
+    isTableOrder && !dineInTable
       ? "Dine-in"
-      : isPickUp && pickUpTable
-        ? pickupTitle
-        : null;
+      : isBuzzerStart && isTableOrder
+        ? "Dine-in"
+        : isPickUp && pickUpTable
+          ? pickupTitle
+          : null;
   const kdsSubtitle = kdsBuzzerNumber
     ? `Buzzer ${kdsBuzzerNumber}`
     : isPickUp && pickUpTable
       ? `Table ${pickUpTable}`
       : null;
   const orderTitle = isTableOrder
-    ? `Table ${order.table}`
+    ? dineInTable
+      ? `Table ${dineInTable}`
+      : "Dine-in"
     : isDelivery
       ? "Delivery"
       : pickUpTable

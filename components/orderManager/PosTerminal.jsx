@@ -737,6 +737,7 @@ export default function PosTerminal() {
       setCustomerEmail(plan.customerEmail);
       setOrderType(plan.orderType);
       setIsTakeawayBuzzer(Boolean(plan.isBuzzer));
+      setTicketBuzzerNumber(String(plan.buzzerNumber || "").trim());
       setIsCheckPaid(false);
       setIsResumedCheck(true);
       setCheckDiscount(plan.checkDiscount);
@@ -932,9 +933,10 @@ export default function PosTerminal() {
   const awaitingOrderType = !resolvedOrderType && !isTableFieldLocked;
   const hasCustomerInfo = Boolean(customerName.trim() || customerPhone.trim());
   const showTicketBuzzerButton =
-    Boolean(posConfig.dineInUseBuzzer) &&
     resolvedOrderType === "dine-in" &&
-    !isTakeawayBuzzer;
+    !isTakeawayBuzzer &&
+    (Boolean(posConfig.dineInUseBuzzer) ||
+      Boolean(String(ticketBuzzerNumber || "").trim()));
   const showTakeawayBuzzerButton =
     takeawayUseBuzzer && resolvedOrderType === "takeaway";
   const headerBuzzerNumber = showTakeawayBuzzerButton
@@ -947,6 +949,7 @@ export default function PosTerminal() {
 
   const orderHeader = (() => {
     const tableValue = resolvedTableNumber || "--";
+    const dineInTicketBuzzer = String(ticketBuzzerNumber || "").trim();
     if (!resolvedOrderType) {
       if (isOrderTypeMissing) {
         return {
@@ -975,10 +978,21 @@ export default function PosTerminal() {
       };
     }
     if (resolvedOrderType === "dine-in") {
-      if (isTakeawayBuzzer && resolvedTableNumber) {
+      // Table seat wins; ticket buzzer is the side chip when dine-in Use buzzer is on.
+      if (resolvedTableNumber) {
         return {
-          kindLabel: "Dine in",
+          kindLabel: "Table",
           valueLabel: resolvedTableNumber,
+          typeLabel: "DINE-IN",
+          isPrompt: false,
+          isError: false,
+        };
+      }
+      // No map table (e.g. Takeaway start → dine-in + buzzer): show buzzer as identity.
+      if (dineInTicketBuzzer) {
+        return {
+          kindLabel: "Buzzer",
+          valueLabel: dineInTicketBuzzer,
           typeLabel: "DINE-IN",
           isPrompt: false,
           isError: false,
@@ -986,7 +1000,7 @@ export default function PosTerminal() {
       }
       return {
         kindLabel: "Table",
-        valueLabel: tableValue,
+        valueLabel: "--",
         typeLabel: "DINE-IN",
         isPrompt: false,
         isError: false,
@@ -1711,23 +1725,34 @@ export default function PosTerminal() {
     }
   }
 
+  /**
+   * Order-type-aware buzzer apply:
+   * - takeaway → isBuzzer + number in `table`
+   * - dine-in → ticket buzzer only (never isTakeawayBuzzer / table seat)
+   */
+  function applyBuzzerForOrderType(selectedOrderType, number) {
+    const buzzer = String(number || "").trim();
+    if (!buzzer) return false;
+    if (selectedOrderType === "takeaway") {
+      setTableNumber(buzzer);
+      setIsTakeawayBuzzer(true);
+      setOrderType("takeaway");
+      return true;
+    }
+    applyPendingTableNumber();
+    setIsTakeawayBuzzer(false);
+    setTicketBuzzerNumber(buzzer);
+    setOrderType("dine-in");
+    return true;
+  }
+
   function handleConfirmChoiceBuzzer({ orderType: nextOrderType, number }) {
     const selected = resolveChoiceOrderType(nextOrderType);
-    const buzzer = String(number || "").trim();
-    if (!buzzer) return;
+    if (!applyBuzzerForOrderType(selected, number)) return;
     setChoiceOrderType(selected);
     setIsTakeawayChoiceOpen(false);
     setIsOrderTypeMissing(false);
     setPendingTakeaway(null);
-    if (selected === "takeaway") {
-      setTableNumber(buzzer);
-      setIsTakeawayBuzzer(true);
-      setOrderType("takeaway");
-      return;
-    }
-    setIsTakeawayBuzzer(false);
-    setOrderType("dine-in");
-    setTicketBuzzerNumber(buzzer);
   }
 
   function handleConfirmChoiceCustomer({
@@ -1836,16 +1861,13 @@ export default function PosTerminal() {
   }
 
   function handleTakeawayBuzzerConfirm(number) {
-    const buzzer = String(number || "").trim();
-    if (!buzzer) return;
-    setTableNumber(buzzer);
-    setIsTakeawayBuzzer(true);
+    const selected = pendingTakeaway
+      ? selectedStartOrderType()
+      : resolvedOrderType === "dine-in"
+        ? "dine-in"
+        : "takeaway";
+    if (!applyBuzzerForOrderType(selected, number)) return;
     setIsOrderTypeMissing(false);
-    if (pendingTakeaway) {
-      setOrderType(selectedStartOrderType());
-    } else if (!resolvedOrderType) {
-      setOrderType("takeaway");
-    }
     setIsTakeawayBuzzerDrawerOpen(false);
     setIsTakeawayChoiceOpen(false);
     setPendingTakeaway(null);
@@ -2185,8 +2207,10 @@ export default function PosTerminal() {
       if (isTakeawayBuzzer || mappedOrderType === "pick-up") {
         payload.isBuzzer = isTakeawayBuzzer;
       }
-      if (showTicketBuzzerButton && ticketBuzzerNumber) {
-        payload.buzzerNumber = ticketBuzzerNumber;
+      // Dine-in ticket buzzer (Takeaway-start → dine-in, or dine-in Use buzzer).
+      const dineInBuzzer = String(ticketBuzzerNumber || "").trim();
+      if (mappedOrderType === "dine-in" && dineInBuzzer) {
+        payload.buzzerNumber = dineInBuzzer;
       }
 
       // Pay-with-server-QR must create a real Mongo fire so batch complete can
@@ -2211,7 +2235,8 @@ export default function PosTerminal() {
         }
 
         if (result.posCheckId) setPosCheckId(result.posCheckId);
-        setTicketBuzzerNumber("");
+        // Keep dine-in ticket buzzer on the open check (same as takeaway buzzer in table).
+        if (mappedOrderType !== "dine-in") setTicketBuzzerNumber("");
         setCartLines((prev) =>
           prev.map((line) =>
             sentLineIds.has(line.lineId)
@@ -2264,7 +2289,13 @@ export default function PosTerminal() {
         String(result.order?.posCheckId || "").trim() || posCheckId;
 
       setActiveOrderId(newOrderId);
-      setTicketBuzzerNumber("");
+      // Keep dine-in ticket buzzer on the open check (same as takeaway buzzer in table).
+      if (mappedOrderType === "dine-in") {
+        const savedBuzzer = String(result.order?.buzzerNumber || "").trim();
+        if (savedBuzzer) setTicketBuzzerNumber(savedBuzzer);
+      } else {
+        setTicketBuzzerNumber("");
+      }
       if (nextCheckId) setPosCheckId(nextCheckId);
       const nextTaxInvoiceNo = String(result.order?.taxInvoiceNo || "").trim();
       if (nextTaxInvoiceNo) setTaxInvoiceNo(nextTaxInvoiceNo);
