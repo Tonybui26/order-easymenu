@@ -7,7 +7,7 @@ export const POS_ACTION_TONE = {
   blue: "bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800",
   teal: "bg-teal-600 text-white hover:bg-teal-700 active:bg-teal-800",
   green:
-    "bg-[#53a974] text-white hover:bg-[#479466] active:bg-[#3d7f57]",
+    "bg-[rgb(43,162,91)] text-white hover:bg-[rgb(36,140,78)] active:bg-[rgb(30,120,68)]",
   purple: "bg-purple-600 text-white hover:bg-purple-700 active:bg-purple-800",
   red: "bg-red-600 text-white hover:bg-red-700 active:bg-red-800",
 };
