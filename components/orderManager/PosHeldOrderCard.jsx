@@ -263,8 +263,14 @@ export default function PosHeldOrderCard({
                   </span>
                 ) : null}
               </div>
-              <div className="flex shrink-0 flex-col items-end gap-0.5">
-                <span className="text-sm font-medium text-neutral-500">
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <span
+                  className={cn(
+                    isTakeawayPickupHeldOrder(order)
+                      ? "inline-flex rounded-full bg-[rgba(56,56,55,1)] px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white"
+                      : "text-sm font-medium text-neutral-500",
+                  )}
+                >
                   {heldCardTypeLabel(order)}
                 </span>
                 {showStatus ? (
