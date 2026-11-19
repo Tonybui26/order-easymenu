@@ -250,27 +250,43 @@ export default function MoreMenuButton({
         ]
       : []),
     ...(kitchenDisplayEnabled
-      ? posEnabled
-        ? [
-            {
-              icon: MonitorSmartphone,
-              title: "POS",
-              description: "Open point of sale",
-              action: handleOpenPos,
-            },
-          ]
-        : []
+      ? [
+          ...(posEnabled
+            ? [
+                {
+                  icon: MonitorSmartphone,
+                  title: "POS",
+                  description: "Open point of sale",
+                  action: handleOpenPos,
+                },
+              ]
+            : [
+                {
+                  id: "kitchen-display",
+                  icon: Monitor,
+                  title: "Kitchen display",
+                  description: "On — tap to turn off",
+                  action: () => setKitchenDisplayEnabled(false),
+                  keepModalOpen: true,
+                  isActive: true,
+                },
+              ]),
+        ]
       : [
           {
             id: "kitchen-display",
             icon: Monitor,
             title: "Kitchen display",
-            description: kitchenDisplayEnabled
-              ? "On for this device — tap to turn off"
-              : "Off — tap to simplify this screen for the kitchen",
-            action: () => setKitchenDisplayEnabled(!kitchenDisplayEnabled),
+            description: posEnabled
+              ? "Off — tap to simplify this screen for the kitchen"
+              : "Only available with POS",
+            action: () => {
+              if (!posEnabled) return;
+              setKitchenDisplayEnabled(true);
+            },
+            disabled: !posEnabled,
             keepModalOpen: true,
-            isActive: kitchenDisplayEnabled,
+            isActive: false,
           },
           {
             icon: CheckCheck,
@@ -431,31 +447,48 @@ export default function MoreMenuButton({
               return (
                 <button
                   key={index}
+                  type="button"
+                  disabled={Boolean(feature.disabled)}
                   onClick={() => {
+                    if (feature.disabled) return;
                     feature.action();
                     if (!feature.keepModalOpen) setShowModal(false);
                   }}
                   className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-all duration-200 ${
-                    feature.isActive
-                      ? "border-brand_accent bg-brand_accent/5 text-brand_accent shadow-md"
-                      : "border-gray-200 bg-white hover:border-brand_accent hover:shadow-md"
+                    feature.disabled
+                      ? "cursor-not-allowed border-gray-200 bg-gray-50 opacity-60"
+                      : feature.isActive
+                        ? "border-brand_accent bg-brand_accent/5 text-brand_accent shadow-md"
+                        : "border-gray-200 bg-white hover:border-brand_accent hover:shadow-md"
                   }`}
                 >
                   <div
                     className={`flex size-8 flex-shrink-0 items-center justify-center rounded-lg ${
-                      feature.isActive ? "bg-brand_accent/10" : "bg-gray-100"
+                      feature.disabled
+                        ? "bg-gray-100"
+                        : feature.isActive
+                          ? "bg-brand_accent/10"
+                          : "bg-gray-100"
                     }`}
                   >
                     <feature.icon
                       className={`size-6 ${
-                        feature.isActive ? "text-brand_accent" : "text-gray-600"
+                        feature.disabled
+                          ? "text-gray-400"
+                          : feature.isActive
+                            ? "text-brand_accent"
+                            : "text-gray-600"
                       }`}
                     />
                   </div>
                   <div className="min-w-0 flex-1">
                     <h4
                       className={`font-medium ${
-                        feature.isActive ? "text-brand_accent" : "text-gray-900"
+                        feature.disabled
+                          ? "text-gray-500"
+                          : feature.isActive
+                            ? "text-brand_accent"
+                            : "text-gray-900"
                       }`}
                     >
                       {feature.title}
@@ -463,9 +496,11 @@ export default function MoreMenuButton({
                     {feature.description && (
                       <p
                         className={`mt-1 text-sm ${
-                          feature.isActive
-                            ? "text-brand_accent/70"
-                            : "text-gray-600"
+                          feature.disabled
+                            ? "text-gray-500"
+                            : feature.isActive
+                              ? "text-brand_accent/70"
+                              : "text-gray-600"
                         }`}
                       >
                         {feature.description}
