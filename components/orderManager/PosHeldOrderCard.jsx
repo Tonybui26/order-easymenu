@@ -16,6 +16,7 @@ import HeldOrderChannelBadge from "./HeldOrderChannelBadge";
 import PosActionButton from "./PosActionButton";
 import {
   getHeldAggregateStatusLabel,
+  getHeldCustomerInfoLabel,
   getPosHeldCardActions,
   getPosHeldDrawerTitle,
   isPosDineInHeldOrder,
@@ -79,8 +80,7 @@ function heldCardTypeLabel(order) {
 }
 
 function customerLabel(order) {
-  const name = String(order?.customerName || "").trim();
-  return name || "Guest";
+  return getHeldCustomerInfoLabel(order);
 }
 
 function aggregateStatusLabel(heldOrder, status) {
