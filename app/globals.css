@@ -21,6 +21,8 @@ button {
 
 html {
   scroll-behavior: smooth;
+  /* Keep form controls / date UI light on iOS Safari even when the OS is dark. */
+  color-scheme: light;
 }
 
 /*

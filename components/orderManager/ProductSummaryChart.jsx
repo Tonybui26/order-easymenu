@@ -117,7 +117,7 @@ export default function ProductSummaryChart({ data = [] }) {
             </PieChart>
           </ResponsiveContainer>
         </div>
-        <ul className="grid w-full grid-cols-1 gap-2 text-xs text-gray-600 sm:grid-cols-2">
+        <ul className="grid w-full grid-cols-1 gap-2 text-sm text-gray-600 sm:grid-cols-2">
           {slices.map((slice, index) => {
             const pct =
               total > 0 ? ((slice.value / total) * 100).toFixed(0) : "0";
@@ -133,7 +133,7 @@ export default function ProductSummaryChart({ data = [] }) {
                 <span className="min-w-0 truncate font-medium text-gray-800">
                   {slice.name}
                 </span>
-                <span className="ml-auto shrink-0 tabular-nums text-gray-500">
+                <span className="shrink-0 tabular-nums text-gray-500">
                   {pct}%
                 </span>
               </li>

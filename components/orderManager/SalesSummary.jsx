@@ -105,12 +105,18 @@ const PRODUCT_COLUMNS = [
   },
 ];
 
+const PRODUCT_RANK_OPTIONS = [
+  { id: "quantity", label: "Qty" },
+  { id: "revenue", label: "Revenue" },
+];
+
 export default function SalesSummary() {
   const { handleOpenCashDrawer } = usePosOpenCashDrawer();
   const { storeProfile, menuConfig, menuContent } = useMenuContext();
   const storageOptimizerOn = isStoreStorageOptimizer(menuConfig);
 
   const [activeReport, setActiveReport] = useState(REPORTS[0].id);
+  const [productRankBy, setProductRankBy] = useState("quantity");
   const [draftRange, setDraftRange] = useState(() => {
     const today = todayKey();
     return { from: today, to: today };
@@ -190,8 +196,8 @@ export default function SalesSummary() {
     [orders, appliedFrom, appliedTo],
   );
   const productRows = useMemo(
-    () => summarizeProducts(orders, menuContent),
-    [orders, menuContent],
+    () => summarizeProducts(orders, menuContent, { sortBy: productRankBy }),
+    [orders, menuContent, productRankBy],
   );
   const productTotals = useMemo(
     () => productSummaryTotals(productRows),
@@ -349,6 +355,32 @@ export default function SalesSummary() {
           ) : activeReport === "product-summary" ? (
             <div>
               <ProductSummaryChart data={productRows} />
+              <div className="flex items-center gap-2 border-b border-gray-200 px-4 py-3 sm:px-6">
+                <p className="text-sm font-medium text-gray-600">Rank by</p>
+                <div
+                  className="inline-flex rounded-lg bg-gray-100 p-1"
+                  role="group"
+                  aria-label="Rank products by"
+                >
+                  {PRODUCT_RANK_OPTIONS.map((option) => {
+                    const isActive = productRankBy === option.id;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setProductRankBy(option.id)}
+                        className={`rounded-md px-3.5 py-1.5 text-sm font-semibold transition ${
+                          isActive
+                            ? "bg-[#f6d2c4] text-neutral-900"
+                            : "text-gray-500 hover:text-neutral-800"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
                 <thead className="border-b border-gray-200 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">

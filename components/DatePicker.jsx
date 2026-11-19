@@ -95,23 +95,30 @@ export function DatePicker({
         <Button
           variant="outline"
           className={cn(
-            "w-full justify-start text-left font-normal",
-            !value && "text-muted-foreground",
+            // Force light styling so iOS/Safari dark mode does not paint a black field.
+            "w-full justify-start border-zinc-200 bg-white text-left font-normal text-neutral-900 hover:bg-zinc-100 hover:text-neutral-900 dark:border-zinc-200 dark:bg-white dark:text-neutral-900 dark:hover:bg-zinc-100 dark:hover:text-neutral-900",
+            !value && "text-muted-foreground dark:text-muted-foreground",
             className,
           )}
+          style={{ colorScheme: "light" }}
           disabled={disabled}
         >
           <CalendarIcon className="h-4 w-4" />
           {displayValue}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
+      <PopoverContent
+        className="w-auto border-zinc-200 bg-white p-0 text-zinc-950 dark:border-zinc-200 dark:bg-white dark:text-zinc-950"
+        align="start"
+        style={{ colorScheme: "light" }}
+      >
         <Calendar
           mode={enableDateRange ? "range" : "single"}
           disabled={
             allowFutureDates ? undefined : (date) => date > new Date()
           }
           captionLayout="dropdown"
+          className="bg-white dark:bg-white"
           selected={
             enableDateRange ? value : value ? new Date(value) : undefined
           }
@@ -120,8 +127,13 @@ export function DatePicker({
           {...props}
         />
         {enableDateRange && showCloseButton && (
-          <div className="flex justify-end border-t p-3">
-            <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
+          <div className="flex justify-end border-t border-zinc-200 bg-white p-3 dark:border-zinc-200 dark:bg-white">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setOpen(false)}
+              className="border-zinc-200 bg-white text-neutral-900 hover:bg-zinc-100 dark:border-zinc-200 dark:bg-white dark:text-neutral-900 dark:hover:bg-zinc-100"
+            >
               Close
             </Button>
           </div>
