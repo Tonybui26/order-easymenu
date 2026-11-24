@@ -17,7 +17,40 @@ export const POS_TAB_BACKGROUND_COLORS = [
   "#9B7ED9",
   "#F5B8C8",
   "#A8E6C3",
+  "#FF9F43",
+  "#54A0FF",
+  "#5F27CD",
+  "#01A3A4",
+  "#FF6B6B",
+  "#48DBFB",
+  "#F368E0",
+  "#10AC84",
+  "#FECA57",
+  "#EE5A24",
+  "#C8D6E5",
+  "#B4F26E",
+  "#FF8F70",
 ];
+
+function normalizeHexColor(value, fallback = POS_TAB_BACKGROUND_COLORS[0]) {
+  const raw = String(value || "").trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(raw)) return `#${raw.slice(1).toUpperCase()}`;
+  if (/^#[0-9a-fA-F]{3}$/.test(raw)) {
+    const r = raw[1];
+    const g = raw[2];
+    const b = raw[3];
+    return `#${r}${r}${g}${g}${b}${b}`.toUpperCase();
+  }
+  return fallback;
+}
+
+function isPresetBackgroundColor(value) {
+  const normalized = normalizeHexColor(value, "");
+  if (!normalized) return false;
+  return POS_TAB_BACKGROUND_COLORS.some(
+    (color) => normalizeHexColor(color) === normalized,
+  );
+}
 
 export default function PosTabEditModal({
   isOpen,
@@ -49,7 +82,9 @@ export default function PosTabEditModal({
       : defaultGroupId;
     if (tab) {
       setName(tab.name || "");
-      setBackgroundColor(tab.backgroundColor || POS_TAB_BACKGROUND_COLORS[0]);
+      setBackgroundColor(
+        normalizeHexColor(tab.backgroundColor || POS_TAB_BACKGROUND_COLORS[0]),
+      );
       setOpenItem(tab.openItem === true && !hasProducts);
       setItemGroupId(nextGroupId);
       return;
@@ -178,14 +213,15 @@ export default function PosTabEditModal({
           <p className="text-sm font-medium text-neutral-900">Background</p>
           <div className="mt-2 flex flex-wrap">
             {POS_TAB_BACKGROUND_COLORS.map((color) => {
-              const isSelected = backgroundColor === color;
+              const isSelected =
+                normalizeHexColor(backgroundColor) === normalizeHexColor(color);
               return (
                 <button
                   key={color}
                   type="button"
                   aria-label={`Select color ${color}`}
                   aria-pressed={isSelected}
-                  onClick={() => setBackgroundColor(color)}
+                  onClick={() => setBackgroundColor(normalizeHexColor(color))}
                   className={cn(
                     "size-12 shrink-0 border border-black/10",
                     isSelected && "relative z-10 ring-2 ring-inset ring-black",
@@ -194,6 +230,39 @@ export default function PosTabEditModal({
                 />
               );
             })}
+            <label
+              className={cn(
+                "relative size-12 shrink-0 cursor-pointer border border-black/10",
+                !isPresetBackgroundColor(backgroundColor) &&
+                  "relative z-10 ring-2 ring-inset ring-black",
+              )}
+              aria-label="Custom background color"
+              title="Custom color"
+            >
+              <input
+                type="color"
+                value={normalizeHexColor(backgroundColor)}
+                onChange={(event) =>
+                  setBackgroundColor(normalizeHexColor(event.target.value))
+                }
+                className="absolute inset-0 cursor-pointer opacity-0"
+              />
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0"
+                style={{
+                  backgroundImage: isPresetBackgroundColor(backgroundColor)
+                    ? "conic-gradient(#F2555A, #F5D03A, #7DDB8C, #54A0FF, #9B7ED9, #F368E0, #F2555A)"
+                    : undefined,
+                  backgroundColor: isPresetBackgroundColor(backgroundColor)
+                    ? undefined
+                    : normalizeHexColor(backgroundColor),
+                }}
+              />
+              <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/55 py-0.5 text-center text-[9px] font-semibold uppercase leading-none text-white">
+                Custom
+              </span>
+            </label>
           </div>
         </div>
     </SideDrawer>
