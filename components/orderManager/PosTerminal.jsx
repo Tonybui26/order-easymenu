@@ -551,6 +551,7 @@ export default function PosTerminal() {
   const { handleOpenCashDrawer } = usePosOpenCashDrawer(showDismissibleToast);
   const posConfig = useMemo(() => resolvePosConfig(menuConfig), [menuConfig]);
   const posMenuStyle = posConfig.menuStyle;
+  const posGroupMenuStyle = posConfig.groupMenuStyle;
   const cartQtyByItemId = useMemo(() => {
     const qtyById = new Map();
     for (const line of cartLines) {
@@ -3711,13 +3712,19 @@ export default function PosTerminal() {
                     </p>
                   )
                 ) : (
-                  <div className="flex min-h-full flex-col">
+                  <div
+                    className="flex min-h-full flex-col"
+                    data-group-menu-style={posGroupMenuStyle}
+                  >
                     {tabs.map((tab, index) => {
                       const isSelected = tab.id === selectedTabId;
                       const isAboveSelected =
                         selectedTabIndex >= 0 && index === selectedTabIndex - 1;
                       const isBelowSelected =
                         selectedTabIndex >= 0 && index === selectedTabIndex + 1;
+                      const tabColor = tab.backgroundColor || "#d9d9d9";
+                      const isGroupStyle2 =
+                        posGroupMenuStyle === "style2" && !isSelected;
                       return (
                         <button
                           key={tab.id}
@@ -3727,13 +3734,18 @@ export default function PosTerminal() {
                             "relative flex min-h-[56px] w-full shrink-0 items-center justify-start overflow-hidden border-l-[7px] px-2.5 py-4 text-left text-sm font-semibold text-neutral-900 xl:min-h-[72px] xl:px-3 xl:py-6 xl:text-lg",
                             isSelected
                               ? "bg-[#f0f0f0]"
-                              : "bg-white hover:bg-neutral-50",
+                              : isGroupStyle2
+                                ? "hover:brightness-[0.97]"
+                                : "bg-white hover:bg-neutral-50",
                             isAboveSelected && "rounded-br-2xl",
                             isBelowSelected && "rounded-tr-2xl",
                             isSelected || customizingItem ? "z-20" : undefined,
                           )}
                           style={{
-                            borderLeftColor: tab.backgroundColor || "#d9d9d9",
+                            borderLeftColor: tabColor,
+                            ...(isGroupStyle2
+                              ? { backgroundColor: tabColor }
+                              : null),
                           }}
                         >
                           <span className="line-clamp-2 pr-5 leading-tight">
