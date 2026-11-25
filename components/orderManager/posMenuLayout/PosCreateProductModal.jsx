@@ -4,6 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { useMenuContext } from "@/components/context/MenuContext";
 import SideDrawer from "@/components/orderManager/SideDrawer";
+import {
+  POS_TAB_BACKGROUND_COLORS,
+  isPresetBackgroundColor,
+  normalizeHexColor,
+} from "@/components/orderManager/posMenuLayout/PosTabEditModal";
 import { foodGroupOptions } from "@/lib/pos/foodGroups";
 import {
   formatOptionPrice,
@@ -15,6 +20,9 @@ import {
   variantPayload,
   variantPricesFromProduct,
 } from "@/lib/pos/productOptions";
+import { cn } from "@/lib/helper";
+
+const DEFAULT_POS_ITEM_BACKGROUND = "#FFFFFF";
 
 function sectionLabel(section) {
   return section?.sectionTitle?.trim() || "Untitled category";
@@ -55,6 +63,9 @@ export default function PosCreateProductModal({
   const [categoryId, setCategoryId] = useState("");
   const [newCategoryTitle, setNewCategoryTitle] = useState("");
   const [itemGroupId, setItemGroupId] = useState("food");
+  const [posBackgroundColor, setPosBackgroundColor] = useState(
+    DEFAULT_POS_ITEM_BACKGROUND,
+  );
   const [posOnly, setPosOnly] = useState(true);
   const [available, setAvailable] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -79,6 +90,11 @@ export default function PosCreateProductModal({
     setCategoryId(defaultCategoryId);
     setNewCategoryTitle("");
     setItemGroupId(product?.itemGroupId || groupOptions[0]?.id || "food");
+    setPosBackgroundColor(
+      normalizeHexColor(
+        product?.posBackgroundColor || DEFAULT_POS_ITEM_BACKGROUND,
+      ),
+    );
     setPosOnly(isEditMode ? product?.posOnly === true : true);
     setAvailable(isEditMode ? product?.available !== false : true);
     setIsSaving(false);
@@ -162,6 +178,10 @@ export default function PosCreateProductModal({
       categoryId: hasCategories ? categoryId : "",
       newCategoryTitle: hasCategories || isEditMode ? "" : newCategoryTitle.trim(),
       itemGroupId,
+      posBackgroundColor:
+        normalizeHexColor(posBackgroundColor) === DEFAULT_POS_ITEM_BACKGROUND
+          ? ""
+          : normalizeHexColor(posBackgroundColor),
       posOnly,
       available,
     };
@@ -366,6 +386,70 @@ export default function PosCreateProductModal({
             Kitchen printers for this group receive the product.
           </span>
         </label>
+
+        <div>
+          <p className="text-sm font-medium text-neutral-900">Background</p>
+          <p className="mt-1 text-sm text-neutral-500">
+            Used on the POS card when this product has no photo. Default is
+            white.
+          </p>
+          <div className="mt-2 flex flex-wrap">
+            {POS_TAB_BACKGROUND_COLORS.map((color) => {
+              const isSelected =
+                normalizeHexColor(posBackgroundColor) ===
+                normalizeHexColor(color);
+              return (
+                <button
+                  key={color}
+                  type="button"
+                  aria-label={`Select color ${color}`}
+                  aria-pressed={isSelected}
+                  onClick={() =>
+                    setPosBackgroundColor(normalizeHexColor(color))
+                  }
+                  className={cn(
+                    "size-12 shrink-0 border border-black/10",
+                    isSelected && "relative z-10 ring-2 ring-inset ring-black",
+                  )}
+                  style={{ backgroundColor: color }}
+                />
+              );
+            })}
+            <label
+              className={cn(
+                "relative size-12 shrink-0 cursor-pointer border border-black/10",
+                !isPresetBackgroundColor(posBackgroundColor) &&
+                  "relative z-10 ring-2 ring-inset ring-black",
+              )}
+              aria-label="Custom background color"
+              title="Custom color"
+            >
+              <input
+                type="color"
+                value={normalizeHexColor(posBackgroundColor)}
+                onChange={(event) =>
+                  setPosBackgroundColor(normalizeHexColor(event.target.value))
+                }
+                className="absolute inset-0 cursor-pointer opacity-0"
+              />
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0"
+                style={{
+                  backgroundImage: isPresetBackgroundColor(posBackgroundColor)
+                    ? "conic-gradient(#F2555A, #F5D03A, #7DDB8C, #54A0FF, #9B7ED9, #F368E0, #F2555A)"
+                    : undefined,
+                  backgroundColor: isPresetBackgroundColor(posBackgroundColor)
+                    ? undefined
+                    : normalizeHexColor(posBackgroundColor),
+                }}
+              />
+              <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/55 py-0.5 text-center text-[9px] font-semibold uppercase leading-none text-white">
+                Custom
+              </span>
+            </label>
+          </div>
+        </div>
 
         <div>
           <p className="text-sm font-medium text-neutral-800">Modifiers</p>

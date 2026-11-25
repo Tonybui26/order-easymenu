@@ -181,7 +181,22 @@ function SortablePosItem({ item, onRemove, onEdit }) {
       {...listeners}
       onClick={() => onEdit?.(item)}
     >
-      <div className="relative min-h-0 flex-1 bg-neutral-100">
+      <div
+        className={cn(
+          "relative min-h-0 flex-1",
+          !(
+            typeof item.posBackgroundColor === "string" &&
+            item.posBackgroundColor.trim()
+          ) && "bg-neutral-100",
+        )}
+        style={
+          !item.PhotoSrc &&
+          typeof item.posBackgroundColor === "string" &&
+          item.posBackgroundColor.trim()
+            ? { backgroundColor: item.posBackgroundColor.trim() }
+            : undefined
+        }
+      >
         {item.PhotoSrc ? (
           <Image
             src={item.PhotoSrc}

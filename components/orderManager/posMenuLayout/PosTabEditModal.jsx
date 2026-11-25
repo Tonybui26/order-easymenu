@@ -32,7 +32,7 @@ export const POS_TAB_BACKGROUND_COLORS = [
   "#FF8F70",
 ];
 
-function normalizeHexColor(value, fallback = POS_TAB_BACKGROUND_COLORS[0]) {
+export function normalizeHexColor(value, fallback = POS_TAB_BACKGROUND_COLORS[0]) {
   const raw = String(value || "").trim();
   if (/^#[0-9a-fA-F]{6}$/.test(raw)) return `#${raw.slice(1).toUpperCase()}`;
   if (/^#[0-9a-fA-F]{3}$/.test(raw)) {
@@ -44,7 +44,7 @@ function normalizeHexColor(value, fallback = POS_TAB_BACKGROUND_COLORS[0]) {
   return fallback;
 }
 
-function isPresetBackgroundColor(value) {
+export function isPresetBackgroundColor(value) {
   const normalized = normalizeHexColor(value, "");
   if (!normalized) return false;
   return POS_TAB_BACKGROUND_COLORS.some(

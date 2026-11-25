@@ -343,6 +343,11 @@ function PosProductCard({
   const hasImage = Boolean(item.PhotoSrc);
   const isStyle2 = menuStyle === "style2";
   const isInCart = cartQty > 0;
+  const noPhotoBackground =
+    typeof item?.posBackgroundColor === "string" &&
+    item.posBackgroundColor.trim()
+      ? item.posBackgroundColor.trim()
+      : "";
   const discountBadge = formatActiveProductDiscountBadge(
     item?.discount,
     new Date(),
@@ -384,7 +389,17 @@ function PosProductCard({
             </span>
           </>
         ) : (
-          <span className="absolute inset-0 z-10 flex items-center justify-center bg-neutral-100 px-3 text-center text-sm font-bold leading-snug text-neutral-800 xl:text-base">
+          <span
+            className={cn(
+              "absolute inset-0 z-10 flex items-center justify-center px-3 text-center text-sm font-bold leading-snug text-neutral-800 xl:text-base",
+              !noPhotoBackground && "bg-neutral-100",
+            )}
+            style={
+              noPhotoBackground
+                ? { backgroundColor: noPhotoBackground }
+                : undefined
+            }
+          >
             <span className="line-clamp-3">{displayTitle}</span>
           </span>
         )}
@@ -419,7 +434,14 @@ function PosProductCard({
           </div>
         </>
       ) : (
-        <div className="flex aspect-square w-full items-center justify-center px-3 py-8">
+        <div
+          className="flex aspect-square w-full items-center justify-center px-3 py-8"
+          style={
+            noPhotoBackground
+              ? { backgroundColor: noPhotoBackground }
+              : undefined
+          }
+        >
           <span className="line-clamp-4 text-center text-base font-semibold leading-snug text-neutral-900 xl:text-lg">
             {displayTitle}
           </span>
