@@ -52,6 +52,7 @@ export default function PosDiscountDrawer({
   onClose,
   subtotal = 0,
   initialDigits = "",
+  title = "Discount",
   onConfirm,
 }) {
   const [digits, setDigits] = useState("");
@@ -181,11 +182,11 @@ export default function PosDiscountDrawer({
       panelClassName="bg-[#984B28]"
       bodyClassName=""
       contentKey="pos-discount-drawer"
-      ariaLabel="Discount"
+      ariaLabel={title}
     >
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
         <p className="mb-3 text-center text-base font-semibold text-white">
-          Discount
+          {title}
         </p>
 
         <motion.div

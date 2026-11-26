@@ -51,6 +51,10 @@ import {
   itemNeedsCustomization,
   selectionMapsFromLine,
 } from "@/lib/pos/itemCustomization";
+import {
+  applyManualLineDiscount,
+  clearManualLineDiscount,
+} from "@/lib/pos/posLineDiscount";
 import { formatActiveProductDiscountBadge } from "@/lib/pricing/productDiscount";
 import {
   isExternalContextCartLine,
@@ -532,6 +536,8 @@ export default function PosTerminal() {
   const [isResumingOrder, setIsResumingOrder] = useState(false);
   const [keypadDrawer, setKeypadDrawer] = useState(null);
   const [isDiscountDrawerOpen, setIsDiscountDrawerOpen] = useState(false);
+  /** @type {[null | { type: "check" } | { type: "line", lineId: string }, Function]} */
+  const [discountTarget, setDiscountTarget] = useState(null);
   const [checkDiscount, setCheckDiscount] = useState(null);
   const [isPaymentDrawerOpen, setIsPaymentDrawerOpen] = useState(false);
   const [tableNumber, setTableNumber] = useState("");
@@ -1281,18 +1287,22 @@ export default function PosTerminal() {
       modifierMap,
     );
     setCartLines((prev) =>
-      prev.map((line) =>
-        line.lineId === customizingLineId
-          ? {
-              ...line,
-              basePrice: built.basePrice,
-              price: built.price,
-              selectedVariants: built.variantsPayload,
-              selectedModifiers: built.modifiersPayload,
-              configKey: built.configKey,
-            }
-          : line,
-      ),
+      prev.map((line) => {
+        if (line.lineId !== customizingLineId) return line;
+        const {
+          preManualUnitPrice: _preManualUnitPrice,
+          manualDiscount: _manualDiscount,
+          ...rest
+        } = line;
+        return {
+          ...rest,
+          basePrice: built.basePrice,
+          price: built.price,
+          selectedVariants: built.variantsPayload,
+          selectedModifiers: built.modifiersPayload,
+          configKey: built.configKey,
+        };
+      }),
     );
   }
 
@@ -1596,8 +1606,13 @@ export default function PosTerminal() {
       storeProfile?.timezone,
     );
     const configKey = cartConfigKey(selectedVariants, selectedModifiers);
+    const {
+      preManualUnitPrice: _preManualUnitPrice,
+      manualDiscount: _manualDiscount,
+      ...rest
+    } = line;
     return {
-      ...line,
+      ...rest,
       selectedVariants,
       selectedModifiers,
       basePrice,
@@ -1977,6 +1992,7 @@ export default function PosTerminal() {
     setIsTicketBuzzerDrawerOpen(false);
     setPendingTakeaway(null);
     setCheckDiscount(null);
+    setDiscountTarget(null);
     setIsDiscountDrawerOpen(false);
     resumeLoadedRef.current = null;
     closeCustomization();
@@ -1990,7 +2006,24 @@ export default function PosTerminal() {
       showDismissibleToast("Add items before applying a discount");
       return;
     }
+    setDiscountTarget({ type: "check" });
     setIsDiscountDrawerOpen(true);
+  }
+
+  function handleCartLineDiscountClick(lineId) {
+    if (isViewOnly) return;
+    const line = cartLines.find((entry) => entry.lineId === lineId);
+    if (!line || !isOpenCartLine(line) || isQrCounterEditableCartLine(line)) {
+      return;
+    }
+    setOptionsLineId(null);
+    setDiscountTarget({ type: "line", lineId });
+    setIsDiscountDrawerOpen(true);
+  }
+
+  function handleCloseDiscountDrawer() {
+    setIsDiscountDrawerOpen(false);
+    setDiscountTarget(null);
   }
 
   function resolveCheckOrderIds() {
@@ -2013,11 +2046,65 @@ export default function PosTerminal() {
     });
   }
 
+  function applyLineDiscountConfirm(
+    lineId,
+    { discountAmount, discountPercent, discountType },
+  ) {
+    setCartLines((prev) =>
+      prev.map((line) => {
+        if (line.lineId !== lineId) return line;
+        if (!isOpenCartLine(line) || isQrCounterEditableCartLine(line)) {
+          return line;
+        }
+
+        if (discountAmount == null || Number(discountAmount) <= 0) {
+          return clearManualLineDiscount(line);
+        }
+
+        const preManualUnitPrice =
+          line.preManualUnitPrice != null
+            ? Number(line.preManualUnitPrice)
+            : Number(line.price || 0);
+        const quantity = Number(line.quantity) || 1;
+        const nextUnit = applyManualLineDiscount({
+          unitPrice: preManualUnitPrice,
+          quantity,
+          discountAmount: Number(discountAmount),
+        });
+
+        return {
+          ...line,
+          preManualUnitPrice,
+          price: nextUnit,
+          manualDiscount: {
+            discountAmount: Number(discountAmount),
+            discountPercent:
+              discountType === "percent" ? discountPercent : null,
+            discountType: discountType || null,
+          },
+        };
+      }),
+    );
+  }
+
   async function handleDiscountConfirm({
     discountAmount,
     discountPercent,
     discountType,
   }) {
+    const target = discountTarget;
+    setIsDiscountDrawerOpen(false);
+    setDiscountTarget(null);
+
+    if (target?.type === "line" && target.lineId) {
+      applyLineDiscountConfirm(target.lineId, {
+        discountAmount,
+        discountPercent,
+        discountType,
+      });
+      return;
+    }
+
     const previousDiscount = checkDiscount;
     const nextDiscount =
       discountAmount == null || Number(discountAmount) <= 0
@@ -2025,7 +2112,6 @@ export default function PosTerminal() {
         : { discountAmount, discountPercent, discountType };
 
     setCheckDiscount(nextDiscount);
-    setIsDiscountDrawerOpen(false);
 
     const orderIds = resolveCheckOrderIds();
     if (orderIds.length === 0) return;
@@ -3022,6 +3108,7 @@ export default function PosTerminal() {
     tablePrefilledRef.current = null;
     setKeypadDrawer(null);
     setCheckDiscount(null);
+    setDiscountTarget(null);
     setIsDiscountDrawerOpen(false);
     resumeLoadedRef.current = null;
     closeCustomization();
@@ -3275,14 +3362,42 @@ export default function PosTerminal() {
     0,
     cartSubtotal + posSurchargeTotal - (discountAmount || 0),
   );
+  const discountLine =
+    discountTarget?.type === "line" && discountTarget.lineId
+      ? cartLines.find((line) => line.lineId === discountTarget.lineId)
+      : null;
+  const discountLineBaseUnit =
+    discountLine != null
+      ? Number(
+          discountLine.preManualUnitPrice != null
+            ? discountLine.preManualUnitPrice
+            : discountLine.price || 0,
+        )
+      : 0;
+  const discountLineQty = Number(discountLine?.quantity) || 1;
+  const discountDrawerSubtotal =
+    discountTarget?.type === "line"
+      ? Math.round(discountLineBaseUnit * discountLineQty * 100) / 100
+      : cartSubtotal;
+  const discountDrawerTitle =
+    discountTarget?.type === "line" ? "Item discount" : "Discount";
+  const lineManualDiscount = discountLine?.manualDiscount;
   const discountInitialDigits =
-    checkDiscount?.discountType === "percent" &&
-    checkDiscount?.discountPercent != null
-      ? String(checkDiscount.discountPercent)
-      : checkDiscount?.discountType === "dollar" &&
-          checkDiscount?.discountAmount != null
-        ? String(checkDiscount.discountAmount)
-        : "";
+    discountTarget?.type === "line"
+      ? lineManualDiscount?.discountType === "percent" &&
+        lineManualDiscount?.discountPercent != null
+        ? String(lineManualDiscount.discountPercent)
+        : lineManualDiscount?.discountType === "dollar" &&
+            lineManualDiscount?.discountAmount != null
+          ? String(lineManualDiscount.discountAmount)
+          : ""
+      : checkDiscount?.discountType === "percent" &&
+          checkDiscount?.discountPercent != null
+        ? String(checkDiscount.discountPercent)
+        : checkDiscount?.discountType === "dollar" &&
+            checkDiscount?.discountAmount != null
+          ? String(checkDiscount.discountAmount)
+          : "";
   const hasUnsentLines = cartLines.some(isSendableCartLine);
   const hasQrLinesReadyToKitchen = cartLines.some(isKitchenPendingQrCartLine);
   // POS menu: Send for new POS fires and/or unpaid counter QR awaiting kitchen.
@@ -3448,11 +3563,17 @@ export default function PosTerminal() {
                             !isExternalContextCartLine(line)
                           }
                           useKitchenPrintAliases={useKitchenPrintAliases}
+                          canDiscount={
+                            !isViewOnly &&
+                            isOpenCartLine(line) &&
+                            !isQrCounterEditableCartLine(line)
+                          }
                           isOptionsOpen={optionsLineId === line.lineId}
                           onOptionsOpenChange={(open) =>
                             handleCartLineOptionsOpenChange(line.lineId, open)
                           }
                           onOptionsClick={handleCartLineOptionsClick}
+                          onDiscountClick={handleCartLineDiscountClick}
                           onSelect={handleSelectCartLine}
                           onQtyClick={handleQtyClick}
                           onRemoveLine={handleRemoveLine}
@@ -3616,9 +3737,10 @@ export default function PosTerminal() {
 
         <PosDiscountDrawer
           isOpen={isDiscountDrawerOpen}
-          onClose={() => setIsDiscountDrawerOpen(false)}
-          subtotal={cartSubtotal}
+          onClose={handleCloseDiscountDrawer}
+          subtotal={discountDrawerSubtotal}
           initialDigits={discountInitialDigits}
+          title={discountDrawerTitle}
           onConfirm={handleDiscountConfirm}
         />
 

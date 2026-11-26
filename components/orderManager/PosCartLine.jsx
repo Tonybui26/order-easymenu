@@ -12,16 +12,16 @@ import { X } from "lucide-react";
 import { cn } from "@/lib/helper";
 import { formatPosItemDisplayName } from "@/lib/helper/printNameAlias";
 
-const OPTION_WIDTH = 88;
+const ACTION_WIDTH = 88;
+/** Narrower swipe action for item discount (%). */
+const DISCOUNT_ACTION_WIDTH = 52;
 const SWIPE_SPRING = { type: "spring", damping: 28, stiffness: 320 };
 const CART_LINE_LAYOUT_SPRING = { type: "spring", damping: 28, stiffness: 320 };
-const OPEN_OFFSET = -OPTION_WIDTH;
-const OPEN_THRESHOLD = OPTION_WIDTH * 0.35;
 const OPEN_VELOCITY = -400;
 /** Ignore content clicks synthesized after a swipe (WebViews fire these late). */
 const POST_DRAG_CLICK_SUPPRESS_MS = 450;
-/** Dedupe pointerup + click so Option only opens once per gesture. */
-const OPTION_ACTIVATE_DEDUPE_MS = 400;
+/** Dedupe pointerup + click so Option / Discount only open once per gesture. */
+const ACTION_ACTIVATE_DEDUPE_MS = 400;
 
 const CART_LINE_ITEM_VARIANTS = {
   hidden: { opacity: 0, y: -20, scale: 0.97 },
@@ -49,7 +49,7 @@ function formatMoney(amount) {
 /**
  * POS cart line with indented variant/modifier rows (design reference).
  * Highlight background only when the line is active/selected for editing.
- * Swipe left to reveal an OPTION action (notes / line options — UI first).
+ * Swipe left to reveal Discount (unsent) + Option actions.
  */
 export default function PosCartLine({
   line,
@@ -60,10 +60,13 @@ export default function PosCartLine({
   /** Hide variant/modifier remove controls while keeping qty/line remove. */
   lockOptionEdits = false,
   allowVoidSentLine = false,
+  /** Show Discount in the swipe reveal (unsent / open lines only). */
+  canDiscount = false,
   useKitchenPrintAliases = false,
   isOptionsOpen = false,
   onOptionsOpenChange,
   onOptionsClick,
+  onDiscountClick,
   onSelect,
   onQtyClick,
   onRemoveLine,
@@ -92,10 +95,16 @@ export default function PosCartLine({
     allowVoidSentLine && isSentToKitchen && !isCancelled;
   const showRemoveUnsentButton = !readOnly && !isSentToKitchen && !isCancelled;
   const showRemoveOptionButton = showRemoveUnsentButton && !lockOptionEdits;
+  const showDiscountAction = Boolean(canDiscount) && showRemoveUnsentButton;
   const canSwipeOptions =
     !readOnly &&
     !isCancelled &&
     (!isSentToKitchen || showVoidSentButton);
+  const revealWidth = showDiscountAction
+    ? ACTION_WIDTH + DISCOUNT_ACTION_WIDTH
+    : ACTION_WIDTH;
+  const openOffset = -revealWidth;
+  const openThreshold = revealWidth * 0.35;
   const strikeClass = isCancelled ? "line-through decoration-neutral-400" : "";
   const nameOptions = { useKitchenPrintAliases };
   const displayTitle =
@@ -109,11 +118,13 @@ export default function PosCartLine({
   const suppressTimerRef = useRef(null);
   const optionArmedRef = useRef(false);
   const optionLayerRef = useRef(null);
-  const lastOptionActivateAtRef = useRef(0);
+  const lastActionActivateAtRef = useRef(0);
+  const openOffsetRef = useRef(openOffset);
+  openOffsetRef.current = openOffset;
   const [isRevealed, setIsRevealed] = useState(false);
 
   useMotionValueEvent(x, "change", (latest) => {
-    isOpenRef.current = latest <= OPEN_OFFSET / 2;
+    isOpenRef.current = latest <= openOffsetRef.current / 2;
   });
 
   function syncOptionLayerInteractive(active) {
@@ -135,8 +146,8 @@ export default function PosCartLine({
     setIsRevealed(isOptionsOpen);
     optionArmedRef.current = isOptionsOpen;
     syncOptionLayerInteractive(isOptionsOpen);
-    animate(x, isOptionsOpen ? OPEN_OFFSET : 0, SWIPE_SPRING);
-  }, [canSwipeOptions, isOptionsOpen, x]);
+    animate(x, isOptionsOpen ? openOffset : 0, SWIPE_SPRING);
+  }, [canSwipeOptions, isOptionsOpen, openOffset, x]);
 
   useEffect(() => {
     return () => {
@@ -173,7 +184,7 @@ export default function PosCartLine({
     optionArmedRef.current = open;
     syncOptionLayerInteractive(open);
     if (open) {
-      x.set(OPEN_OFFSET);
+      x.set(openOffset);
     } else {
       animate(x, 0, SWIPE_SPRING);
     }
@@ -193,7 +204,7 @@ export default function PosCartLine({
     if (!isDraggingRef.current) return;
     isDraggingRef.current = false;
     const shouldOpen =
-      info.offset.x < -OPEN_THRESHOLD || info.velocity.x < OPEN_VELOCITY;
+      info.offset.x < -openThreshold || info.velocity.x < OPEN_VELOCITY;
     snapTo(shouldOpen);
     armPostDragClickSuppress();
     // Drop swipe pointer id after the gesture settles so Option can accept the next tap.
@@ -211,34 +222,47 @@ export default function PosCartLine({
     if (!isLocked) onSelect?.(line.lineId);
   }
 
-  function handleOptionActivate(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!optionArmedRef.current && !isRevealed && !isOptionsOpen) return;
-    if (isDraggingRef.current) return;
-    // Ignore the finger that performed the swipe if it lifts on Option.
+  function canActivateRevealedAction(event) {
+    if (!optionArmedRef.current && !isRevealed && !isOptionsOpen) return false;
+    if (isDraggingRef.current) return false;
+    // Ignore the finger that performed the swipe if it lifts on an action.
     if (
       event.pointerId != null &&
       dragPointerIdRef.current != null &&
       event.pointerId === dragPointerIdRef.current
     ) {
-      return;
+      return false;
     }
 
     const now = performance.now();
-    if (now - lastOptionActivateAtRef.current < OPTION_ACTIVATE_DEDUPE_MS) {
-      return;
+    if (now - lastActionActivateAtRef.current < ACTION_ACTIVATE_DEDUPE_MS) {
+      return false;
     }
-    lastOptionActivateAtRef.current = now;
+    lastActionActivateAtRef.current = now;
     // Clear content-click suppress so we don't leave a dead zone after opening notes.
     suppressClickRef.current = false;
     if (suppressTimerRef.current) {
       clearTimeout(suppressTimerRef.current);
       suppressTimerRef.current = null;
     }
+    return true;
+  }
+
+  function handleOptionActivate(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!canActivateRevealedAction(event)) return;
     // Prefer pointerup on touch: after a swipe, WebViews often swallow the first click.
     // SideDrawer ignores orphan backdrop clicks, so pointerup-open is safe.
     onOptionsClick?.(line.lineId);
+  }
+
+  function handleDiscountActivate(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!showDiscountAction) return;
+    if (!canActivateRevealedAction(event)) return;
+    onDiscountClick?.(line.lineId);
   }
 
   return (
@@ -266,17 +290,30 @@ export default function PosCartLine({
           ref={optionLayerRef}
           className={cn(
             "absolute inset-y-0 right-0 flex",
-            // When revealed, sit above the sliding row so taps reach Option
+            // When revealed, sit above the sliding row so taps reach actions
             // even while the open spring is still settling.
             isRevealed ? "z-[3]" : "pointer-events-none z-0",
           )}
-          style={{ width: OPTION_WIDTH }}
+          style={{ width: revealWidth }}
         >
+          {showDiscountAction ? (
+            <button
+              type="button"
+              onPointerUp={handleDiscountActivate}
+              onClick={handleDiscountActivate}
+              className="flex h-full flex-col items-center justify-center bg-[#1f6b4a] px-1 text-center text-base font-bold leading-none text-white transition-colors hover:bg-[#185a3e] active:bg-[#134833]"
+              style={{ width: DISCOUNT_ACTION_WIDTH }}
+              aria-label={`Discount for ${displayTitle}`}
+            >
+              %
+            </button>
+          ) : null}
           <button
             type="button"
             onPointerUp={handleOptionActivate}
             onClick={handleOptionActivate}
-            className="flex h-full w-full flex-col items-center justify-center rounded-r-[0.75rem] bg-[#301C0F] px-2 text-center text-xs font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#3d2614] active:bg-[#24150b]"
+            className="flex h-full flex-col items-center justify-center rounded-r-[0.75rem] bg-[#301C0F] px-2 text-center text-xs font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#3d2614] active:bg-[#24150b]"
+            style={{ width: ACTION_WIDTH }}
             aria-label={`Options for ${displayTitle}`}
           >
             Option
@@ -287,7 +324,7 @@ export default function PosCartLine({
       <motion.div
         style={{ x: canSwipeOptions ? x : 0 }}
         drag={canSwipeOptions && !isRevealed && !isOptionsOpen ? "x" : false}
-        dragConstraints={{ left: OPEN_OFFSET, right: 0 }}
+        dragConstraints={{ left: openOffset, right: 0 }}
         dragElastic={0.12}
         dragDirectionLock
         dragMomentum={false}
