@@ -22,8 +22,8 @@ import {
   computeTimedServiceCharge,
   computeTimedServiceSurcharge,
   formatServiceMinutes,
-  formatTimedServiceDiscountBadge,
   formatTimedServiceRate,
+  getTimedServiceCurrentDiscountSummary,
   resolveSoleTableTimedService,
 } from "@/lib/pos/timedServiceConfig";
 import { useMenuContext } from "@/components/context/MenuContext";
@@ -244,14 +244,22 @@ function PreviewSectionsList({ sections }) {
   return <ul className="space-y-3">{nodes}</ul>;
 }
 
-function TimedServiceRunningPanel({ service, storeTimezone }) {
+function TimedServiceRunningPanel({
+  service,
+  storeTimezone,
+  charge = null,
+}) {
   const now = new Date();
   const rate = formatTimedServiceRate(service, now, storeTimezone);
-  const discountBadge = formatTimedServiceDiscountBadge(
+  const discountSummary = getTimedServiceCurrentDiscountSummary(
     service,
     now,
     storeTimezone,
   );
+  const segments = Array.isArray(charge?.segments) ? charge.segments : [];
+  const showBreakdown =
+    segments.length > 1 ||
+    (segments.length === 1 && segments[0].key !== "list");
 
   return (
     <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
@@ -259,16 +267,50 @@ function TimedServiceRunningPanel({ service, storeTimezone }) {
         <p className="text-xl font-bold leading-tight text-neutral-950">
           {service.name} in use
         </p>
-        {discountBadge ? (
+        {discountSummary.badge ? (
           <span className="rounded-md bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-tight tracking-wide text-white shadow-sm">
-            {discountBadge}
+            {discountSummary.badge}
           </span>
         ) : null}
       </div>
       {rate ? (
         <p className="mt-1 text-sm font-semibold tabular-nums text-emerald-800">
-          {rate}
+          Now {rate}
+          {discountSummary.windowLabel
+            ? ` · ${discountSummary.shortLabel} (${discountSummary.windowLabel})`
+            : discountSummary.badge
+              ? ` · ${discountSummary.shortLabel}`
+              : ""}
         </p>
+      ) : null}
+      {charge ? (
+        <p className="mt-1 text-sm tabular-nums text-emerald-900/80">
+          Elapsed {formatServiceMinutes(charge.minutes)} ·{" "}
+          {formatMoney(charge.amount)} so far
+        </p>
+      ) : null}
+      {showBreakdown ? (
+        <div className="mt-2 space-y-1 border-t border-emerald-200/80 pt-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800/70">
+            How this total is calculated
+          </p>
+          {segments.map((segment) => (
+            <div
+              key={`${segment.key}-${segment.minutes}-${segment.amount}`}
+              className="flex items-center justify-between gap-2 text-sm text-emerald-950"
+            >
+              <span>
+                {formatServiceMinutes(segment.minutes)} · {segment.label}
+                {segment.rate != null
+                  ? ` @ $${Number(segment.rate).toFixed(2)}/${segment.unit || "hour"}`
+                  : ""}
+              </span>
+              <span className="shrink-0 font-semibold tabular-nums">
+                {formatMoney(segment.amount)}
+              </span>
+            </div>
+          ))}
+        </div>
       ) : null}
     </div>
   );
@@ -779,6 +821,7 @@ export default function PosTableMapTableDrawer({
           <TimedServiceRunningPanel
             service={activeTimedService}
             storeTimezone={storeProfile?.timezone}
+            charge={serviceCharge}
           />
         ) : displayManualMode ? (
           <p className="rounded-xl border border-neutral-100 bg-white px-3 py-4 text-sm text-neutral-600">
@@ -815,14 +858,36 @@ export default function PosTableMapTableDrawer({
         !displayPreviewError ? (
           <div className="space-y-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5">
             {serviceCharge ? (
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm text-neutral-600">
-                  {activeTimedService.name} ·{" "}
-                  {formatServiceMinutes(serviceCharge.minutes)}
-                </span>
-                <span className="text-sm font-semibold tabular-nums text-neutral-900">
-                  {formatMoney(serviceCharge.amount)}
-                </span>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm text-neutral-600">
+                    {activeTimedService.name} ·{" "}
+                    {formatServiceMinutes(serviceCharge.minutes)}
+                  </span>
+                  <span className="text-sm font-semibold tabular-nums text-neutral-900">
+                    {formatMoney(serviceCharge.amount)}
+                  </span>
+                </div>
+                {(serviceCharge.segments || []).length > 1 ||
+                ((serviceCharge.segments || [])[0] &&
+                  serviceCharge.segments[0].key !== "list") ? (
+                  <div className="space-y-0.5 pl-0.5">
+                    {serviceCharge.segments.map((segment) => (
+                      <div
+                        key={`summary-${segment.key}-${segment.minutes}-${segment.amount}`}
+                        className="flex items-center justify-between gap-2 text-xs text-neutral-500"
+                      >
+                        <span>
+                          {formatServiceMinutes(segment.minutes)} ·{" "}
+                          {segment.label}
+                        </span>
+                        <span className="tabular-nums">
+                          {formatMoney(segment.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ) : null}
             {summarySurchargeLines.map((line) => (
